@@ -486,3 +486,6 @@ $RECYCLE.BIN/
 src/ShutkiVorta.Web/App_Data/
 # Menu photos uploaded through the admin panel
 src/ShutkiVorta.Web/wwwroot/uploads/
+
+# Local agent worktrees
+.claude/worktrees/

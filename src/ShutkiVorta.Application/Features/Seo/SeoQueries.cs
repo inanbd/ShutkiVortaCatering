@@ -23,7 +23,9 @@ public static class SeoPaths
     [
         ("/", "weekly", "1.0"),
         ("/menu", "weekly", "0.9"),
+        ("/restaurants", "monthly", "0.8"),
         ("/catering", "monthly", "0.7"),
+        ("/kitchen", "monthly", "0.7"),
         ("/about", "monthly", "0.6"),
         ("/faq", "monthly", "0.6"),
         ("/contact", "monthly", "0.5"),
@@ -36,6 +38,7 @@ public static class SeoPaths
         "/account",
         "/cart",
         "/checkout",
+        "/restaurants/order",
         "/order/",
         "/track-order",
         "/error",

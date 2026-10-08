@@ -1,0 +1,47 @@
+@page "/account/restaurant-orders"
+@model ShutkiVorta.Web.Pages.Account.RestaurantOrders.IndexModel
+@using ShutkiVorta.Application.Common.Formatting
+
+<section class="section-sm">
+    <div class="container">
+        <h1 style="font-size:2.4rem;">My account</h1>
+        <div class="account-layout">
+            <partial name="_AccountNav" />
+            <div>
+                <partial name="_StatusMessage" />
+                <div class="flex" style="justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;">
+                    <h2 style="font-size:1.8rem;margin:0;">Restaurant standing orders</h2>
+                    <a class="btn btn-outline btn-sm" href="/restaurants/order">@Icons.Get("plus") New standing order</a>
+                </div>
+                @if (Model.StandingOrders.Count == 0)
+                {
+                    <div class="form-card kantha empty-state mt-3">
+                        <p class="bn" lang="bn">রেস্টুরেন্টের জন্য ভর্তা</p>
+                        <p class="muted">Own a restaurant? Get fresh vortas delivered on the days you choose, at wholesale prices.</p>
+                        <a class="btn btn-primary" href="/restaurants">How standing orders work</a>
+                    </div>
+                }
+                else
+                {
+                    <div class="orders-list mt-3">
+                        @foreach (var so in Model.StandingOrders)
+                        {
+                            <a class="order-row-card" href="/account/restaurant-orders/@so.Reference">
+                                <div>
+                                    <div class="num">@so.Reference &middot; @so.BusinessName</div>
+                                    <div class="small muted">@so.Fulfillment.DisplayName() &middot; @so.DaysText at @Format.Time(so.PreferredTime)</div>
+                                    <div class="small">@so.ItemsPreview</div>
+                                </div>
+                                <div style="text-align:right;">
+                                    <partial name="_StandingOrderBadge" model="so.Status" />
+                                    <div class="price" style="font-size:1.3rem;margin-top:6px;">@Ui.Money(so.SubtotalPerDelivery)</div>
+                                    <div class="small muted">per delivery + tax</div>
+                                </div>
+                            </a>
+                        }
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+</section>

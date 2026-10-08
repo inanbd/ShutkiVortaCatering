@@ -193,7 +193,7 @@ internal static class StandingOrderEmailModel
         return new Dictionary<string, object?>
         {
             ["Reference"] = so.Reference,
-            ["BusinessName"] = so.BusinessName,
+            ["RestaurantName"] = so.BusinessName,
             ["ContactName"] = so.ContactName,
             ["ContactFirstName"] = firstName,
             ["CustomerEmail"] = so.Email,

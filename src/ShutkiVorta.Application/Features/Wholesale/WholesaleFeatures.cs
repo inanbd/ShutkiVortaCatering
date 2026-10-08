@@ -130,7 +130,7 @@ public sealed class SubmitStandingOrderCommandValidator : AbstractValidator<Subm
         When(x => x.Fulfillment == FulfillmentMethod.Delivery, () =>
         {
             RuleFor(x => x.AddressLine1).NotEmpty().WithMessage("Please enter the delivery address.").MaximumLength(200);
-            RuleFor(x => x.City).NotEmpty().MaximumLength(100);
+            RuleFor(x => x.City).NotEmpty().WithMessage("Please enter the city.").MaximumLength(100);
             RuleFor(x => x.State).NotEmpty().Length(2).WithMessage("Please use the 2-letter state code, e.g. TX.");
             RuleFor(x => x.PostalCode).NotEmpty().Matches(@"^\d{5}(-\d{4})?$").WithMessage("Please enter a valid ZIP code.");
         });

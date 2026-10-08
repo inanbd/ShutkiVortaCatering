@@ -1,0 +1,188 @@
+@page "/account/restaurant-orders/{reference}"
+@model ShutkiVorta.Web.Pages.Account.RestaurantOrders.DetailsModel
+@using ShutkiVorta.Application.Common.Formatting
+@using ShutkiVorta.Application.Features.Wholesale
+@using ShutkiVorta.Domain.Wholesale
+@{
+    var so = Model.StandingOrder;
+    var est = so.EstimatePerDelivery;
+}
+
+<section class="section-sm">
+    <div class="container">
+        <p><a href="/account/restaurant-orders">&larr; All restaurant orders</a></p>
+        <div class="container-narrow" style="margin:0 auto;">
+            <partial name="_StatusMessage" />
+
+            @if (Model.JustSubmitted)
+            {
+                <div class="form-card kantha text-center mb-3">
+                    <p class="bn" lang="bn" style="font-size:2rem;color:var(--red-700);margin:0;">ধন্যবাদ!</p>
+                    <h2 style="font-size:1.7rem;">We received your request</h2>
+                    <p class="muted mb-0">We'll call or email you within one business day to confirm prices and your first delivery. A copy is on its way to @so.Email.</p>
+                </div>
+            }
+
+            <div class="order-box">
+                <div class="standing-head">
+                    <div>
+                        <span class="eyebrow">Standing order</span>
+                        <h1 class="order-number" style="font-size:2rem;margin:0;">@so.Reference</h1>
+                        <div class="muted">@so.BusinessName</div>
+                    </div>
+                    <partial name="_StandingOrderBadge" model="so.Status" />
+                </div>
+
+                @if (so.Status == StandingOrderStatus.PendingApproval)
+                {
+                    <p class="alert alert-info">We are reviewing your request. Nothing is scheduled or charged until we confirm it with you.</p>
+                }
+                else if (!string.IsNullOrWhiteSpace(so.StatusReason))
+                {
+                    <p class="alert alert-info">@so.StatusName: @so.StatusReason</p>
+                }
+
+                <dl class="standing-facts">
+                    <div><dt>@so.FulfillmentName</dt><dd>@so.DaysText at @Format.Time(so.PreferredTime)</dd></div>
+                    <div><dt>Starting</dt><dd>@Format.Date(so.StartDate.ToDateTime(TimeOnly.MinValue))@(so.EndDate is { } end ? $" · until {Format.ShortDate(end.ToDateTime(TimeOnly.MinValue))}" : "")</dd></div>
+                    @if (so.IsDelivery)
+                    {
+                        <div><dt>Deliver to</dt><dd>@so.DeliveryAddress</dd></div>
+                    }
+                    <div><dt>Contact</dt><dd>@so.ContactName &middot; @so.Phone</dd></div>
+                </dl>
+
+                <h2 style="font-size:1.5rem;">Each delivery</h2>
+                <table class="items-table">
+                    <thead><tr><th>Vorta</th><th class="num">Pounds</th><th class="num">Price</th><th class="num">Amount</th></tr></thead>
+                    <tbody>
+                        @foreach (var line in so.Lines)
+                        {
+                            <tr>
+                                <td><strong>@line.ItemName</strong>@if (!string.IsNullOrWhiteSpace(line.ItemBengaliName)) {<text> <span class="bn small muted" lang="bn">@line.ItemBengaliName</span></text>}</td>
+                                <td class="num">@line.QuantityText</td>
+                                <td class="num">@Ui.Money(line.UnitPrice)</td>
+                                <td class="num">@Ui.Money(line.LineTotal)</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+                <table class="totals" style="max-width:340px;margin-left:auto;">
+                    <tr><td>Subtotal</td><td>@Ui.Money(est.Subtotal)</td></tr>
+                    @if (so.IsDelivery)
+                    {
+                        <tr><td>Delivery</td><td>@Ui.Money(est.DeliveryFee)</td></tr>
+                    }
+                    <tr><td>Sales tax@(so.TaxExempt ? " (exempt)" : "")</td><td>@Ui.Money(est.Tax)</td></tr>
+                    <tr class="grand"><td>Per delivery</td><td>@Ui.Money(est.Total)</td></tr>
+                </table>
+                <p class="small muted" style="text-align:right;">@so.DeliveriesPerWeek deliver@(so.DeliveriesPerWeek == 1 ? "y" : "ies") a week &asymp; @Ui.Money(so.EstimatedWeeklyTotal) per week</p>
+            </div>
+
+            @if (so.Upcoming.Count > 0)
+            {
+                <section class="form-card mt-3">
+                    @if (so.Status == StandingOrderStatus.PendingApproval)
+                    {
+                        <h2 style="font-size:1.5rem;">Planned deliveries</h2>
+                        <p class="small muted">These deliveries will be scheduled once we approve your standing order.</p>
+                    }
+                    else
+                    {
+                        <h2 style="font-size:1.5rem;">Upcoming deliveries</h2>
+                        <p class="small muted">Skip a delivery or bring it back up to @so.ChangeCutoffHours hours before it. For anything closer, please call us.</p>
+                    }
+                    <ul class="delivery-list">
+                        @foreach (var d in so.Upcoming)
+                        {
+                            var date = d.Date.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture);
+                            <li class="delivery-row state-@d.State.ToString().ToLowerInvariant()">
+                                <div class="delivery-date">
+                                    <strong>@d.ScheduledFor.ToString("ddd, MMM d", Format.Culture)</strong>
+                                    <span class="small muted">@Format.Time(d.ScheduledFor)</span>
+                                </div>
+                                <div class="delivery-state">
+                                    @if (d.State == DeliveryState.OrderCreated && d.OrderNumber is not null)
+                                    {
+                                        <a href="/account/orders/@d.OrderNumber">@d.OrderNumber</a>
+                                        <span class="small muted">&middot; @d.StateName</span>
+                                    }
+                                    else
+                                    {
+                                        <span>@(so.Status == StandingOrderStatus.PendingApproval && d.State == DeliveryState.Scheduled ? "Planned" : d.StateName)</span>
+                                    }
+                                </div>
+                                <div class="delivery-action">
+                                    @if (d.CanSkip)
+                                    {
+                                        <form method="post" asp-page-handler="Skip" asp-route-reference="@so.Reference" data-confirm="Skip the delivery on @d.ScheduledFor.ToString("dddd, MMMM d", Format.Culture)?">
+                                            <input type="hidden" name="date" value="@date" />
+                                            <button class="btn btn-outline btn-sm" type="submit">Skip</button>
+                                        </form>
+                                    }
+                                    else if (d.CanUnskip)
+                                    {
+                                        <form method="post" asp-page-handler="Restore" asp-route-reference="@so.Reference">
+                                            <input type="hidden" name="date" value="@date" />
+                                            <button class="btn btn-green btn-sm" type="submit">Restore</button>
+                                        </form>
+                                    }
+                                </div>
+                            </li>
+                        }
+                    </ul>
+                </section>
+            }
+
+            @if (so.CanPause || so.CanResume || so.CanCancel)
+            {
+                <section class="form-card mt-3">
+                    <h2 style="font-size:1.5rem;">Change your standing order</h2>
+                    <div class="standing-actions">
+                        @if (so.CanResume)
+                        {
+                            <form method="post" asp-page-handler="Resume" asp-route-reference="@so.Reference">
+                                <p class="small muted">Deliveries start again from the next available date.</p>
+                                <button class="btn btn-green" type="submit">Resume deliveries</button>
+                            </form>
+                        }
+                        @if (so.CanPause)
+                        {
+                            <form method="post" asp-page-handler="Pause" asp-route-reference="@so.Reference" data-confirm="Pause all upcoming deliveries?">
+                                <div class="field mb-2">
+                                    <label for="pause-reason">Pause (holiday, renovation…) &mdash; reason (optional)</label>
+                                    <input id="pause-reason" type="text" name="reason" maxlength="300" />
+                                </div>
+                                <button class="btn btn-outline" type="submit">Pause deliveries</button>
+                            </form>
+                        }
+                        @if (so.CanCancel)
+                        {
+                            <form method="post" asp-page-handler="Cancel" asp-route-reference="@so.Reference" data-confirm="Cancel this standing order? This cannot be undone.">
+                                <div class="field mb-2">
+                                    <label for="cancel-reason">Cancel &mdash; reason (optional)</label>
+                                    <input id="cancel-reason" type="text" name="reason" maxlength="300" />
+                                </div>
+                                <button class="btn btn-outline" type="submit">Cancel standing order</button>
+                            </form>
+                        }
+                    </div>
+                    <p class="small muted mt-2 mb-0">Need different vortas, pounds or days? Call us at the number below or send a message &mdash; we'll update your agreement.</p>
+                </section>
+            }
+
+            @if (so.Events.Count > 0)
+            {
+                <section class="form-card mt-3">
+                    <h2 style="font-size:1.5rem;">History</h2>
+                    <ul class="history">
+                        @foreach (var e in so.Events)
+                        {
+                            <li><strong>@e.Description</strong> <span class="small muted">&middot; @Format.DateTime(e.ChangedAtLocal)</span></li>
+                        }
+                    </ul>
+                </section>
+            }
+        </div>
+    </div>
+</section>

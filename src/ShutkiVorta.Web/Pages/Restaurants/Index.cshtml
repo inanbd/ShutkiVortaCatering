@@ -1,0 +1,178 @@
+@page "/restaurants"
+@model ShutkiVorta.Web.Pages.Restaurants.IndexModel
+@{
+    var c = Model.Catalog;
+    var b = Model.Business;
+    var orderUrl = Model.IsSignedIn ? "/restaurants/order" : "/account/login?returnUrl=%2Frestaurants%2Forder";
+}
+
+<section class="page-banner">
+    <div class="container">
+        <span class="bn-title" lang="bn">রেস্টুরেন্টের জন্য ভর্তা</span>
+        <h1>Vortas for Restaurants</h1>
+        <p>Homestyle shutki and vegetable vortas, made fresh by Bangladeshi mothers in our inspected @b.City kitchen and delivered to your door on the days you choose.</p>
+    </div>
+    <div class="bunting" aria-hidden="true"></div>
+</section>
+
+<section class="section">
+    <div class="container split">
+        <div>
+            <span class="eyebrow">Wholesale &middot; standing orders</span>
+            <h2>Your vorta station, stocked every week</h2>
+            <p>Serving bhorta-bhaat, a thali or a Bengali brunch? Skip the hours of roasting, pounding and cleaning shutki. Tell us which vortas you need, how many pounds and on which days &mdash; we cook them in small batches and deliver them ready to plate.</p>
+            <ul class="checklist">
+                <li>Wholesale prices by the pound@(c.DiscountPercent > 0 ? $" — about {Ui.Number(c.DiscountPercent)}% below retail" : "")</li>
+                <li>Choose your days of the week and a delivery time</li>
+                <li>Skip a day or pause for holidays online, up to @c.ChangeCutoffHours hours ahead</li>
+                <li>The same recipe every time, made by Bangladeshi mothers</li>
+                <li>Resale tax exemption once your certificate is on file</li>
+            </ul>
+            <div class="hero-actions mt-3">
+                <a class="btn btn-primary btn-lg" href="@orderUrl">@Icons.Get("calendar") Start a standing order</a>
+                <a class="btn btn-outline btn-lg" href="#prices">See wholesale prices</a>
+            </div>
+            @if (!Model.IsSignedIn)
+            {
+                <p class="small muted mt-2">You'll sign in (or create a free account) first, so you can manage your deliveries online.</p>
+            }
+        </div>
+        <figure class="framed">
+            <img src="~/images/site/assorted.webp" alt="An assortment of Bangladeshi vortas served with rice" width="800" height="1000" loading="lazy" />
+        </figure>
+    </div>
+</section>
+
+<partial name="_AlponaDivider" />
+
+<section class="section" aria-labelledby="how-title">
+    <div class="container">
+        <header class="section-head">
+            <span class="bn-title" lang="bn">কীভাবে কাজ করে</span>
+            <h2 id="how-title">How standing orders work</h2>
+        </header>
+        <div class="steps steps-4">
+            <div class="step">
+                <div class="step-num">১</div>
+                <h3>Choose your vortas</h3>
+                <p>Pick the vortas and pounds you need for each delivery (from @Ui.Number(c.MinimumQuantityPerItem) lb per vorta).</p>
+            </div>
+            <div class="step">
+                <div class="step-num">২</div>
+                <h3>Pick your days</h3>
+                <p>Select the days of the week and the time you want them, and your first delivery date.</p>
+            </div>
+            <div class="step">
+                <div class="step-num">৩</div>
+                <h3>We confirm</h3>
+                <p>We call or email within one business day to confirm prices, quantities and your first delivery.</p>
+            </div>
+            <div class="step">
+                <div class="step-num">৪</div>
+                <h3>Fresh every week</h3>
+                <p>Deliveries are scheduled automatically. Skip, pause or change anytime from your account.</p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="section section-cream" id="prices" aria-labelledby="prices-title">
+    <div class="container">
+        <header class="section-head">
+            <span class="bn-title" lang="bn">পাইকারি দাম</span>
+            <h2 id="prices-title">Wholesale price list</h2>
+            <p>Per pound, per delivery. Final prices are confirmed when we approve your standing order.</p>
+        </header>
+        <div class="price-table-wrap">
+            <table class="price-table">
+                <thead>
+                    <tr><th scope="col">Vorta</th><th scope="col" class="num">Retail</th><th scope="col" class="num">Restaurant price</th></tr>
+                </thead>
+                <tbody>
+                    @foreach (var item in c.Items)
+                    {
+                        <tr>
+                            <td>
+                                <a href="/menu/@item.Slug"><strong>@item.Name</strong></a>
+                                @if (!string.IsNullOrWhiteSpace(item.BengaliName))
+                                {
+                                    <span class="bn small muted" lang="bn">@item.BengaliName</span>
+                                }
+                                <div class="small muted">@item.CategoryName</div>
+                            </td>
+                            <td class="num muted"><s>@Ui.Money(item.RetailPrice)</s> <span class="small">/ @item.Unit</span></td>
+                            <td class="num"><strong class="price">@Ui.Money(item.WholesalePrice)</strong> <span class="small muted">/ @item.Unit</span></td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+        <ul class="chips terms-chips mt-3">
+            <li>Min. @Ui.Number(c.MinimumQuantityPerItem) lb per vorta</li>
+            <li>Min. @Ui.Money(c.MinimumSubtotalPerDelivery) per delivery</li>
+            <li>@(c.DeliveryFee > 0 ? $"Delivery {Ui.Money(c.DeliveryFee)}" : "Free delivery")</li>
+            <li>Start in @c.LeadTimeDays days</li>
+            <li>@c.DeliveryAreaDescription</li>
+        </ul>
+    </div>
+</section>
+
+<section class="section section-dark scallop-top" aria-labelledby="why-title">
+    <div class="container">
+        <header class="section-head">
+            <span class="eyebrow">Why restaurants choose us</span>
+            <h2 id="why-title">Made like at home, delivered like clockwork</h2>
+        </header>
+        <div class="info-cards">
+            <div class="info-card">
+                @Icons.Get("heart", "icon")
+                <h3>Mother-made taste</h3>
+                <p>Our vortas are made by Bangladeshi mothers and homemakers, each bringing the flavours of her home district. <a class="link-light" href="/kitchen">Meet our kitchen</a>.</p>
+            </div>
+            <div class="info-card">
+                @Icons.Get("check-circle", "icon")
+                <h3>Inspected kitchen</h3>
+                <p>Prepared in a health-inspected, permitted commercial kitchen by food-handler-certified cooks, then sealed, labelled and dated.</p>
+            </div>
+            <div class="info-card">
+                @Icons.Get("calendar", "icon")
+                <h3>You stay in control</h3>
+                <p>See every upcoming delivery online. Skip a date, pause for Ramadan or a renovation, and resume with one click.</p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="section">
+    <div class="container container-narrow faq">
+        <header class="section-head">
+            <span class="bn-title" lang="bn">সাধারণ প্রশ্ন</span>
+            <h2>Questions from restaurants</h2>
+        </header>
+        @for (var i = 0; i < Model.Faq.Count; i++)
+        {
+            var (question, answer) = Model.Faq[i];
+            <details open="@(i == 0 ? "open" : null)">
+                <summary>@question</summary>
+                <p>@answer</p>
+            </details>
+        }
+    </div>
+</section>
+
+<section class="section section-maroon cta-band">
+    <div class="container">
+        <span class="bn-title" lang="bn">চলুন শুরু করি</span>
+        <h2>Ready to put vortas on your menu?</h2>
+        <p>Send us your standing order request in a few minutes. Nothing is charged or scheduled until we confirm it with you.</p>
+        @if (c.AcceptingRequests)
+        {
+            <a class="btn btn-primary btn-lg" href="@orderUrl">Start a standing order</a>
+        }
+        else
+        {
+            <a class="btn btn-primary btn-lg" href="/contact">Contact us</a>
+        }
+        <p class="small mt-2" style="margin-bottom:0;">Prefer to talk first? Call <a class="link-light" href="tel:@(new string(b.Phone.Where(ch => char.IsDigit(ch) || ch == '+').ToArray()))">@b.Phone</a>.</p>
+    </div>
+</section>

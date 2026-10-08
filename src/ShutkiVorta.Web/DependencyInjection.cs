@@ -25,6 +25,8 @@ public static class DependencyInjection
             options.Conventions.AuthorizeFolder("/Admin", AdminPolicy);
             options.Conventions.AuthorizeFolder("/Account/Manage");
             options.Conventions.AuthorizeFolder("/Account/Orders");
+            options.Conventions.AuthorizeFolder("/Account/RestaurantOrders");
+            options.Conventions.AuthorizePage("/Restaurants/Order");
         });
 
         services.AddRouting(options =>

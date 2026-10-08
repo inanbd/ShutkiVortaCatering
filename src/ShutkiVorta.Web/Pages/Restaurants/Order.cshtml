@@ -1,0 +1,224 @@
+@page "/restaurants/order"
+@model ShutkiVorta.Web.Pages.Restaurants.OrderModel
+@using System.Globalization
+@using ShutkiVorta.Domain.Wholesale
+@{
+    var c = Model.Catalog;
+    var isDelivery = Model.Input.Fulfillment == FulfillmentMethod.Delivery;
+    var inv = CultureInfo.InvariantCulture;
+}
+
+<section class="page-banner" style="padding:44px 0 50px;">
+    <div class="container">
+        <span class="bn-title" lang="bn">নিয়মিত অর্ডার</span>
+        <h1>Restaurant standing order</h1>
+        <p>Choose your vortas, the pounds you need for each delivery and the days you want them.</p>
+    </div>
+    <div class="bunting" aria-hidden="true"></div>
+</section>
+
+<section class="section-sm">
+    <div class="container">
+        @if (!c.AcceptingRequests)
+        {
+            <div class="alert alert-error">We are not taking new restaurant orders right now. Please <a href="/contact">contact us</a> and we'll let you know as soon as we have room.</div>
+        }
+        <form method="post" class="cart-layout" id="restaurant-order-form" novalidate
+              data-tax-rate="@c.TaxRate.ToString(inv)" data-fee="@c.DeliveryFee.ToString(inv)"
+              data-min-subtotal="@c.MinimumSubtotalPerDelivery.ToString(inv)" data-min-qty="@c.MinimumQuantityPerItem.ToString(inv)"
+              data-step="@c.QuantityStep.ToString(inv)">
+            <div class="form-card kantha">
+                <div asp-validation-summary="ModelOnly" class="validation-summary-errors"></div>
+
+                <fieldset class="fieldset">
+                    <legend><span class="num">১</span> Your restaurant</legend>
+                    <div class="form-grid">
+                        <div class="field full">
+                            <label asp-for="Input.BusinessName"></label>
+                            <input asp-for="Input.BusinessName" autocomplete="organization" />
+                            <span asp-validation-for="Input.BusinessName" class="field-validation-error"></span>
+                        </div>
+                        <div class="field">
+                            <label asp-for="Input.ContactName"></label>
+                            <input asp-for="Input.ContactName" autocomplete="name" />
+                            <span asp-validation-for="Input.ContactName" class="field-validation-error"></span>
+                        </div>
+                        <div class="field">
+                            <label asp-for="Input.Phone"></label>
+                            <input asp-for="Input.Phone" type="tel" autocomplete="tel" placeholder="(214) 555-0123" />
+                            <span asp-validation-for="Input.Phone" class="field-validation-error"></span>
+                        </div>
+                        <div class="field">
+                            <label asp-for="Input.Email"></label>
+                            <input asp-for="Input.Email" type="email" autocomplete="email" />
+                            <span asp-validation-for="Input.Email" class="field-validation-error"></span>
+                        </div>
+                        <div class="field">
+                            <label asp-for="Input.TaxPermitNumber"></label>
+                            <input asp-for="Input.TaxPermitNumber" inputmode="numeric" />
+                            <span class="hint small muted">For resale tax exemption &mdash; we'll ask for your resale certificate.</span>
+                        </div>
+                    </div>
+                </fieldset>
+
+                <fieldset class="fieldset">
+                    <legend><span class="num">২</span> Vortas for each delivery</legend>
+                    <p class="small muted mt-0">Enter pounds per delivery &mdash; at least @Ui.Number(c.MinimumQuantityPerItem) lb of each vorta you choose@(c.QuantityStep > 0 ? $", in {Ui.Number(c.QuantityStep)} lb steps" : ""). Leave the others empty.</p>
+                    <div class="wholesale-items">
+                        @foreach (var group in c.Items.GroupBy(i => i.CategoryName))
+                        {
+                            <h3 class="wholesale-group">@group.Key</h3>
+                            @foreach (var item in group)
+                            {
+                                Model.Input.Quantities.TryGetValue(item.Id, out var qty);
+                                <div class="wholesale-item" data-item data-price="@item.WholesalePrice.ToString(inv)">
+                                    @if (!string.IsNullOrEmpty(item.ImageUrl))
+                                    {
+                                        <img src="@item.ImageUrl" alt="" width="64" height="64" loading="lazy" />
+                                    }
+                                    <div class="wholesale-item-name">
+                                        <label for="qty-@item.Id"><strong>@item.Name</strong></label>
+                                        @if (!string.IsNullOrWhiteSpace(item.BengaliName))
+                                        {
+                                            <span class="bn small muted" lang="bn">@item.BengaliName</span>
+                                        }
+                                        <div class="small muted">@Ui.Money(item.WholesalePrice) / @item.Unit <s class="retail">@Ui.Money(item.RetailPrice)</s></div>
+                                    </div>
+                                    <div class="wholesale-item-qty">
+                                        <input id="qty-@item.Id" class="input" name="Input.Quantities[@item.Id]" type="number" inputmode="decimal"
+                                               min="0" step="@c.QuantityStep.ToString(inv)" value="@(qty?.ToString("0.##", inv))" placeholder="0" aria-label="Pounds of @item.Name per delivery" />
+                                        <span class="small muted">@item.Unit</span>
+                                    </div>
+                                    <div class="wholesale-item-total" data-line-total>&mdash;</div>
+                                </div>
+                            }
+                        }
+                    </div>
+                </fieldset>
+
+                <fieldset class="fieldset">
+                    <legend><span class="num">৩</span> Days &amp; time</legend>
+                    <div class="field">
+                        <span class="label">Which days do you need them?</span>
+                        <div class="day-picker" role="group" aria-label="Delivery days">
+                            @foreach (var day in WeekDaysExtensions.WeekOrder)
+                            {
+                                var closed = c.ClosedDays.Contains(day);
+                                <label class="day-chip @(closed ? "is-closed" : null)">
+                                    <input type="checkbox" name="Input.Days" value="@day" checked="@(Model.Input.Days.Contains(day) && !closed)" disabled="@closed" data-day />
+                                    <span><b>@day.ToString()[..3]</b>@if (closed) {<small>closed</small>}</span>
+                                </label>
+                            }
+                        </div>
+                        <span asp-validation-for="Input.Days" class="field-validation-error"></span>
+                    </div>
+                    <div class="form-grid mt-2">
+                        <div class="field">
+                            <label asp-for="Input.PreferredTime"></label>
+                            <select asp-for="Input.PreferredTime">
+                                @foreach (var slot in c.TimeSlots)
+                                {
+                                    <option value="@slot.ToString("HH:mm", inv)">@ShutkiVorta.Application.Common.Formatting.Format.Time(slot)</option>
+                                }
+                            </select>
+                            <span asp-validation-for="Input.PreferredTime" class="field-validation-error"></span>
+                        </div>
+                        <div class="field">
+                            <label asp-for="Input.StartDate"></label>
+                            <input asp-for="Input.StartDate" type="date" min="@c.EarliestStartDate.ToString("yyyy-MM-dd", inv)" />
+                            <span asp-validation-for="Input.StartDate" class="field-validation-error"></span>
+                        </div>
+                        <div class="field">
+                            <label asp-for="Input.EndDate"></label>
+                            <input asp-for="Input.EndDate" type="date" min="@c.EarliestStartDate.ToString("yyyy-MM-dd", inv)" />
+                            <span class="hint small muted">Leave empty to continue until you pause or cancel.</span>
+                            <span asp-validation-for="Input.EndDate" class="field-validation-error"></span>
+                        </div>
+                    </div>
+                    <p class="hint small muted mt-1">The first delivery can be on @ShutkiVorta.Application.Common.Formatting.Format.Date(c.EarliestStartDate.ToDateTime(TimeOnly.MinValue)) or later. Changes and skips can be made online up to @c.ChangeCutoffHours hours before a delivery.</p>
+                </fieldset>
+
+                <fieldset class="fieldset">
+                    <legend><span class="num">৪</span> Delivery or pickup</legend>
+                    <div class="choice-cards" role="radiogroup">
+                        <label class="choice-card">
+                            <input type="radio" asp-for="Input.Fulfillment" value="@FulfillmentMethod.Delivery" data-fulfillment />
+                            <span class="choice-body">
+                                <span class="choice-title">@Icons.Get("truck") Delivery to your restaurant</span>
+                                <span class="choice-text">@c.DeliveryAreaDescription &middot; @(c.DeliveryFee > 0 ? Ui.Money(c.DeliveryFee) + " per delivery" : "free delivery")</span>
+                            </span>
+                        </label>
+                        <label class="choice-card">
+                            <input type="radio" asp-for="Input.Fulfillment" value="@FulfillmentMethod.Pickup" data-fulfillment />
+                            <span class="choice-body">
+                                <span class="choice-title">@Icons.Get("bag") Pickup</span>
+                                <span class="choice-text">Collect from our kitchen in Dallas at your chosen time.</span>
+                            </span>
+                        </label>
+                    </div>
+                    <div class="form-grid mt-3 @(isDelivery ? null : "hidden")" data-delivery-fields>
+                        <div class="field full">
+                            <label asp-for="Input.AddressLine1"></label>
+                            <input asp-for="Input.AddressLine1" autocomplete="address-line1" />
+                            <span asp-validation-for="Input.AddressLine1" class="field-validation-error"></span>
+                        </div>
+                        <div class="field full">
+                            <label asp-for="Input.AddressLine2"></label>
+                            <input asp-for="Input.AddressLine2" autocomplete="address-line2" />
+                        </div>
+                        <div class="field">
+                            <label asp-for="Input.City"></label>
+                            <input asp-for="Input.City" autocomplete="address-level2" />
+                            <span asp-validation-for="Input.City" class="field-validation-error"></span>
+                        </div>
+                        <div class="form-grid" style="gap:0 12px;">
+                            <div class="field">
+                                <label asp-for="Input.State"></label>
+                                <input asp-for="Input.State" maxlength="2" autocomplete="address-level1" />
+                                <span asp-validation-for="Input.State" class="field-validation-error"></span>
+                            </div>
+                            <div class="field">
+                                <label asp-for="Input.PostalCode"></label>
+                                <input asp-for="Input.PostalCode" inputmode="numeric" autocomplete="postal-code" />
+                                <span asp-validation-for="Input.PostalCode" class="field-validation-error"></span>
+                            </div>
+                        </div>
+                    </div>
+                </fieldset>
+
+                <fieldset class="fieldset mb-0">
+                    <legend><span class="num">৫</span> Anything else?</legend>
+                    <div class="field">
+                        <label asp-for="Input.Notes"></label>
+                        <textarea asp-for="Input.Notes" rows="3" placeholder="e.g. back-door delivery, packaging size (1 lb or 5 lb tubs), spice level, receiving hours…"></textarea>
+                        <span asp-validation-for="Input.Notes" class="field-validation-error"></span>
+                    </div>
+                </fieldset>
+            </div>
+
+            <aside class="summary-card standing-summary" aria-live="polite">
+                <header>
+                    <span class="bn" lang="bn">প্রতি ডেলিভারি</span>
+                    <h2>Each delivery</h2>
+                </header>
+                <div class="summary-body">
+                    <table class="totals">
+                        <tr><td>Vortas</td><td data-sum-qty>0 lb</td></tr>
+                        <tr><td>Subtotal</td><td data-sum-subtotal>@Ui.Money(0)</td></tr>
+                        <tr data-sum-fee-row class="@(isDelivery ? null : "hidden")"><td>Delivery</td><td data-sum-fee>@Ui.Money(c.DeliveryFee)</td></tr>
+                        <tr><td>Est. sales tax</td><td data-sum-tax>@Ui.Money(0)</td></tr>
+                        <tr class="grand"><td>Est. per delivery</td><td data-sum-total>@Ui.Money(0)</td></tr>
+                    </table>
+                    <p class="small muted mb-0" data-sum-week>Choose your delivery days to see a weekly estimate.</p>
+                    <p class="small standing-warning hidden" data-sum-minimum>Minimum @Ui.Money(c.MinimumSubtotalPerDelivery) per delivery.</p>
+                    <button class="btn btn-primary btn-lg btn-block mt-3" type="submit" disabled="@(!c.AcceptingRequests)">Send request</button>
+                    <p class="small muted mt-2 mb-0">No payment now. We'll confirm prices and your first delivery within one business day. @c.PaymentTerms</p>
+                </div>
+            </aside>
+        </form>
+    </div>
+</section>
+
+@section Scripts {
+    <script src="~/js/restaurant-order.js" asp-append-version="true"></script>
+}

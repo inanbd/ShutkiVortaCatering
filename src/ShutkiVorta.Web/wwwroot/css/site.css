@@ -567,6 +567,76 @@ p { margin: 0 0 1em; }
 .error-page { text-align: center; padding: 100px 0; }
 .error-page .code { font-family: var(--font-display); font-size: 7rem; line-height: 1; color: var(--gold-500); }
 
+/* ---------- Restaurants: wholesale price list, standing-order form & account ---------- */
+.steps.steps-4 { grid-template-columns: repeat(4, 1fr); gap: 22px; }
+.price-table-wrap { overflow-x: auto; background: var(--cream-50); border: 1px solid var(--line); border-radius: var(--radius-lg); box-shadow: var(--shadow-sm); max-width: 860px; margin: 0 auto; }
+.price-table { width: 100%; border-collapse: collapse; }
+.price-table th { text-align: left; font-size: .78rem; letter-spacing: .12em; text-transform: uppercase; color: var(--red-700); padding: 14px 18px; border-bottom: 2px solid var(--gold-500); }
+.price-table td { padding: 14px 18px; border-bottom: 1px dashed var(--line); vertical-align: middle; }
+.price-table tr:last-child td { border-bottom: 0; }
+.price-table .num { text-align: right; white-space: nowrap; }
+.price-table .price { font-size: 1.35rem; }
+.price-table a { color: var(--ink-900); text-decoration: none; }
+.price-table a:hover { color: var(--red-700); }
+.price-table .bn { margin-left: 6px; }
+.terms-chips { justify-content: center; }
+.link-light { color: var(--gold-400); }
+
+.wholesale-group { font-size: 1.25rem; color: var(--green-800); margin: 18px 0 6px; padding-bottom: 6px; border-bottom: 1px dashed var(--line); }
+.wholesale-group:first-child { margin-top: 0; }
+.wholesale-item { display: grid; grid-template-columns: 56px 1fr 128px 92px; gap: 14px; align-items: center; padding: 10px 8px; border-radius: var(--radius); transition: background .2s; }
+.wholesale-item img { width: 56px; height: 56px; object-fit: cover; border-radius: 50%; border: 2px solid var(--gold-400); }
+.wholesale-item.is-selected { background: var(--green-100); }
+.wholesale-item.is-invalid { background: #fdecec; }
+.wholesale-item-name label { cursor: pointer; color: var(--ink-900); }
+.wholesale-item-name .bn { margin-left: 4px; }
+.wholesale-item .retail { color: var(--ink-400); margin-left: 4px; }
+.wholesale-item-qty { display: flex; align-items: center; gap: 6px; }
+.wholesale-item-qty .input { width: 84px; text-align: right; padding: .5em .6em; }
+.wholesale-item-total { text-align: right; font-weight: 600; color: var(--green-800); font-variant-numeric: tabular-nums; }
+
+.day-picker { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; }
+.day-chip { position: relative; cursor: pointer; }
+.day-chip input { position: absolute; opacity: 0; }
+.day-chip span { display: flex; flex-direction: column; align-items: center; justify-content: center; min-width: 64px; height: 56px; padding: 0 10px; border: 2px solid var(--cream-300); border-radius: var(--radius-lg); background: var(--white); color: var(--ink-700); transition: all .15s; }
+.day-chip small { font-size: .7rem; color: var(--ink-400); }
+.day-chip input:checked + span { border-color: var(--green-800); background: var(--green-800); color: var(--cream-50); box-shadow: 0 0 0 3px rgba(214, 167, 64, .35); }
+.day-chip input:focus-visible + span { outline: 3px solid var(--gold-500); outline-offset: 2px; }
+.day-chip.is-closed { cursor: not-allowed; opacity: .55; }
+.day-chip.is-closed span { background: var(--cream-100); border-style: dashed; }
+.standing-warning { color: var(--red-700); font-weight: 600; margin: 10px 0 0; }
+
+.standing-head { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; align-items: flex-start; margin-bottom: 14px; }
+.standing-facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin: 0 0 18px; }
+.standing-facts div { background: var(--cream-50); border-radius: var(--radius); padding: 12px 14px; border: 1px solid var(--line); }
+.standing-facts dt { font-size: .74rem; letter-spacing: .12em; text-transform: uppercase; color: var(--red-700); font-weight: 700; }
+.standing-facts dd { margin: 4px 0 0; font-weight: 500; }
+.delivery-list { list-style: none; margin: 0; padding: 0; }
+.delivery-row { display: grid; grid-template-columns: 150px 1fr auto; gap: 12px; align-items: center; padding: 10px 0; border-bottom: 1px dashed var(--line); }
+.delivery-row:last-child { border-bottom: 0; }
+.delivery-date { display: flex; flex-direction: column; }
+.delivery-row.state-skipped .delivery-state, .delivery-row.state-cancelled .delivery-state, .delivery-row.state-kitchenclosed .delivery-state { color: var(--ink-400); text-decoration: line-through; }
+.delivery-row.state-ordercreated .delivery-state a { font-weight: 600; color: var(--green-800); }
+.standing-actions { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 20px; align-items: end; }
+
+@media (max-width: 1080px) {
+  .steps.steps-4 { grid-template-columns: repeat(2, 1fr); }
+}
+
+@media (max-width: 640px) {
+  .steps.steps-4 { grid-template-columns: 1fr; }
+  .wholesale-item { grid-template-columns: 44px 1fr auto; row-gap: 6px; column-gap: 12px; }
+  .wholesale-item img { width: 44px; height: 44px; grid-row: 1 / span 2; align-self: start; }
+  .wholesale-item-name { grid-column: 2 / span 2; }
+  .wholesale-item-qty { grid-column: 2; grid-row: 2; }
+  .wholesale-item-total { grid-column: 3; grid-row: 2; }
+  .day-chip span { min-width: 54px; }
+  .delivery-row { grid-template-columns: 1fr auto; }
+  .delivery-state { grid-column: 1; grid-row: 2; }
+  .delivery-action { grid-column: 2; grid-row: 1 / span 2; }
+  .price-table th, .price-table td { padding: 12px; }
+}
+
 /* ---------- Utilities ---------- */
 .text-center { text-align: center; }
 .mt-0 { margin-top: 0; } .mt-1 { margin-top: .5rem; } .mt-2 { margin-top: 1rem; } .mt-3 { margin-top: 1.5rem; } .mt-4 { margin-top: 2.5rem; }

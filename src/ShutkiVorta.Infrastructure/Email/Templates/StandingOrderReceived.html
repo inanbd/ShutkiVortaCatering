@@ -1,14 +1,14 @@
 <div style="text-align:center;">
   <div style="font-family:'Noto Serif Bengali','Hind Siliguri',Georgia,serif;font-size:30px;color:#b3202b;">ধন্যবাদ!</div>
   <h1 style="margin:6px 0 10px;font-family:Georgia,'Times New Roman',serif;font-weight:normal;color:#7a1f2b;font-size:25px;">We received your request, {{ContactFirstName}}</h1>
-  <p style="margin:0 0 6px;font-family:Arial,Helvetica,sans-serif;font-size:12px;letter-spacing:2px;text-transform:uppercase;color:#6b5138;">Standing order {{Reference}} &middot; {{BusinessName}}</p>
+  <p style="margin:0 0 6px;font-family:Arial,Helvetica,sans-serif;font-size:12px;letter-spacing:2px;text-transform:uppercase;color:#6b5138;">Standing order {{Reference}} &middot; {{RestaurantName}}</p>
 </div>
 <p style="margin:16px 0;">Thank you for bringing homestyle Bangladeshi vortas to your guests. Our team will review your request and call or email you within one business day to confirm quantities, prices and your first delivery. <strong>Nothing is charged or scheduled until we confirm.</strong></p>
 
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#fbf1dc;border:2px dashed #d6a740;font-size:14px;">
   <tr>
     <td style="padding:16px 20px;line-height:1.7;">
-      <strong style="color:#7a1f2b;">{{FulfillmentName}}:</strong> every {{DaysText}} at {{PreferredTime}}<br>
+      <strong style="color:#7a1f2b;">{{FulfillmentName}}:</strong> {{DaysText}} at {{PreferredTime}}<br>
       <strong style="color:#7a1f2b;">Starting:</strong> {{StartDate}}{{#if EndDate}} &middot; until {{EndDate}}{{/if}}<br>
       {{#if IsDelivery}}<strong style="color:#7a1f2b;">Deliver to:</strong> {{DeliveryAddress}}<br>{{/if}}
     </td>

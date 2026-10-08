@@ -1,0 +1,12 @@
+@using ShutkiVorta.Domain.Wholesale
+@model StandingOrderStatus
+@{
+    var css = Model switch
+    {
+        StandingOrderStatus.PendingApproval => "status-pending",
+        StandingOrderStatus.Active => "status-confirmed",
+        StandingOrderStatus.Paused => "status-preparing",
+        _ => "status-cancelled",
+    };
+}
+<span class="status-pill @css">@Model.DisplayName()</span>
