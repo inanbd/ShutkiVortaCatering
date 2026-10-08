@@ -7,13 +7,13 @@ namespace ShutkiVorta.Infrastructure.Persistence.Repositories;
 
 internal sealed class CateringInquiryRepository(IDbConnectionFactory connections, ISqlDialect dialect) : ICateringInquiryRepository
 {
-    private const string Columns = "Id, Name, Email, Phone, EventDate, GuestCount, Message, IsHandled, CreatedAtUtc, HandledAtUtc";
+    private const string Columns = "Id, Topic, Name, Email, Phone, EventDate, GuestCount, Message, IsHandled, CreatedAtUtc, HandledAtUtc";
 
     public async Task AddAsync(CateringInquiry inquiry, CancellationToken cancellationToken = default)
     {
         const string sql = """
-            INSERT INTO CateringInquiries (Name, Email, Phone, EventDate, GuestCount, Message, IsHandled, CreatedAtUtc, HandledAtUtc)
-            VALUES (@Name, @Email, @Phone, @EventDate, @GuestCount, @Message, @IsHandled, @CreatedAtUtc, @HandledAtUtc)
+            INSERT INTO CateringInquiries (Topic, Name, Email, Phone, EventDate, GuestCount, Message, IsHandled, CreatedAtUtc, HandledAtUtc)
+            VALUES (@Topic, @Name, @Email, @Phone, @EventDate, @GuestCount, @Message, @IsHandled, @CreatedAtUtc, @HandledAtUtc)
             """;
 
         await using var connection = await connections.OpenAsync(cancellationToken);

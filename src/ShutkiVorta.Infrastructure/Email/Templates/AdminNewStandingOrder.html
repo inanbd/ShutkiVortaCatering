@@ -1,0 +1,43 @@
+<div style="font-family:Arial,Helvetica,sans-serif;font-size:12px;letter-spacing:2px;text-transform:uppercase;color:#b3202b;font-weight:bold;">&#127869; New restaurant order request &middot; awaiting your approval</div>
+<h1 style="margin:6px 0 18px;font-family:Georgia,'Times New Roman',serif;font-weight:normal;color:#7a1f2b;font-size:26px;">{{BusinessName}} &middot; {{Reference}}</h1>
+
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#fbf1dc;border:2px dashed #d6a740;font-size:14px;">
+  <tr>
+    <td class="stack" valign="top" width="50%" style="padding:16px 20px;">
+      <div style="color:#7a1f2b;font-weight:bold;text-transform:uppercase;font-size:11px;letter-spacing:1px;">Restaurant</div>
+      <div style="padding-top:4px;"><strong>{{BusinessName}}</strong><br>
+        {{ContactName}}<br>
+        <a href="mailto:{{CustomerEmail}}" style="color:#0d4d3a;">{{CustomerEmail}}</a><br>
+        {{CustomerPhone}}
+        {{#if TaxPermitNumber}}<br><span style="color:#6b5138;">Tax permit: {{TaxPermitNumber}}</span>{{/if}}</div>
+    </td>
+    <td class="stack" valign="top" width="50%" style="padding:16px 20px;">
+      <div style="color:#7a1f2b;font-weight:bold;text-transform:uppercase;font-size:11px;letter-spacing:1px;">{{FulfillmentName}} schedule</div>
+      <div style="padding-top:4px;"><strong>Every {{DaysText}}</strong> at <strong>{{PreferredTime}}</strong><br>
+        Starting {{StartDate}}{{#if EndDate}}<br>Until {{EndDate}}{{/if}}
+        {{#if IsDelivery}}<br><span style="color:#6b5138;">{{DeliveryAddress}}</span>{{/if}}</div>
+    </td>
+  </tr>
+</table>
+
+<h2 style="margin:26px 0 8px;font-family:Georgia,'Times New Roman',serif;font-weight:normal;color:#7a1f2b;font-size:19px;">Per delivery</h2>
+{{{ItemsTable}}}
+
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:10px;font-size:14px;">
+  <tr><td style="padding:3px 8px;color:#6b5138;">Subtotal</td><td align="right" style="padding:3px 8px;">{{SubtotalPerDelivery}}</td></tr>
+  {{#if HasDeliveryFee}}<tr><td style="padding:3px 8px;color:#6b5138;">Delivery</td><td align="right" style="padding:3px 8px;">{{DeliveryFee}}</td></tr>{{/if}}
+  <tr><td style="padding:3px 8px;color:#6b5138;">Sales tax{{#if TaxPermitNumber}} (mark exempt once the resale certificate is on file){{/if}}</td><td align="right" style="padding:3px 8px;">{{TaxPerDelivery}}</td></tr>
+  <tr><td style="padding:8px;border-top:2px solid #c8932b;font-weight:bold;color:#0d4d3a;">Each delivery</td><td align="right" style="padding:8px;border-top:2px solid #c8932b;font-weight:bold;color:#0d4d3a;">{{TotalPerDelivery}}</td></tr>
+  <tr><td style="padding:3px 8px;color:#6b5138;">About {{DeliveriesPerWeek}} deliveries a week</td><td align="right" style="padding:3px 8px;color:#6b5138;">&asymp; {{EstimatedWeeklyTotal}} / week</td></tr>
+</table>
+
+{{#if Notes}}<p style="margin:16px 0 0;padding:12px 16px;background-color:#fff1e6;border-left:4px solid #b3202b;font-size:14px;white-space:pre-line;"><strong>Notes from the restaurant:</strong> {{Notes}}</p>{{/if}}
+<p style="margin:14px 0 0;font-size:13px;color:#6b5138;">Nothing is scheduled until you approve it. You can adjust items, agreed prices, the delivery fee and tax exemption before approving.</p>
+
+<table role="presentation" cellpadding="0" cellspacing="0" align="center" style="margin:26px auto 0;">
+  <tr>
+    <td align="center" style="background-color:#0d4d3a;border:2px solid #d6a740;border-radius:4px;">
+      <a href="{{AdminUrl}}" style="display:inline-block;padding:13px 30px;font-family:Arial,Helvetica,sans-serif;font-size:15px;font-weight:bold;color:#ffffff;text-decoration:none;letter-spacing:1px;">Review &amp; approve</a>
+    </td>
+  </tr>
+</table>

@@ -23,6 +23,9 @@ internal sealed class FakeUrls : IAppUrls
     public string CustomerOrder(string orderNumber) => Absolute($"/account/orders/{orderNumber}");
     public string AdminOrder(string orderNumber) => Absolute($"/admin/orders/{orderNumber}");
     public string AdminInquiries() => Absolute("/admin/inquiries");
+    public string AdminStandingOrder(int id) => Absolute($"/admin/recurring/{id}");
+    public string CustomerStandingOrder(string reference) => Absolute($"/account/restaurant-orders/{reference}");
+    public string Restaurants() => Absolute("/restaurants");
     public string ConfirmEmail(string userId, string code) => Absolute($"/account/confirm-email?userId={userId}&code={code}");
     public string ResetPassword(string email, string code) => Absolute($"/account/reset-password?email={email}&code={code}");
     public string Login() => Absolute("/account/login");

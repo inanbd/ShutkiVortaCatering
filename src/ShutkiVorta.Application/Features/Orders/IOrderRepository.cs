@@ -29,6 +29,34 @@ public interface IOrderRepository
     Task<IReadOnlyDictionary<string, int>> CountByCustomerAsync(IReadOnlyCollection<string> customerIds, CancellationToken cancellationToken = default);
 
     Task<IReadOnlyList<PopularItemDto>> GetPopularItemsSinceAsync(DateTime fromUtc, int take, CancellationToken cancellationToken = default);
+
+    /// <summary>Orders generated from one standing order, scheduled within the range (local time).</summary>
+    Task<IReadOnlyList<OrderSummaryDto>> GetForStandingOrderAsync(int standingOrderId, DateTime fromLocal, DateTime toLocal, CancellationToken cancellationToken = default);
+
+    /// <summary>Order lines of all non-cancelled orders scheduled within the range (local time), for kitchen planning.</summary>
+    Task<IReadOnlyList<ProductionLine>> GetProductionLinesAsync(DateTime fromLocal, DateTime toLocal, CancellationToken cancellationToken = default);
+}
+
+/// <summary>Where an order came from.</summary>
+public enum OrderSource
+{
+    /// <summary>Placed through the website checkout.</summary>
+    Online = 1,
+
+    /// <summary>Generated from a restaurant standing order.</summary>
+    Restaurant = 2,
+}
+
+/// <summary>One order line with its order's schedule. Populated directly by the data layer.</summary>
+public sealed class ProductionLine
+{
+    public int OrderId { get; init; }
+    public int? StandingOrderId { get; init; }
+    public DateTime ScheduledFor { get; init; }
+    public int MenuItemId { get; init; }
+    public string ItemName { get; init; } = string.Empty;
+    public string Unit { get; init; } = string.Empty;
+    public decimal Quantity { get; init; }
 }
 
 public sealed record OrderSearchCriteria
@@ -36,6 +64,7 @@ public sealed record OrderSearchCriteria
     public string? Search { get; init; }
     public OrderStatus? Status { get; init; }
     public FulfillmentMethod? Fulfillment { get; init; }
+    public OrderSource? Source { get; init; }
     public DateTime? ScheduledFrom { get; init; }
     public DateTime? ScheduledTo { get; init; }
     public int Page { get; init; } = 1;

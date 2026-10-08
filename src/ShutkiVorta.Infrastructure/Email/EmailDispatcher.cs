@@ -1,94 +1,129 @@
+using System.Net.Sockets;
+using MailKit;
+using MailKit.Net.Smtp;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using ShutkiVorta.Application.Common.Email;
 using ShutkiVorta.Application.Common.Interfaces;
+using ShutkiVorta.Application.Common.Options;
+using ShutkiVorta.Application.Features.Emails;
 
 namespace ShutkiVorta.Infrastructure.Email;
 
-/// <summary>Background service that sends queued emails, retrying transient failures.</summary>
-internal sealed class EmailDispatcher(EmailQueue queue, IServiceScopeFactory scopes, ILogger<EmailDispatcher> logger) : BackgroundService
+/// <summary>
+/// Background service that delivers emails from the durable outbox. Temporary failures (network, timeouts, 4xx replies)
+/// are retried with back-off (1 min, 5 min, 30 min, 2 h); permanent ones (wrong password, certificate, 5xx) fail at once
+/// with a hint. Everything is visible in Admin → Email log, where failed emails can be re-sent after fixing the settings.
+/// </summary>
+internal sealed class EmailDispatcher(
+    EmailDispatchSignal signal,
+    IServiceScopeFactory scopes,
+    IEmailDiagnostics diagnostics,
+    IOptionsMonitor<EmailOptions> options,
+    TimeProvider time,
+    ILogger<EmailDispatcher> logger) : BackgroundService
 {
-    private static readonly TimeSpan[] RetryDelays = [TimeSpan.FromSeconds(2), TimeSpan.FromSeconds(10), TimeSpan.FromSeconds(30)];
-    private static readonly TimeSpan ShutdownFlushTimeout = TimeSpan.FromSeconds(10);
+    private const int BatchSize = 20;
+    private static readonly TimeSpan PollInterval = TimeSpan.FromSeconds(30);
+    private static readonly TimeSpan[] RetryDelays =
+        [TimeSpan.FromMinutes(1), TimeSpan.FromMinutes(5), TimeSpan.FromMinutes(30), TimeSpan.FromHours(2)];
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        try
-        {
-            await foreach (var message in queue.Reader.ReadAllAsync(stoppingToken))
-            {
-                await SendWithRetryAsync(message, stoppingToken);
-            }
-        }
-        catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
-        {
-            // Normal shutdown.
-        }
+        ReportConfiguration();
 
-        await FlushRemainingAsync();
-    }
-
-    /// <summary>On shutdown, give already-queued emails (e.g. an order confirmation) a short chance to go out.</summary>
-    private async Task FlushRemainingAsync()
-    {
-        using var timeout = new CancellationTokenSource(ShutdownFlushTimeout);
-        while (!timeout.IsCancellationRequested && queue.Reader.TryRead(out var message))
-        {
-            await SendOnceAsync(message, timeout.Token);
-        }
-    }
-
-    private async Task SendWithRetryAsync(EmailMessage message, CancellationToken stoppingToken)
-    {
-        for (var attempt = 0; ; attempt++)
+        while (!stoppingToken.IsCancellationRequested)
         {
             try
             {
-                await SendAsync(message, stoppingToken);
-                return;
+                while (await ProcessBatchAsync(stoppingToken) == BatchSize)
+                {
+                    // Keep draining while full batches come back.
+                }
+
+                await signal.WaitAsync(PollInterval, stoppingToken);
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
             {
-                return;
-            }
-            catch (Exception ex) when (attempt < RetryDelays.Length)
-            {
-                logger.LogWarning(ex, "Sending email \"{Subject}\" failed (attempt {Attempt}); retrying", message.Subject, attempt + 1);
-                try
-                {
-                    await Task.Delay(RetryDelays[attempt], stoppingToken);
-                }
-                catch (OperationCanceledException)
-                {
-                    await SendOnceAsync(message, CancellationToken.None);
-                    return;
-                }
+                break;
             }
             catch (Exception ex)
             {
-                logger.LogError(ex, "Giving up on email \"{Subject}\" to {Recipients}", message.Subject, string.Join(", ", message.To));
-                return;
+                // Typically the database is briefly unavailable; try again shortly.
+                logger.LogError(ex, "Email dispatcher loop failed; retrying in {Delay}", PollInterval);
+                await Task.Delay(PollInterval, stoppingToken).ContinueWith(_ => { }, TaskScheduler.Default);
             }
         }
     }
 
-    private async Task SendOnceAsync(EmailMessage message, CancellationToken cancellationToken)
+    private async Task<int> ProcessBatchAsync(CancellationToken stoppingToken)
     {
-        try
+        await using var scope = scopes.CreateAsyncScope();
+        var outbox = scope.ServiceProvider.GetRequiredService<EmailOutboxRepository>();
+        var transport = scope.ServiceProvider.GetRequiredService<IEmailTransport>();
+        var batch = await outbox.ClaimDueAsync(BatchSize, stoppingToken);
+
+        foreach (var email in batch)
         {
-            await SendAsync(message, cancellationToken);
+            if (!options.CurrentValue.Enabled)
+            {
+                await outbox.MarkDisabledAsync(email.Id, stoppingToken);
+                continue;
+            }
+
+            try
+            {
+                var result = await transport.SendAsync(email.ToMessage(), stoppingToken);
+                await outbox.MarkDeliveredAsync(email.Id, result, stoppingToken);
+            }
+            catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+            {
+                throw; // Left in "Sending"; picked up again after restart.
+            }
+            catch (Exception ex)
+            {
+                var retryAt = IsTransient(ex) && email.Attempts <= RetryDelays.Length
+                    ? time.GetUtcNow().UtcDateTime + RetryDelays[email.Attempts - 1]
+                    : (DateTime?)null;
+                var method = options.CurrentValue.ResolveDeliveryMethod();
+                var hint = (ex as EmailDeliveryException)?.Hint;
+                var error = hint is null ? ex.Message : $"{ex.Message} — {hint}";
+                await outbox.MarkFailedAsync(email.Id, method, error, retryAt, CancellationToken.None);
+
+                if (retryAt is null)
+                {
+                    logger.LogError(ex, "Giving up on email {EmailId} \"{Subject}\" to {Recipients} after {Attempts} attempts",
+                        email.Id, email.Subject, email.ToAddresses, email.Attempts);
+                }
+                else
+                {
+                    logger.LogWarning(ex, "Sending email {EmailId} \"{Subject}\" failed (attempt {Attempt}); retrying at {RetryAt:u}",
+                        email.Id, email.Subject, email.Attempts, retryAt);
+                }
+            }
         }
-        catch (Exception ex)
-        {
-            logger.LogError(ex, "Could not send email \"{Subject}\" to {Recipients} during shutdown", message.Subject, string.Join(", ", message.To));
-        }
+
+        return batch.Count;
     }
 
-    private async Task SendAsync(EmailMessage message, CancellationToken cancellationToken)
+    /// <summary>Only network hiccups and temporary (4xx) refusals are worth retrying; wrong settings fail immediately.</summary>
+    internal static bool IsTransient(Exception ex)
     {
-        using var scope = scopes.CreateScope();
-        var transport = scope.ServiceProvider.GetRequiredService<IEmailTransport>();
-        await transport.SendAsync(message, cancellationToken);
+        var cause = ex is EmailDeliveryException { InnerException: { } inner } ? inner : ex;
+        return cause is SocketException or TimeoutException or IOException or SmtpProtocolException
+                   or ServiceNotConnectedException or OperationCanceledException
+               || cause is SmtpCommandException command && (int)command.StatusCode is >= 400 and < 500;
+    }
+
+    private void ReportConfiguration()
+    {
+        var report = diagnostics.GetReport();
+        logger.LogInformation("Email: {Summary}", report.Summary);
+        foreach (var warning in report.Warnings)
+        {
+            logger.LogWarning("Email configuration: {Warning}", warning);
+        }
     }
 }

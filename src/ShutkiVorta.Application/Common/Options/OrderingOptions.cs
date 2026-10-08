@@ -22,6 +22,13 @@ public sealed class OrderingOptions
     public int SlotIntervalMinutes { get; set; } = 60;
     public List<DayOfWeek> ClosedDays { get; set; } = [];
 
+    /// <summary>Dates the kitchen is closed (holidays such as Eid), "yyyy-MM-dd". Applies to online and restaurant orders.</summary>
+    public List<string> BlackoutDates { get; set; } = [];
+
+    public bool IsKitchenClosed(DateOnly date) =>
+        ClosedDays.Contains(date.DayOfWeek)
+        || BlackoutDates.Any(d => DateOnly.TryParseExact(d?.Trim(), "yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out var b) && b == date);
+
     public decimal DeliveryFee { get; set; } = 10m;
     public decimal? FreeDeliveryThreshold { get; set; } = 150m;
     public decimal MinimumDeliverySubtotal { get; set; } = 40m;

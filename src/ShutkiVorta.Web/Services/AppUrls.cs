@@ -49,6 +49,12 @@ public sealed class AppUrls(IOptionsMonitor<SiteOptions> site, IHttpContextAcces
 
     public string AdminInquiries() => Absolute("/admin/inquiries");
 
+    public string AdminStandingOrder(int id) => Absolute($"/admin/recurring/{id}");
+
+    public string CustomerStandingOrder(string reference) => Absolute($"/account/restaurant-orders/{Uri.EscapeDataString(reference)}");
+
+    public string Restaurants() => Absolute("/restaurants");
+
     public string ConfirmEmail(string userId, string code) =>
         Absolute($"/account/confirm-email?userId={Uri.EscapeDataString(userId)}&code={Uri.EscapeDataString(code)}");
 

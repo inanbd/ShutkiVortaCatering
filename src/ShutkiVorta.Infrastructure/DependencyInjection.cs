@@ -5,16 +5,19 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using ShutkiVorta.Application.Common.Interfaces;
 using ShutkiVorta.Application.Features.Accounts;
+using ShutkiVorta.Application.Features.Emails;
 using ShutkiVorta.Application.Features.Inquiries;
 using ShutkiVorta.Application.Features.Menu;
 using ShutkiVorta.Application.Features.Orders;
 using ShutkiVorta.Application.Features.Settings;
+using ShutkiVorta.Application.Features.Wholesale;
 using ShutkiVorta.Infrastructure.Email;
 using ShutkiVorta.Infrastructure.Identity;
 using ShutkiVorta.Infrastructure.Persistence;
 using ShutkiVorta.Infrastructure.Persistence.Repositories;
 using ShutkiVorta.Infrastructure.Persistence.Seed;
 using ShutkiVorta.Infrastructure.Services;
+using ShutkiVorta.Infrastructure.Wholesale;
 
 namespace ShutkiVorta.Infrastructure;
 
@@ -36,6 +39,7 @@ public static class DependencyInjection
         services.AddScoped<IMenuItemRepository, MenuItemRepository>();
         services.AddScoped<IOrderRepository, OrderRepository>();
         services.AddScoped<ICateringInquiryRepository, CateringInquiryRepository>();
+        services.AddScoped<IStandingOrderRepository, StandingOrderRepository>();
 
         services.Configure<SeedOptions>(configuration.GetSection(SeedOptions.SectionName));
         services.AddScoped<MigrationRunner>();
@@ -63,12 +67,15 @@ public static class DependencyInjection
 
         services.AddScoped<IIdentityService, IdentityService>();
 
-        // ---- Email ----
-        services.AddSingleton<EmailQueue>();
-        services.AddSingleton<IEmailService>(sp => sp.GetRequiredService<EmailQueue>());
-        services.AddHostedService<EmailDispatcher>();
+        // ---- Email (durable outbox + background dispatcher) ----
+        services.AddSingleton<EmailDispatchSignal>();
+        services.AddScoped<EmailOutboxRepository>();
+        services.AddScoped<IEmailLog>(sp => sp.GetRequiredService<EmailOutboxRepository>());
+        services.AddScoped<IEmailService, OutboxEmailService>();
         services.AddScoped<IEmailTransport, EmailTransport>();
+        services.AddSingleton<IEmailDiagnostics, EmailDiagnostics>();
         services.AddSingleton<IEmailTemplateRenderer, EmailTemplateRenderer>();
+        services.AddHostedService<EmailDispatcher>();
 
         // ---- Misc services ----
         services.AddMemoryCache();
@@ -76,6 +83,9 @@ public static class DependencyInjection
         services.AddSingleton<IDateTimeProvider, DateTimeProvider>();
         services.AddSingleton<IOrderNumberGenerator, OrderNumberGenerator>();
         services.AddScoped<IImageStorage, LocalImageStorage>();
+
+        // ---- Restaurant standing orders: generate upcoming deliveries in the background ----
+        services.AddHostedService<StandingOrderGenerator>();
 
         return services;
     }

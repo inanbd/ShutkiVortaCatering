@@ -11,33 +11,81 @@ using ShutkiVorta.Domain.Common;
 
 namespace ShutkiVorta.Infrastructure.Email;
 
-/// <summary>Sends email using the method configured in appsettings.json ("Email:DeliveryMethod").</summary>
+/// <summary>Delivers email using the method configured in appsettings.json ("Email:DeliveryMethod", default "Auto").</summary>
 internal sealed class EmailTransport(
     IOptionsMonitor<EmailOptions> options,
     IHostEnvironment environment,
     ILogger<EmailTransport> logger) : IEmailTransport
 {
-    public async Task SendAsync(EmailMessage message, CancellationToken cancellationToken = default)
+    public async Task<EmailDeliveryResult> SendAsync(EmailMessage message, CancellationToken cancellationToken = default)
     {
         var settings = options.CurrentValue;
-        if (!settings.Enabled)
-        {
-            logger.LogInformation("Email disabled; skipped \"{Subject}\" to {Recipients}", message.Subject, string.Join(", ", message.To));
-            return;
-        }
-
         var mime = BuildMimeMessage(message, settings);
 
-        if (string.Equals(settings.DeliveryMethod, EmailDeliveryMethods.Smtp, StringComparison.OrdinalIgnoreCase))
+        if (settings.ResolveDeliveryMethod() == EmailDeliveryMethods.Smtp)
         {
-            await SendViaSmtpAsync(mime, settings.Smtp, cancellationToken);
-        }
-        else
-        {
-            await WriteToPickupDirectoryAsync(mime, message, settings, cancellationToken);
+            var reply = await SendViaSmtpAsync(mime, settings.Smtp, cancellationToken);
+            logger.LogInformation("Sent email \"{Subject}\" to {Recipients} via {Host}: {Reply}", message.Subject, string.Join(", ", message.To), settings.Smtp.Host, reply);
+            return new EmailDeliveryResult(EmailDeliveryMethods.Smtp, ActuallySent: true, reply);
         }
 
-        logger.LogInformation("Sent email \"{Subject}\" to {Recipients} via {Method}", message.Subject, string.Join(", ", message.To), settings.DeliveryMethod);
+        var path = await WriteToPickupDirectoryAsync(mime, message, settings, cancellationToken);
+        logger.LogInformation("Saved email \"{Subject}\" to {Path} (pickup folder — not sent)", message.Subject, path);
+        return new EmailDeliveryResult(EmailDeliveryMethods.PickupDirectory, ActuallySent: false, path);
+    }
+
+    public async Task<SmtpConnectionTestResult> TestConnectionAsync(CancellationToken cancellationToken = default)
+    {
+        var settings = options.CurrentValue;
+        var smtp = settings.Smtp;
+        var steps = new List<SmtpConnectionTestStep>();
+
+        if (settings.ResolveDeliveryMethod() != EmailDeliveryMethods.Smtp)
+        {
+            return new SmtpConnectionTestResult(
+                false,
+                "No SMTP server is in use: emails are saved to the pickup folder and are not sent.",
+                steps,
+                string.IsNullOrWhiteSpace(smtp.Host) || !smtp.IsConfigured
+                    ? "Fill in Email:Smtp:Host (and Port, UserName, Password) in appsettings.json and restart the site."
+                    : "Set Email:DeliveryMethod to \"Auto\" or \"Smtp\" in appsettings.json and restart the site.");
+        }
+
+        var (security, correction) = SmtpSecurity.Resolve(smtp);
+        if (correction is not null)
+        {
+            steps.Add(new SmtpConnectionTestStep("Settings", true, correction));
+        }
+
+        using var client = CreateClient(smtp);
+        try
+        {
+            await client.ConnectAsync(smtp.Host, smtp.Port, security, cancellationToken);
+            var tls = client.IsSecure ? $"encrypted with {client.SslProtocol}" : "NOT encrypted";
+            steps.Add(new SmtpConnectionTestStep("Connect", true, $"Connected to {smtp.Host}:{smtp.Port} using {SmtpSecurity.Describe(security)} — {tls}."));
+
+            if (!string.IsNullOrWhiteSpace(smtp.UserName))
+            {
+                await client.AuthenticateAsync(smtp.UserName, smtp.Password ?? string.Empty, cancellationToken);
+                steps.Add(new SmtpConnectionTestStep("Sign in", true, $"Signed in as {smtp.UserName}."));
+            }
+            else
+            {
+                var offered = client.AuthenticationMechanisms.Count > 0 ? $" (the server offers sign-in: {string.Join(", ", client.AuthenticationMechanisms)})" : string.Empty;
+                steps.Add(new SmtpConnectionTestStep("Sign in", true, $"Skipped — no UserName configured{offered}."));
+            }
+
+            await client.NoOpAsync(cancellationToken);
+            await client.DisconnectAsync(quit: true, cancellationToken);
+            return new SmtpConnectionTestResult(true, "The mail server accepted the connection and sign-in. Use \"Send test email\" to try a real message.", steps, null);
+        }
+        catch (Exception ex)
+        {
+            var step = !client.IsConnected ? "Connect" : "Sign in";
+            steps.Add(new SmtpConnectionTestStep(step, false, ex.Message));
+            logger.LogWarning(ex, "SMTP connection test to {Host}:{Port} failed at {Step}", smtp.Host, smtp.Port, step);
+            return new SmtpConnectionTestResult(false, $"{step} failed: {ex.Message}", steps, SmtpErrorHints.Explain(ex, smtp));
+        }
     }
 
     private static MimeMessage BuildMimeMessage(EmailMessage message, EmailOptions settings)
@@ -60,23 +108,51 @@ internal sealed class EmailTransport(
         return mime;
     }
 
-    private static async Task SendViaSmtpAsync(MimeMessage mime, SmtpSettings smtp, CancellationToken cancellationToken)
+    private SmtpClient CreateClient(SmtpSettings smtp)
     {
-        var security = Enum.TryParse<SecureSocketOptions>(smtp.Security, ignoreCase: true, out var parsed) ? parsed : SecureSocketOptions.Auto;
-
-        using var client = new SmtpClient { Timeout = Math.Max(5, smtp.TimeoutSeconds) * 1000 };
-        await client.ConnectAsync(smtp.Host, smtp.Port, security, cancellationToken);
-        if (!string.IsNullOrWhiteSpace(smtp.UserName))
+        var client = new SmtpClient
         {
-            await client.AuthenticateAsync(smtp.UserName, smtp.Password ?? string.Empty, cancellationToken);
+            Timeout = Math.Max(5, smtp.TimeoutSeconds) * 1000,
+            CheckCertificateRevocation = smtp.CheckCertificateRevocation,
+        };
+
+        if (smtp.AcceptInvalidCertificates)
+        {
+            client.ServerCertificateValidationCallback = (_, _, _, _) => true;
         }
 
-        await client.SendAsync(mime, cancellationToken);
-        await client.DisconnectAsync(quit: true, cancellationToken);
+        if (!string.IsNullOrWhiteSpace(smtp.LocalDomain))
+        {
+            client.LocalDomain = smtp.LocalDomain;
+        }
+
+        return client;
+    }
+
+    private async Task<string> SendViaSmtpAsync(MimeMessage mime, SmtpSettings smtp, CancellationToken cancellationToken)
+    {
+        var (security, _) = SmtpSecurity.Resolve(smtp);
+        using var client = CreateClient(smtp);
+        try
+        {
+            await client.ConnectAsync(smtp.Host, smtp.Port, security, cancellationToken);
+            if (!string.IsNullOrWhiteSpace(smtp.UserName))
+            {
+                await client.AuthenticateAsync(smtp.UserName, smtp.Password ?? string.Empty, cancellationToken);
+            }
+
+            var reply = await client.SendAsync(mime, cancellationToken);
+            await client.DisconnectAsync(quit: true, cancellationToken);
+            return string.IsNullOrWhiteSpace(reply) ? "accepted" : reply.Trim();
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
+        {
+            throw new EmailDeliveryException(ex.Message, SmtpErrorHints.Explain(ex, smtp), ex);
+        }
     }
 
     /// <summary>Development mode: saves each email as .eml (open in any mail client) plus .html (open in a browser).</summary>
-    private async Task WriteToPickupDirectoryAsync(MimeMessage mime, EmailMessage message, EmailOptions settings, CancellationToken cancellationToken)
+    private async Task<string> WriteToPickupDirectoryAsync(MimeMessage mime, EmailMessage message, EmailOptions settings, CancellationToken cancellationToken)
     {
         var directory = Path.IsPathRooted(settings.PickupDirectory)
             ? settings.PickupDirectory
@@ -88,5 +164,6 @@ internal sealed class EmailTransport(
 
         await mime.WriteToAsync(Path.Combine(directory, baseName + ".eml"), cancellationToken);
         await File.WriteAllTextAsync(Path.Combine(directory, baseName + ".html"), message.HtmlBody, cancellationToken);
+        return Path.Combine(directory, baseName + ".eml");
     }
 }

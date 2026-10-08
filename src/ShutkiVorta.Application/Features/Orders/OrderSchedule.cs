@@ -18,9 +18,15 @@ public sealed class OrderSchedule(IOptions<OrderingOptions> options, IDateTimePr
     public IReadOnlyList<TimeOnly> DailySlots()
     {
         var o = options.Value;
-        var first = ParseTime(o.FirstSlot, new TimeOnly(11, 0));
-        var last = ParseTime(o.LastSlot, new TimeOnly(19, 0));
-        var interval = Math.Clamp(o.SlotIntervalMinutes, 15, 240);
+        return BuildSlots(o.FirstSlot, o.LastSlot, o.SlotIntervalMinutes, new TimeOnly(11, 0), new TimeOnly(19, 0));
+    }
+
+    /// <summary>Evenly spaced time slots from <paramref name="firstSlot"/> to <paramref name="lastSlot"/> inclusive.</summary>
+    public static IReadOnlyList<TimeOnly> BuildSlots(string? firstSlot, string? lastSlot, int intervalMinutes, TimeOnly defaultFirst, TimeOnly defaultLast)
+    {
+        var first = ParseTime(firstSlot, defaultFirst);
+        var last = ParseTime(lastSlot, defaultLast);
+        var interval = Math.Clamp(intervalMinutes, 15, 240);
 
         var slots = new List<TimeOnly>();
         for (var t = first; t <= last; t = t.AddMinutes(interval))
@@ -47,7 +53,7 @@ public sealed class OrderSchedule(IOptions<OrderingOptions> options, IDateTimePr
         for (var offset = 0; offset <= Math.Max(1, o.MaxDaysInAdvance); offset++)
         {
             var date = today.AddDays(offset);
-            if (o.ClosedDays.Contains(date.DayOfWeek))
+            if (o.IsKitchenClosed(date))
             {
                 continue;
             }
@@ -68,8 +74,8 @@ public sealed class OrderSchedule(IOptions<OrderingOptions> options, IDateTimePr
         var day = GetAvailableDays().FirstOrDefault(d => d.Date == date);
         if (day is null)
         {
-            return options.Value.ClosedDays.Contains(date.DayOfWeek)
-                ? $"We are closed on {date.DayOfWeek}s. Please choose another date."
+            return options.Value.IsKitchenClosed(date)
+                ? $"Our kitchen is closed on {date.ToString("dddd, MMM d", Format.Culture)}. Please choose another date."
                 : $"Please choose a date at least {options.Value.MinimumLeadTimeHours} hours from now and within the next {options.Value.MaxDaysInAdvance} days.";
         }
 

@@ -11,6 +11,9 @@ public sealed record MenuItemDetails
     public required string Description { get; init; }
     public string? Ingredients { get; init; }
     public decimal PricePerUnit { get; init; }
+
+    /// <summary>Optional price per unit for restaurant (wholesale) orders; null uses the configured discount.</summary>
+    public decimal? WholesalePricePerUnit { get; init; }
     public string Unit { get; init; } = MenuItem.DefaultUnit;
     public decimal MinimumQuantity { get; init; } = 0.5m;
     public decimal QuantityStep { get; init; } = 0.5m;

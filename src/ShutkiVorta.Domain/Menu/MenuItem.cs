@@ -21,6 +21,7 @@ public sealed class MenuItem : Entity
     public string Description { get; private set; } = string.Empty;
     public string? Ingredients { get; private set; }
     public decimal PricePerUnit { get; private set; }
+    public decimal? WholesalePricePerUnit { get; private set; }
     public string Unit { get; private set; } = DefaultUnit;
     public decimal MinimumQuantity { get; private set; }
     public decimal QuantityStep { get; private set; }
@@ -69,6 +70,10 @@ public sealed class MenuItem : Entity
 
     public string FormatQuantity(decimal quantity) => $"{quantity:0.##} {Unit}";
 
+    /// <summary>Price per unit for restaurants: the explicit wholesale price, or retail less the default discount.</summary>
+    public decimal EffectiveWholesalePrice(decimal defaultDiscountPercent) =>
+        WholesalePricePerUnit ?? Money.Round(PricePerUnit * (1 - Math.Clamp(defaultDiscountPercent, 0, 90) / 100m));
+
     private void Apply(MenuItemDetails d, DateTime nowUtc)
     {
         Name = Guard.NotEmpty(d.Name, "Name", 120);
@@ -86,6 +91,7 @@ public sealed class MenuItem : Entity
         Description = Guard.NotEmpty(d.Description, "Description", 4000);
         Ingredients = Guard.Optional(d.Ingredients, "Ingredients", 1000);
         PricePerUnit = Money.Round(Guard.Positive(d.PricePerUnit, "Price"));
+        WholesalePricePerUnit = d.WholesalePricePerUnit is { } wholesale ? Money.Round(Guard.Positive(wholesale, "Wholesale price")) : null;
         Unit = Guard.NotEmpty(d.Unit, "Unit", 20);
         MinimumQuantity = Guard.Positive(d.MinimumQuantity, "Minimum quantity");
         QuantityStep = Guard.Positive(d.QuantityStep, "Quantity step");

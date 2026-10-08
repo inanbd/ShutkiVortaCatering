@@ -1,0 +1,47 @@
+@page "/admin/emails/{id:long}"
+@model ShutkiVorta.Web.Pages.Admin.Emails.DetailsModel
+@using ShutkiVorta.Application.Features.Emails
+@{
+    var e = Model.Email;
+}
+@section Actions {
+    <a class="btn btn-outline btn-sm" href="/admin/emails">&larr; Email log</a>
+    @if (e.Status is EmailStatus.Failed or EmailStatus.SavedToFolder or EmailStatus.Disabled)
+    {
+        <form method="post" asp-page-handler="Retry" asp-route-id="@e.Id">
+            <button class="btn btn-primary btn-sm" type="submit">Send again</button>
+        </form>
+    }
+}
+
+<div class="detail-grid">
+    <section class="panel">
+        <div class="panel-head"><h2>@e.Subject</h2><span class="pill @IndexModel.StatusCss(e.Status)">@e.Status.DisplayName()</span></div>
+        <div class="panel-body flush">
+            <iframe class="email-preview" title="Email preview" sandbox srcdoc="@e.HtmlBody"></iframe>
+        </div>
+    </section>
+    <section class="panel">
+        <div class="panel-head"><h2>Delivery</h2></div>
+        <div class="panel-body">
+            <dl class="kv">
+                <dt>To</dt><dd>@e.ToAddresses</dd>
+                <dt>Created</dt><dd>@e.CreatedAtUtc.ToString("u", Format.Culture)</dd>
+                <dt>Attempts</dt><dd>@e.Attempts</dd>
+                <dt>Method</dt><dd>@(e.DeliveryMethod ?? "—")</dd>
+                @if (e.SentAtUtc is { } sent)
+                {
+                    <dt>Delivered</dt><dd>@sent.ToString("u", Format.Culture)</dd>
+                }
+                @if (!string.IsNullOrWhiteSpace(e.DeliveryDetail))
+                {
+                    <dt>Server reply</dt><dd class="small">@e.DeliveryDetail</dd>
+                }
+                @if (!string.IsNullOrWhiteSpace(e.LastError))
+                {
+                    <dt>Last error</dt><dd><div class="alert alert-error mb-0 small">@e.LastError</div></dd>
+                }
+            </dl>
+        </div>
+    </section>
+</div>

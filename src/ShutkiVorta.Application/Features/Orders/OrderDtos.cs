@@ -16,10 +16,16 @@ public sealed class OrderSummaryDto
     public FulfillmentMethod Fulfillment { get; init; }
     public DateTime ScheduledFor { get; init; }
     public OrderStatus Status { get; init; }
+    public decimal Subtotal { get; init; }
+    public decimal DeliveryFee { get; init; }
+    public decimal Tax { get; init; }
     public decimal Total { get; init; }
     public DateTime CreatedAtUtc { get; init; }
+    public int? StandingOrderId { get; init; }
+    public string? CompanyName { get; init; }
     public string ItemsPreview { get; set; } = string.Empty;
 
+    public bool IsRestaurantOrder => StandingOrderId is not null;
     public string StatusName => Status.DisplayName();
     public string FulfillmentName => Fulfillment.DisplayName();
 }

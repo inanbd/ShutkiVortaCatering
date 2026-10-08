@@ -9,7 +9,7 @@ internal sealed class MenuItemRepository(IDbConnectionFactory connections, ISqlD
     private const string Columns = """
         Id, Name, BengaliName, Slug, Category, ShortDescription, Description, Ingredients, PricePerUnit, Unit,
         MinimumQuantity, QuantityStep, SpiceLevel, ImageUrl, ImageAlt, ImageCredit, IsAvailable, IsFeatured,
-        SortOrder, MetaTitle, MetaDescription, CreatedAtUtc, UpdatedAtUtc
+        SortOrder, MetaTitle, MetaDescription, WholesalePricePerUnit, CreatedAtUtc, UpdatedAtUtc
         """;
 
     public async Task<IReadOnlyList<MenuItem>> GetAllAsync(bool includeUnavailable, CancellationToken cancellationToken = default)
@@ -69,10 +69,10 @@ internal sealed class MenuItemRepository(IDbConnectionFactory connections, ISqlD
         const string sql = """
             INSERT INTO MenuItems (Name, BengaliName, Slug, Category, ShortDescription, Description, Ingredients, PricePerUnit, Unit,
                 MinimumQuantity, QuantityStep, SpiceLevel, ImageUrl, ImageAlt, ImageCredit, IsAvailable, IsFeatured,
-                SortOrder, MetaTitle, MetaDescription, CreatedAtUtc, UpdatedAtUtc)
+                SortOrder, MetaTitle, MetaDescription, WholesalePricePerUnit, CreatedAtUtc, UpdatedAtUtc)
             VALUES (@Name, @BengaliName, @Slug, @Category, @ShortDescription, @Description, @Ingredients, @PricePerUnit, @Unit,
                 @MinimumQuantity, @QuantityStep, @SpiceLevel, @ImageUrl, @ImageAlt, @ImageCredit, @IsAvailable, @IsFeatured,
-                @SortOrder, @MetaTitle, @MetaDescription, @CreatedAtUtc, @UpdatedAtUtc)
+                @SortOrder, @MetaTitle, @MetaDescription, @WholesalePricePerUnit, @CreatedAtUtc, @UpdatedAtUtc)
             """;
 
         await using var connection = await connections.OpenAsync(cancellationToken);
@@ -89,7 +89,8 @@ internal sealed class MenuItemRepository(IDbConnectionFactory connections, ISqlD
                 PricePerUnit = @PricePerUnit, Unit = @Unit, MinimumQuantity = @MinimumQuantity, QuantityStep = @QuantityStep,
                 SpiceLevel = @SpiceLevel, ImageUrl = @ImageUrl, ImageAlt = @ImageAlt, ImageCredit = @ImageCredit,
                 IsAvailable = @IsAvailable, IsFeatured = @IsFeatured, SortOrder = @SortOrder,
-                MetaTitle = @MetaTitle, MetaDescription = @MetaDescription, UpdatedAtUtc = @UpdatedAtUtc
+                MetaTitle = @MetaTitle, MetaDescription = @MetaDescription, WholesalePricePerUnit = @WholesalePricePerUnit,
+                UpdatedAtUtc = @UpdatedAtUtc
             WHERE Id = @Id
             """;
 
@@ -101,7 +102,7 @@ internal sealed class MenuItemRepository(IDbConnectionFactory connections, ISqlD
     {
         await using var connection = await connections.OpenAsync(cancellationToken);
         var count = await connection.ExecuteScalarAsync<int>(new CommandDefinition(
-            "SELECT COUNT(*) FROM OrderLines WHERE MenuItemId = @Id", new { Id = id }, cancellationToken: cancellationToken));
+            "SELECT (SELECT COUNT(*) FROM OrderLines WHERE MenuItemId = @Id) + (SELECT COUNT(*) FROM StandingOrderLines WHERE MenuItemId = @Id)", new { Id = id }, cancellationToken: cancellationToken));
         return count > 0;
     }
 

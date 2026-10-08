@@ -20,6 +20,14 @@ public sealed class Order : Entity
     public string TrackingToken { get; private set; } = string.Empty;
 
     public string? CustomerId { get; private set; }
+
+    /// <summary>Set when the order was generated from a restaurant standing order.</summary>
+    public int? StandingOrderId { get; private set; }
+
+    /// <summary>Restaurant / business name for wholesale orders.</summary>
+    public string? CompanyName { get; private set; }
+
+    public bool IsFromStandingOrder => StandingOrderId is not null;
     public string CustomerName { get; private set; } = string.Empty;
     public string Email { get; private set; } = string.Empty;
     public string Phone { get; private set; } = string.Empty;
@@ -142,6 +150,62 @@ public sealed class Order : Entity
         return order;
     }
 
+    /// <summary>
+    /// Creates the order for one delivery date of a restaurant standing order. It uses the agreed wholesale prices,
+    /// skips retail rules (lead time, availability, minimums) and starts as Confirmed because the agreement is approved.
+    /// </summary>
+    public static Order CreateFromStandingOrder(
+        string orderNumber,
+        string trackingToken,
+        Wholesale.StandingOrder standingOrder,
+        DateOnly date,
+        OrderPricingPolicy pricing,
+        DateTime nowUtc)
+    {
+        ArgumentNullException.ThrowIfNull(standingOrder);
+        if (standingOrder.IsTransient)
+        {
+            throw new InvalidOperationException("The standing order must be saved before orders can be generated from it.");
+        }
+
+        if (standingOrder.Lines.Count == 0)
+        {
+            throw new DomainException("The standing order has no items.");
+        }
+
+        var order = new Order
+        {
+            OrderNumber = Guard.NotEmpty(orderNumber, "Order number", 32),
+            TrackingToken = Guard.NotEmpty(trackingToken, "Tracking token", 64),
+            CustomerId = standingOrder.CustomerId,
+            StandingOrderId = standingOrder.Id,
+            CompanyName = standingOrder.BusinessName,
+            CustomerName = standingOrder.ContactName,
+            Email = standingOrder.Email,
+            Phone = standingOrder.Phone,
+            Fulfillment = standingOrder.Fulfillment,
+            AddressLine1 = standingOrder.AddressLine1,
+            AddressLine2 = standingOrder.AddressLine2,
+            City = standingOrder.City,
+            State = standingOrder.State,
+            PostalCode = standingOrder.PostalCode,
+            ScheduledFor = standingOrder.ScheduledFor(date),
+            CustomerNotes = standingOrder.Notes,
+            Status = OrderStatus.Confirmed,
+            CreatedAtUtc = nowUtc,
+            UpdatedAtUtc = nowUtc,
+        };
+
+        foreach (var line in standingOrder.Lines)
+        {
+            order._lines.Add(OrderLine.FromAgreedPrice(line.MenuItemId, line.ItemName, line.ItemBengaliName, line.Unit, line.UnitPrice, line.Quantity));
+        }
+
+        order.ApplyTotals(pricing.Calculate(order._lines.Sum(l => l.LineTotal), order.Fulfillment));
+        order._history.Add(OrderStatusChange.Record(OrderStatus.Confirmed, $"Generated from standing order {standingOrder.Reference}", "System", nowUtc));
+        return order;
+    }
+
     /// <summary>Statuses an administrator can move this order to from its current status.</summary>
     public IReadOnlyList<OrderStatus> AllowedNextStatuses()
     {
@@ -175,6 +239,9 @@ public sealed class Order : Entity
         UpdatedAtUtc = nowUtc;
         _history.Add(OrderStatusChange.Record(newStatus, Guard.Optional(note, "Note", 500), Guard.NotEmpty(changedBy, "Changed by", 256), nowUtc));
     }
+
+    /// <summary>Whether a generated order can still be withdrawn automatically (the kitchen has not started on it).</summary>
+    public bool CanBeWithdrawnBySchedule => Status is OrderStatus.Pending or OrderStatus.Confirmed;
 
     public void CancelByCustomer(string? reason, DateTime nowUtc)
     {

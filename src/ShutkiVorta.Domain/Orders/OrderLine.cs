@@ -30,5 +30,17 @@ public sealed class OrderLine : Entity
         LineTotal = Money.Round(item.PricePerUnit * quantity),
     };
 
+    /// <summary>Line for an order generated from a restaurant standing order, at the agreed wholesale price.</summary>
+    internal static OrderLine FromAgreedPrice(int menuItemId, string itemName, string? itemBengaliName, string unit, decimal unitPrice, decimal quantity) => new()
+    {
+        MenuItemId = menuItemId,
+        ItemName = itemName,
+        ItemBengaliName = itemBengaliName,
+        Unit = unit,
+        UnitPrice = unitPrice,
+        Quantity = quantity,
+        LineTotal = Money.Round(unitPrice * quantity),
+    };
+
     public void AttachTo(int orderId) => OrderId = orderId;
 }

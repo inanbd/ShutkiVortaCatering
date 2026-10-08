@@ -12,11 +12,12 @@ internal sealed class OrderRepository(IDbConnectionFactory connections, ISqlDial
     private const string OrderColumns = """
         Id, OrderNumber, TrackingToken, CustomerId, CustomerName, Email, Phone, Fulfillment, AddressLine1, AddressLine2,
         City, State, PostalCode, ScheduledFor, CustomerNotes, AdminNotes, Status, Subtotal, DeliveryFee, Tax, Total,
-        CreatedAtUtc, UpdatedAtUtc
+        CreatedAtUtc, UpdatedAtUtc, StandingOrderId, CompanyName
         """;
 
     private const string SummaryColumns = """
-        o.Id, o.OrderNumber, o.CustomerId, o.CustomerName, o.Email, o.Phone, o.Fulfillment, o.ScheduledFor, o.Status, o.Total, o.CreatedAtUtc
+        o.Id, o.OrderNumber, o.CustomerId, o.CustomerName, o.Email, o.Phone, o.Fulfillment, o.ScheduledFor, o.Status,
+        o.Subtotal, o.DeliveryFee, o.Tax, o.Total, o.CreatedAtUtc, o.StandingOrderId, o.CompanyName
         """;
 
     public async Task AddAsync(Order order, CancellationToken cancellationToken = default)
@@ -24,10 +25,10 @@ internal sealed class OrderRepository(IDbConnectionFactory connections, ISqlDial
         const string insertOrder = """
             INSERT INTO Orders (OrderNumber, TrackingToken, CustomerId, CustomerName, Email, Phone, Fulfillment, AddressLine1,
                 AddressLine2, City, State, PostalCode, ScheduledFor, CustomerNotes, AdminNotes, Status, Subtotal, DeliveryFee,
-                Tax, Total, CreatedAtUtc, UpdatedAtUtc)
+                Tax, Total, CreatedAtUtc, UpdatedAtUtc, StandingOrderId, CompanyName)
             VALUES (@OrderNumber, @TrackingToken, @CustomerId, @CustomerName, @Email, @Phone, @Fulfillment, @AddressLine1,
                 @AddressLine2, @City, @State, @PostalCode, @ScheduledFor, @CustomerNotes, @AdminNotes, @Status, @Subtotal, @DeliveryFee,
-                @Tax, @Total, @CreatedAtUtc, @UpdatedAtUtc)
+                @Tax, @Total, @CreatedAtUtc, @UpdatedAtUtc, @StandingOrderId, @CompanyName)
             """;
 
         const string insertLine = """
@@ -111,7 +112,7 @@ internal sealed class OrderRepository(IDbConnectionFactory connections, ISqlDial
         if (!string.IsNullOrWhiteSpace(criteria.Search))
         {
             var term = criteria.Search.Replace("%", string.Empty).Replace("_", string.Empty).Replace("[", string.Empty).Trim();
-            conditions.Add("(o.OrderNumber LIKE @Pattern OR o.CustomerName LIKE @Pattern OR o.Email LIKE @Pattern OR o.Phone LIKE @Pattern)");
+            conditions.Add("(o.OrderNumber LIKE @Pattern OR o.CustomerName LIKE @Pattern OR o.CompanyName LIKE @Pattern OR o.Email LIKE @Pattern OR o.Phone LIKE @Pattern)");
             parameters.Add("Pattern", $"%{term}%");
         }
 
@@ -125,6 +126,11 @@ internal sealed class OrderRepository(IDbConnectionFactory connections, ISqlDial
         {
             conditions.Add("o.Fulfillment = @Fulfillment");
             parameters.Add("Fulfillment", (int)fulfillment);
+        }
+
+        if (criteria.Source is { } source)
+        {
+            conditions.Add(source == OrderSource.Restaurant ? "o.StandingOrderId IS NOT NULL" : "o.StandingOrderId IS NULL");
         }
 
         if (criteria.ScheduledFrom is { } from)
@@ -232,6 +238,33 @@ internal sealed class OrderRepository(IDbConnectionFactory connections, ISqlDial
             new { FromUtc = fromUtc, Cancelled = (int)OrderStatus.Cancelled, Skip = 0, Take = take },
             cancellationToken: cancellationToken));
         return rows.Select(r => r with { Revenue = Math.Round(r.Revenue, 2), TotalQuantity = Math.Round(r.TotalQuantity, 2) }).ToList();
+    }
+
+    public async Task<IReadOnlyList<OrderSummaryDto>> GetForStandingOrderAsync(int standingOrderId, DateTime fromLocal, DateTime toLocal, CancellationToken cancellationToken = default)
+    {
+        await using var connection = await connections.OpenAsync(cancellationToken);
+        var items = (await connection.QueryAsync<OrderSummaryDto>(new CommandDefinition(
+            $"SELECT {SummaryColumns} FROM Orders o WHERE o.StandingOrderId = @StandingOrderId AND o.ScheduledFor >= @From AND o.ScheduledFor <= @To ORDER BY o.ScheduledFor",
+            new { StandingOrderId = standingOrderId, From = fromLocal, To = toLocal },
+            cancellationToken: cancellationToken))).AsList();
+        await AttachPreviewsAsync(connection, items, cancellationToken);
+        return items;
+    }
+
+    public async Task<IReadOnlyList<ProductionLine>> GetProductionLinesAsync(DateTime fromLocal, DateTime toLocal, CancellationToken cancellationToken = default)
+    {
+        await using var connection = await connections.OpenAsync(cancellationToken);
+        var rows = await connection.QueryAsync<ProductionLine>(new CommandDefinition(
+            """
+            SELECT o.Id AS OrderId, o.StandingOrderId, o.ScheduledFor, l.MenuItemId, l.ItemName, l.Unit, l.Quantity
+            FROM OrderLines l
+            INNER JOIN Orders o ON o.Id = l.OrderId
+            WHERE o.ScheduledFor >= @From AND o.ScheduledFor <= @To AND o.Status <> @Cancelled
+            ORDER BY o.ScheduledFor, l.Id
+            """,
+            new { From = fromLocal, To = toLocal, Cancelled = (int)OrderStatus.Cancelled },
+            cancellationToken: cancellationToken));
+        return rows.AsList();
     }
 
     private async Task InsertNewHistoryAsync(DbConnection connection, DbTransaction transaction, Order order, CancellationToken cancellationToken)

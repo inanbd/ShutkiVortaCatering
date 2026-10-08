@@ -40,7 +40,10 @@ internal sealed class OrderPlacedEmailHandler(
                     EmailTemplates.AdminNewOrder,
                     $"🛎️ New {dto.FulfillmentName.ToLowerInvariant()} order {dto.OrderNumber} · {model["Total"]} · {model["ScheduledDate"]}",
                     model);
-                await email.QueueAsync(EmailMessage.Create(admins, adminEmail, replyTo: dto.Email), cancellationToken);
+                foreach (var admin in admins)
+                {
+                    await email.QueueAsync(EmailMessage.Create(admin, adminEmail, replyTo: dto.Email), cancellationToken);
+                }
             }
             else
             {
@@ -109,7 +112,10 @@ internal sealed class OrderStatusChangedEmailHandler(
             if (notification.ChangedByCustomer && notification.NewStatus == OrderStatus.Cancelled && admins.Count > 0)
             {
                 var rendered = renderer.Render(EmailTemplates.AdminOrderCancelled, $"❌ Order {dto.OrderNumber} was cancelled by the customer", model);
-                await email.QueueAsync(EmailMessage.Create(admins, rendered, replyTo: dto.Email), cancellationToken);
+                foreach (var admin in admins)
+                {
+                    await email.QueueAsync(EmailMessage.Create(admin, rendered, replyTo: dto.Email), cancellationToken);
+                }
             }
         }
         catch (Exception ex)

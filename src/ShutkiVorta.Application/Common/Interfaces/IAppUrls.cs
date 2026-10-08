@@ -12,6 +12,9 @@ public interface IAppUrls
     string CustomerOrder(string orderNumber);
     string AdminOrder(string orderNumber);
     string AdminInquiries();
+    string AdminStandingOrder(int id);
+    string CustomerStandingOrder(string reference);
+    string Restaurants();
     string ConfirmEmail(string userId, string code);
     string ResetPassword(string email, string code);
     string Login();

@@ -18,6 +18,7 @@
         </div>
         <div class="panel-body">
             <dl class="kv mb-2">
+                <dt>Topic</dt><dd>@i.TopicName</dd>
                 <dt>Email</dt><dd><a href="mailto:@i.Email">@i.Email</a></dd>
                 @if (!string.IsNullOrWhiteSpace(i.Phone)) {<text><dt>Phone</dt><dd>@i.Phone</dd></text>}
                 @if (i.EventDate is { } date) {<text><dt>Event date</dt><dd>@Format.Date(date)</dd></text>}

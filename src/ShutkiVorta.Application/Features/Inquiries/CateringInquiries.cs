@@ -30,7 +30,8 @@ public sealed record SubmitCateringInquiryCommand(
     string? Phone,
     DateOnly? EventDate,
     int? GuestCount,
-    string Message) : IRequest<int>;
+    string Message,
+    InquiryTopic Topic = InquiryTopic.Catering) : IRequest<int>;
 
 public sealed record CateringInquirySubmittedNotification(int InquiryId) : INotification;
 
@@ -41,6 +42,7 @@ public sealed record SetInquiryHandledCommand(int Id, bool IsHandled) : IRequest
 
 public sealed record CateringInquiryDto(
     int Id,
+    InquiryTopic Topic,
     string Name,
     string Email,
     string? Phone,
@@ -48,7 +50,10 @@ public sealed record CateringInquiryDto(
     int? GuestCount,
     string Message,
     bool IsHandled,
-    DateTime CreatedAtLocal);
+    DateTime CreatedAtLocal)
+{
+    public string TopicName => Topic.DisplayName();
+}
 
 public sealed class SubmitCateringInquiryCommandValidator : AbstractValidator<SubmitCateringInquiryCommand>
 {
@@ -59,6 +64,7 @@ public sealed class SubmitCateringInquiryCommandValidator : AbstractValidator<Su
         RuleFor(x => x.Phone).MaximumLength(32);
         RuleFor(x => x.GuestCount).InclusiveBetween(1, 5000).When(x => x.GuestCount.HasValue);
         RuleFor(x => x.Message).NotEmpty().WithMessage("Please tell us a little about your event or question.").MaximumLength(4000);
+        RuleFor(x => x.Topic).IsInEnum();
     }
 }
 
@@ -81,7 +87,7 @@ internal sealed class CateringInquiryHandlers(
         try
         {
             inquiry = CateringInquiry.Submit(
-                request.Name, request.Email, request.Phone, request.EventDate?.ToDateTime(TimeOnly.MinValue), request.GuestCount, request.Message, clock.UtcNow);
+                request.Topic, request.Name, request.Email, request.Phone, request.EventDate?.ToDateTime(TimeOnly.MinValue), request.GuestCount, request.Message, clock.UtcNow);
         }
         catch (DomainException ex)
         {
@@ -98,7 +104,7 @@ internal sealed class CateringInquiryHandlers(
         var (page, size) = Paging.Normalize(request.Page, request.PageSize);
         var result = await repository.ListAsync(request.OnlyOpen, page, size, cancellationToken);
         var items = result.Items
-            .Select(i => new CateringInquiryDto(i.Id, i.Name, i.Email, i.Phone, i.EventDate, i.GuestCount, i.Message, i.IsHandled, clock.ToBusinessTime(i.CreatedAtUtc)))
+            .Select(i => new CateringInquiryDto(i.Id, i.Topic, i.Name, i.Email, i.Phone, i.EventDate, i.GuestCount, i.Message, i.IsHandled, clock.ToBusinessTime(i.CreatedAtUtc)))
             .ToList();
         return new PagedResult<CateringInquiryDto>(items, result.TotalCount, result.Page, result.PageSize);
     }
@@ -140,16 +146,30 @@ internal sealed class CateringInquiryEmailHandler(
                 ["Message"] = inquiry.Message,
                 ["AdminInquiriesUrl"] = urls.AdminInquiries(),
                 ["MenuUrl"] = urls.Menu(),
+                ["TopicName"] = inquiry.Topic.DisplayName(),
+                ["IsJoinKitchen"] = inquiry.Topic == InquiryTopic.JoinKitchen,
+                ["IsCatering"] = inquiry.Topic == InquiryTopic.Catering,
+                ["IsGeneral"] = inquiry.Topic == InquiryTopic.General,
+            };
+
+            var (adminSubject, replySubject) = inquiry.Topic switch
+            {
+                InquiryTopic.JoinKitchen => ($"👩‍🍳 {inquiry.Name} would like to cook with us", "Thank you for wanting to join our kitchen"),
+                InquiryTopic.General => ($"💬 New message from {inquiry.Name}", "We received your message"),
+                _ => ($"💬 New catering inquiry from {inquiry.Name}", "We received your catering inquiry"),
             };
 
             var admins = emailOptions.Value.AdminRecipients.Where(a => !string.IsNullOrWhiteSpace(a)).ToList();
             if (admins.Count > 0)
             {
-                var adminEmail = renderer.Render(EmailTemplates.AdminNewInquiry, $"💬 New catering inquiry from {inquiry.Name}", model);
-                await email.QueueAsync(EmailMessage.Create(admins, adminEmail, replyTo: inquiry.Email), cancellationToken);
+                var adminEmail = renderer.Render(EmailTemplates.AdminNewInquiry, adminSubject, model);
+                foreach (var admin in admins)
+                {
+                    await email.QueueAsync(EmailMessage.Create(admin, adminEmail, replyTo: inquiry.Email), cancellationToken);
+                }
             }
 
-            var reply = renderer.Render(EmailTemplates.InquiryReceived, "We received your catering inquiry", model);
+            var reply = renderer.Render(EmailTemplates.InquiryReceived, replySubject, model);
             await email.QueueAsync(EmailMessage.Create(inquiry.Email, reply, emailOptions.Value.ReplyToAddress), cancellationToken);
         }
         catch (Exception ex)

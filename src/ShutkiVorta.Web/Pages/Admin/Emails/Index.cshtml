@@ -1,0 +1,67 @@
+@page
+@model ShutkiVorta.Web.Pages.Admin.Emails.IndexModel
+@using ShutkiVorta.Application.Features.Emails
+@section Actions {
+    <form method="post" asp-page-handler="RetryFailed" asp-route-status="@Model.Status">
+        <button class="btn btn-outline btn-sm" type="submit">Retry all failed</button>
+    </form>
+    <a class="btn btn-outline btn-sm" href="/admin/settings">Email settings</a>
+}
+
+<div class="flex gap-1 wrap mb-2">
+    <a class="btn btn-sm @(Model.Status is null ? "btn-green" : "btn-outline")" href="/admin/emails">All</a>
+    @foreach (var s in new[] { EmailStatus.Sent, EmailStatus.Failed, EmailStatus.Pending, EmailStatus.SavedToFolder, EmailStatus.Disabled })
+    {
+        <a class="btn btn-sm @(Model.Status == s ? "btn-green" : "btn-outline")" href="/admin/emails?status=@s">@s.DisplayName()</a>
+    }
+</div>
+
+<section class="panel">
+    <div class="panel-body flush table-wrap">
+        @if (Model.Emails.Items.Count == 0)
+        {
+            <p class="muted" style="padding:24px;">No emails here yet.</p>
+        }
+        else
+        {
+            <table class="table">
+                <thead><tr><th>Created</th><th>To</th><th>Subject</th><th>Status</th><th>Details</th><th></th></tr></thead>
+                <tbody>
+                    @foreach (var e in Model.Emails.Items)
+                    {
+                        <tr>
+                            <td class="small">@e.CreatedAtUtc.ToString("MMM d, HH:mm", Format.Culture) UTC</td>
+                            <td class="small">@e.ToAddresses</td>
+                            <td><a class="strong" href="/admin/emails/@e.Id">@e.Subject</a></td>
+                            <td><span class="pill @IndexModel.StatusCss(e.Status)">@e.Status.DisplayName()</span>@if (e.Attempts > 1) {<text><br /><span class="small muted">@e.Attempts attempts</span></text>}</td>
+                            <td class="small preview">
+                                @if (!string.IsNullOrWhiteSpace(e.LastError))
+                                {
+                                    <span class="text-danger">@e.LastError</span>
+                                }
+                                else if (!string.IsNullOrWhiteSpace(e.DeliveryDetail))
+                                {
+                                    <span>@e.DeliveryDetail</span>
+                                }
+                                @if (e.Status == EmailStatus.Pending && e.NextAttemptAtUtc is { } next && e.Attempts > 0)
+                                {
+                                    <br /><span class="muted">next try @next.ToString("HH:mm", Format.Culture) UTC</span>
+                                }
+                            </td>
+                            <td class="num">
+                                @if (e.Status is EmailStatus.Failed or EmailStatus.SavedToFolder or EmailStatus.Disabled)
+                                {
+                                    <form method="post" asp-page-handler="Retry" asp-route-status="@Model.Status" class="toggle-form">
+                                        <input type="hidden" name="id" value="@e.Id" />
+                                        <button class="btn btn-outline btn-sm" type="submit">Retry</button>
+                                    </form>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+    </div>
+</section>
+<partial name="_Pager" model="(Model.Emails.Page, Model.Emails.TotalPages, (Func<int, string>)Model.PageUrl)" />

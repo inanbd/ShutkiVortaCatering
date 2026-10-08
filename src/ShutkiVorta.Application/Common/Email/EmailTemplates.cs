@@ -13,4 +13,8 @@ public static class EmailTemplates
     public const string Welcome = "Welcome";
     public const string ResetPassword = "ResetPassword";
     public const string TestEmail = "TestEmail";
+    public const string AdminNewStandingOrder = "AdminNewStandingOrder";
+    public const string AdminStandingOrderChanged = "AdminStandingOrderChanged";
+    public const string StandingOrderReceived = "StandingOrderReceived";
+    public const string StandingOrderStatusUpdate = "StandingOrderStatusUpdate";
 }

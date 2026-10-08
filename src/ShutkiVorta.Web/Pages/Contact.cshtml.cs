@@ -4,6 +4,7 @@ using Microsoft.Extensions.Options;
 using ShutkiVorta.Application.Common.Interfaces;
 using ShutkiVorta.Application.Common.Options;
 using ShutkiVorta.Application.Features.Inquiries;
+using ShutkiVorta.Domain.Inquiries;
 using ShutkiVorta.Web.Infrastructure;
 using ShutkiVorta.Web.Seo;
 
@@ -37,7 +38,7 @@ public sealed class ContactModel(ISender sender, IAppUrls urls, IOptions<Busines
         }
 
         var ok = await TryExecuteAsync(
-            () => Sender.Send(new SubmitCateringInquiryCommand(Input.Name, Input.Email, Input.Phone, null, null, Input.Message), cancellationToken),
+            () => Sender.Send(new SubmitCateringInquiryCommand(Input.Name, Input.Email, Input.Phone, null, null, Input.Message, InquiryTopic.General), cancellationToken),
             typeof(InquiryInput));
 
         return ok ? Redirect("/contact?sent=true") : Page();
