@@ -1,0 +1,117 @@
+@page "/cart"
+@model CartModel
+@{
+    var quote = Model.Quote;
+}
+
+<section class="page-banner" style="padding:44px 0 50px;">
+    <div class="container">
+        <span class="bn-title" lang="bn">আপনার অর্ডার</span>
+        <h1>Your Order</h1>
+    </div>
+    <div class="bunting" aria-hidden="true"></div>
+</section>
+
+<section class="section-sm">
+    <div class="container">
+        <partial name="_StatusMessage" />
+
+        @if (quote.IsEmpty)
+        {
+            <div class="empty-state form-card kantha">
+                <p class="bn" lang="bn">আপনার থালা খালি!</p>
+                <h2>Your plate is empty</h2>
+                <p class="muted">Start with our signature Loitta Shutki Vorta or build a spread of homestyle favorites.</p>
+                <a class="btn btn-primary btn-lg" href="/menu">Browse the menu</a>
+            </div>
+        }
+        else
+        {
+            <div class="cart-layout">
+                <div>
+                    <ul class="cart-lines">
+                        @foreach (var line in quote.Lines)
+                        {
+                            <li class="cart-line">
+                                @if (!string.IsNullOrWhiteSpace(line.ImageUrl))
+                                {
+                                    <img src="@line.ImageUrl" alt="@(line.ImageAlt ?? line.Name)" width="96" height="80" loading="lazy" />
+                                }
+                                else
+                                {
+                                    <span></span>
+                                }
+                                <div>
+                                    @if (!string.IsNullOrWhiteSpace(line.BengaliName))
+                                    {
+                                        <span class="bn" lang="bn">@line.BengaliName</span>
+                                    }
+                                    <h3><a href="/menu/@line.Slug">@line.Name</a></h3>
+                                    <span class="muted small">@Ui.Money(line.UnitPrice) / @line.Unit</span>
+                                    <div class="cart-line-controls">
+                                        <form method="post" asp-page-handler="Update" class="flex items-center gap-1" data-autosubmit>
+                                            <input type="hidden" name="menuItemId" value="@line.MenuItemId" />
+                                            <div class="qty" data-qty>
+                                                <button type="button" data-qty-step="-1" aria-label="Decrease quantity">&minus;</button>
+                                                <input name="quantity" type="number" inputmode="decimal" aria-label="Quantity in @line.Unit"
+                                                       min="@Ui.Number(line.MinimumQuantity)" step="@Ui.Number(line.QuantityStep)" max="200" value="@Ui.Number(line.Quantity)" />
+                                                <span class="unit">@line.Unit</span>
+                                                <button type="button" data-qty-step="1" aria-label="Increase quantity">+</button>
+                                            </div>
+                                            <button class="btn btn-outline btn-sm" type="submit">Update</button>
+                                        </form>
+                                        <form method="post" asp-page-handler="Remove">
+                                            <input type="hidden" name="menuItemId" value="@line.MenuItemId" />
+                                            <button class="btn-link small" type="submit">@Icons.Get("trash") Remove</button>
+                                        </form>
+                                    </div>
+                                    @if (line.Error is not null)
+                                    {
+                                        <p class="error">@line.Error</p>
+                                    }
+                                </div>
+                                <div class="cart-line-total">@Ui.Money(line.LineTotal)</div>
+                            </li>
+                        }
+                    </ul>
+                    <p class="mt-2"><a href="/menu">&larr; Add more vortas</a></p>
+                </div>
+
+                <aside class="summary-card" aria-label="Order summary">
+                    <header>
+                        <span class="bn" lang="bn">হিসাব</span>
+                        <h2>Summary</h2>
+                    </header>
+                    <div class="summary-body">
+                        <table class="totals">
+                            <tr><td>Subtotal</td><td>@Ui.Money(quote.Subtotal)</td></tr>
+                            <tr><td>Sales tax (pickup)</td><td>@Ui.Money(quote.PickupTotals.Tax)</td></tr>
+                            <tr class="grand"><td>Total for pickup</td><td>@Ui.Money(quote.PickupTotals.Total)</td></tr>
+                        </table>
+                        <p class="small muted mt-2">
+                            Delivery adds @(quote.DeliveryTotals.DeliveryFee == 0 ? "no fee" : Ui.Money(quote.DeliveryTotals.DeliveryFee)) (total @Ui.Money(quote.DeliveryTotals.Total)).
+                            @if (!quote.MeetsDeliveryMinimum)
+                            {
+                                <span>Delivery requires a @Ui.Money(quote.MinimumDeliverySubtotal) minimum.</span>
+                            }
+                        </p>
+                        @if (quote.AmountToFreeDelivery is { } remaining && quote.FreeDeliveryThreshold is { } threshold)
+                        {
+                            <div class="progress" aria-hidden="true"><span style="width:@((int)Math.Min(100, quote.Subtotal / threshold * 100))%"></span></div>
+                            <p class="small muted">Add @Ui.Money(remaining) more for free delivery.</p>
+                        }
+                        @if (quote.HasErrors)
+                        {
+                            <div class="alert alert-error small">Please fix the highlighted items before checking out.</div>
+                            <span class="btn btn-primary btn-block btn-lg disabled" aria-disabled="true">Checkout</span>
+                        }
+                        else
+                        {
+                            <a class="btn btn-primary btn-block btn-lg mt-1" href="/checkout">Checkout @Icons.Get("arrow-right")</a>
+                        }
+                    </div>
+                </aside>
+            </div>
+        }
+    </div>
+</section>

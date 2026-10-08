@@ -1,0 +1,143 @@
+@page "/menu/{slug}"
+@model ShutkiVorta.Web.Pages.Menu.DetailsModel
+@{
+    var item = Model.Item;
+    var startQty = Math.Max(1m, item.MinimumQuantity);
+}
+
+<section class="section" style="padding-top:40px;">
+    <div class="container">
+        <nav class="breadcrumbs" aria-label="Breadcrumb">
+            <ol>
+                <li><a href="/">Home</a></li>
+                <li><a href="/menu">Menu</a></li>
+                <li aria-current="page">@item.Name</li>
+            </ol>
+        </nav>
+        <partial name="_StatusMessage" />
+
+        <div class="item-hero">
+            <div class="item-media">
+                <figure class="framed">
+                    @if (!string.IsNullOrWhiteSpace(item.ImageUrl))
+                    {
+                        <img src="@item.ImageUrl" alt="@item.DisplayImageAlt" width="960" height="720" fetchpriority="high" />
+                    }
+                    @if (!string.IsNullOrWhiteSpace(item.ImageCredit))
+                    {
+                        <figcaption>@item.ImageCredit</figcaption>
+                    }
+                </figure>
+            </div>
+
+            <div class="item-info">
+                <span class="tag">@item.CategoryName</span>
+                @if (!string.IsNullOrWhiteSpace(item.BengaliName))
+                {
+                    <p class="bn-name" lang="bn">@item.BengaliName</p>
+                }
+                <h1>@item.Name</h1>
+                <p class="lead">@item.ShortDescription</p>
+
+                <div class="item-price">
+                    <span class="price">@Ui.Money(item.PricePerUnit)</span>
+                    <span class="muted">per @item.Unit</span>
+                </div>
+                <partial name="_Spice" model="item.SpiceLevel" />
+
+                @if (item.IsAvailable)
+                {
+                    <form class="order-box" method="post" action="/cart?handler=Add" data-price="@item.PricePerUnit.ToString(System.Globalization.CultureInfo.InvariantCulture)">
+                        @Html.AntiForgeryToken()
+                        <input type="hidden" name="menuItemId" value="@item.Id" />
+                        <input type="hidden" name="returnUrl" value="/menu/@item.Slug" />
+                        <div class="order-row">
+                            <label class="label" for="quantity">Quantity</label>
+                            <div class="qty" data-qty>
+                                <button type="button" data-qty-step="-1" aria-label="Decrease quantity">&minus;</button>
+                                <input id="quantity" name="quantity" type="number" inputmode="decimal"
+                                       min="@Ui.Number(item.MinimumQuantity)" step="@Ui.Number(item.QuantityStep)" max="50" value="@Ui.Number(startQty)" />
+                                <span class="unit">@item.Unit</span>
+                                <button type="button" data-qty-step="1" aria-label="Increase quantity">+</button>
+                            </div>
+                            <span class="order-total">Total <strong data-line-total>@Ui.Money(item.PricePerUnit * startQty)</strong></span>
+                        </div>
+                        <button class="btn btn-primary btn-lg btn-block mt-2" type="submit">@Icons.Get("cart") Add to order</button>
+                        @if (Model.InCart > 0)
+                        {
+                            <p class="small muted mt-1 mb-0 text-center">You already have @Ui.Qty(Model.InCart, item.Unit) in your order. <a href="/cart">Review order</a></p>
+                        }
+                    </form>
+                }
+                else
+                {
+                    <p class="unavailable-note mt-2">This vorta is currently unavailable. Please check back soon or explore our other vortas.</p>
+                }
+
+                <ul class="feature-list">
+                    <li>@Icons.Get("check-circle") Made fresh to order &mdash; please order @Model.Ordering.MinimumLeadTimeHours hours ahead</li>
+                    <li>@Icons.Get("check-circle") Minimum @Ui.Qty(item.MinimumQuantity, item.Unit), then in @Ui.Qty(item.QuantityStep, item.Unit) steps</li>
+                    <li>@Icons.Get("check-circle") Pickup in @Model.Business.City or delivery across @Model.Ordering.DeliveryAreaDescription</li>
+                </ul>
+            </div>
+        </div>
+
+        <div class="item-details">
+            <article class="prose">
+                <h2>About this vorta</h2>
+                @{ var first = true; }
+                @foreach (var paragraph in Ui.Paragraphs(item.Description))
+                {
+                    <p class="@(first ? "drop-cap" : null)">@paragraph</p>
+                    first = false;
+                }
+                <h2>How to enjoy it</h2>
+                <p>Mix a spoonful into steaming white rice with a squeeze of lime, or serve alongside dal, khichuri, ruti or paratha. Keep refrigerated and enjoy within 3&ndash;4 days; bring to room temperature before serving for the best aroma.</p>
+            </article>
+            <aside>
+                @if (item.IngredientList.Count > 0)
+                {
+                    <div class="side-card">
+                        <h3>Ingredients</h3>
+                        <ul class="chips">
+                            @foreach (var ingredient in item.IngredientList)
+                            {
+                                <li>@ingredient</li>
+                            }
+                        </ul>
+                    </div>
+                }
+                <div class="side-card">
+                    <h3>Good to know</h3>
+                    <p class="small mb-0">
+                        @if (item.Category == MenuCategory.ShutkiVorta)
+                        {
+                            <text>Contains fish or shellfish. </text>
+                        }
+                        Prepared in a kitchen that also handles fish, shellfish and mustard. Spice level: <strong>@Ui.SpiceLabel(item.SpiceLevel)</strong>.
+                        Need it milder or hotter? Add a note at checkout.
+                    </p>
+                </div>
+            </aside>
+        </div>
+    </div>
+</section>
+
+@if (Model.Related.Count > 0)
+{
+    <section class="section section-cream" aria-labelledby="related-title">
+        <div class="container">
+            <header class="section-head">
+                <span class="bn-title" lang="bn">সাথে নিন</span>
+                <h2 id="related-title">Make it a vorta spread</h2>
+                <p>Vortas are best enjoyed together. Pair it with these favorites.</p>
+            </header>
+            <div class="menu-grid cols-3">
+                @foreach (var related in Model.Related)
+                {
+                    <partial name="_MenuCard" model="related" />
+                }
+            </div>
+        </div>
+    </section>
+}

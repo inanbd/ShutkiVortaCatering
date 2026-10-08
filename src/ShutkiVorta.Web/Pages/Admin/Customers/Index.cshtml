@@ -1,0 +1,48 @@
+@page
+@model ShutkiVorta.Web.Pages.Admin.Customers.IndexModel
+
+<section class="panel">
+    <div class="panel-head">
+        <form method="get" class="filters" style="width:100%;">
+            <div class="field grow">
+                <label for="q">Search customers</label>
+                <input id="q" name="q" value="@Model.Q" placeholder="Name, email or phone" />
+            </div>
+            <button class="btn btn-green btn-sm" type="submit">@Icons.Get("search") Search</button>
+        </form>
+    </div>
+    <div class="panel-body flush table-wrap">
+        @if (Model.Users.Items.Count == 0)
+        {
+            <p class="muted" style="padding:24px;">No registered customers found. Guests who check out without an account appear on the Orders page.</p>
+        }
+        else
+        {
+            <table class="table">
+                <thead><tr><th>Name</th><th>Contact</th><th>Joined</th><th class="num">Orders</th><th>Role</th><th></th></tr></thead>
+                <tbody>
+                    @foreach (var u in Model.Users.Items)
+                    {
+                        var a = u.Account;
+                        <tr>
+                            <td><strong>@a.FullName</strong>@if (!a.EmailConfirmed) {<text><br /><span class="small muted">email not confirmed</span></text>}</td>
+                            <td>@a.Email<br /><span class="small muted">@a.PhoneNumber</span></td>
+                            <td class="small">@a.CreatedAtUtc.ToString("MMM d, yyyy", Format.Culture)</td>
+                            <td class="num"><a href="/admin/orders?q=@Uri.EscapeDataString(a.Email)">@u.OrderCount</a></td>
+                            <td>@if (a.IsAdmin) { <span class="pill pill-admin">Admin</span> } else { <span class="pill pill-off">Customer</span> }</td>
+                            <td class="num">
+                                <form method="post" asp-page-handler="Admin" asp-route-q="@Model.Q" class="toggle-form"
+                                      data-confirm="@(a.IsAdmin ? $"Remove admin access from {a.FullName}?" : $"Give {a.FullName} full admin access?")">
+                                    <input type="hidden" name="userId" value="@a.Id" />
+                                    <input type="hidden" name="isAdmin" value="@((!a.IsAdmin).ToString().ToLowerInvariant())" />
+                                    <button class="btn btn-outline btn-sm" type="submit">@(a.IsAdmin ? "Remove admin" : "Make admin")</button>
+                                </form>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+    </div>
+</section>
+<partial name="_Pager" model="(Model.Users.Page, Model.Users.TotalPages, (Func<int, string>)Model.PageUrl)" />

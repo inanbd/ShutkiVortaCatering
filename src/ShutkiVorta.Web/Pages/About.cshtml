@@ -1,0 +1,61 @@
+@page "/about"
+@model AboutModel
+
+<section class="page-banner">
+    <div class="container">
+        <span class="bn-title" lang="bn">আমাদের গল্প</span>
+        <h1>Our Story</h1>
+        <p>A taste of Bangladesh, pounded by hand in the heart of Texas.</p>
+    </div>
+    <div class="bunting" aria-hidden="true"></div>
+</section>
+
+<section class="section">
+    <div class="container split">
+        <div class="prose">
+            <span class="eyebrow">Where it began</span>
+            <h2>A craving for home</h2>
+            <p class="drop-cap">Every Bangladeshi kitchen has a shil-pata &mdash; the flat grinding stone where garlic, chilies and roasted shutki are crushed by hand. The rhythmic sound of the pata on the shil is the sound of lunch on its way, of grandmothers and aunties, of rice steaming in the next pot.</p>
+            <p>When we moved to @Model.Business.City, we found plenty of curries but almost no one making real vorta, and certainly not good shutki vorta. So we started making it for ourselves, then for friends, then for friends of friends. Today, our small kitchen cooks for families, students and celebrations across Dallas&ndash;Fort Worth.</p>
+        </div>
+        <figure class="framed">
+            <img src="~/images/site/assorted.webp" alt="Assorted Bangladeshi vortas served together on a plate" width="900" height="900" loading="lazy" />
+        </figure>
+    </div>
+</section>
+
+<section class="section section-dark scallop-top">
+    <div class="container">
+        <header class="section-head">
+            <span class="bn-title" lang="bn">আমাদের প্রতিশ্রুতি</span>
+            <h2>What we promise</h2>
+        </header>
+        <div class="info-cards">
+            <div class="info-card">@Icons.Get("fire", "icon")<h3>Fire-roasted</h3><p>Shutki, eggplant, tomatoes and chilies are roasted over open flame for real smoky depth.</p></div>
+            <div class="info-card">@Icons.Get("leaf", "icon")<h3>Honest ingredients</h3><p>Cold-pressed mustard oil, fresh herbs and carefully cleaned shutki. No preservatives, no shortcuts.</p></div>
+            <div class="info-card">@Icons.Get("heart", "icon")<h3>Made for you</h3><p>Every order is cooked for your date and time, then packed fresh in the morning.</p></div>
+        </div>
+    </div>
+</section>
+
+<section class="section">
+    <div class="container split">
+        <figure class="framed">
+            <img src="~/images/site/dried-fish.webp" alt="Sun-dried fish in baskets at a market in Chittagong" width="1000" height="750" loading="lazy" />
+        </figure>
+        <div class="prose">
+            <span class="eyebrow">About shutki</span>
+            <h2>What is shutki?</h2>
+            <p>Shutki (শুঁটকি) is fish that has been salted lightly or not at all and dried under the sun on bamboo racks along the coasts of Chattogram and Cox's Bazar. Drying concentrates the flavor into something intensely savory &mdash; a Bengali cousin of anchovies and bottarga.</p>
+            <p>Roasted and pounded into a vorta with onions, garlic and chilies, it becomes one of the most beloved dishes in Bangladesh. Loitta (Bombay duck), chingri (shrimp) and chepa (fermented puti fish) are the classics we make.</p>
+            <a class="btn btn-primary" href="/menu#shutkivorta">Try our shutki vortas</a>
+        </div>
+    </div>
+</section>
+
+<section class="section-sm section-cream" id="photo-credits">
+    <div class="container container-narrow">
+        <h2 style="font-size:1.6rem;">Photo credits</h2>
+        <p class="small muted">Food photographs on this site are shared under Creative Commons licenses via Wikimedia Commons. Thank you to the photographers: Ferdous (CC BY-SA 3.0), Sm faysal (CC BY-SA 4.0), Atudu (CC BY-SA 4.0), Deeptoe26 (CC BY-SA 4.0), Bellayet (CC BY-SA 3.0), Kritzolina (CC BY-SA 4.0), Dolon Prova (CC BY-SA 4.0) and রিজওয়ান আহমেদ (CC BY-SA 4.0). Photos may be cropped and resized.</p>
+    </div>
+</section>

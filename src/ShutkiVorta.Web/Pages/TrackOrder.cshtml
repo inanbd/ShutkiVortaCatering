@@ -1,0 +1,35 @@
+@page "/track-order"
+@model TrackOrderModel
+
+<section class="page-banner" style="padding:44px 0 50px;">
+    <div class="container">
+        <span class="bn-title" lang="bn">অর্ডার ট্র্যাক করুন</span>
+        <h1>Track your order</h1>
+        <p>Enter the order number from your confirmation email (it looks like SV-261008-7KQ4).</p>
+    </div>
+    <div class="bunting" aria-hidden="true"></div>
+</section>
+
+<section class="section-sm">
+    <div class="container auth-wrap">
+        <form method="post" class="form-card kantha">
+            <div asp-validation-summary="ModelOnly" class="validation-summary-errors"></div>
+            <div class="field mb-2">
+                <label asp-for="Input.OrderNumber"></label>
+                <input asp-for="Input.OrderNumber" placeholder="SV-261008-7KQ4" autocapitalize="characters" />
+                <span asp-validation-for="Input.OrderNumber" class="field-validation-error"></span>
+            </div>
+            <div class="field mb-3">
+                <label asp-for="Input.Email"></label>
+                <input asp-for="Input.Email" type="email" autocomplete="email" />
+                <span asp-validation-for="Input.Email" class="field-validation-error"></span>
+            </div>
+            <button class="btn btn-primary btn-block btn-lg" type="submit">@Icons.Get("search") Find my order</button>
+            <p class="auth-alt small">Have an account? <a href="/account/orders">See all your orders</a></p>
+        </form>
+    </div>
+</section>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+}

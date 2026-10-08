@@ -1,0 +1,73 @@
+@page
+@model ShutkiVorta.Web.Pages.Admin.Orders.IndexModel
+
+<section class="panel">
+    <div class="panel-head">
+        <form method="get" class="filters" style="width:100%;">
+            <div class="field grow">
+                <label for="q">Search</label>
+                <input id="q" name="q" value="@Model.Q" placeholder="Order #, name, email or phone" />
+            </div>
+            <div class="field">
+                <label for="status">Status</label>
+                <select id="status" name="status">
+                    <option value="">All statuses</option>
+                    @foreach (var s in Enum.GetValues<OrderStatus>())
+                    {
+                        <option value="@s" selected="@(Model.Status == s ? "selected" : null)">@s.DisplayName()</option>
+                    }
+                </select>
+            </div>
+            <div class="field">
+                <label for="fulfillment">Type</label>
+                <select id="fulfillment" name="fulfillment">
+                    <option value="">Pickup &amp; delivery</option>
+                    @foreach (var f in Enum.GetValues<FulfillmentMethod>())
+                    {
+                        <option value="@f" selected="@(Model.Fulfillment == f ? "selected" : null)">@f.DisplayName()</option>
+                    }
+                </select>
+            </div>
+            <div class="field">
+                <label for="from">Scheduled from</label>
+                <input id="from" name="from" type="date" value="@Model.From?.ToString("yyyy-MM-dd")" />
+            </div>
+            <div class="field">
+                <label for="to">to</label>
+                <input id="to" name="to" type="date" value="@Model.To?.ToString("yyyy-MM-dd")" />
+            </div>
+            <button class="btn btn-green btn-sm" type="submit">@Icons.Get("search") Filter</button>
+            <a class="btn btn-outline btn-sm" href="/admin/orders">Reset</a>
+        </form>
+    </div>
+    <div class="panel-body flush table-wrap">
+        @if (Model.Orders.Items.Count == 0)
+        {
+            <p class="muted" style="padding:24px;">No orders match your filters.</p>
+        }
+        else
+        {
+            <table class="table">
+                <thead>
+                    <tr><th>Order</th><th>Placed</th><th>Customer</th><th>Scheduled</th><th>Type</th><th>Status</th><th class="num">Total</th></tr>
+                </thead>
+                <tbody>
+                    @foreach (var o in Model.Orders.Items)
+                    {
+                        <tr>
+                            <td><a class="strong" href="/admin/orders/@o.OrderNumber">@o.OrderNumber</a><div class="preview">@o.ItemsPreview</div></td>
+                            <td class="small">@o.CreatedAtUtc.ToString("MMM d, yyyy", Format.Culture)</td>
+                            <td>@o.CustomerName<br /><span class="small muted">@o.Email &middot; @o.Phone</span></td>
+                            <td><strong>@o.ScheduledFor.ToString("ddd, MMM d", Format.Culture)</strong><br /><span class="small muted">@Format.Time(o.ScheduledFor)</span></td>
+                            <td>@o.FulfillmentName</td>
+                            <td><partial name="_StatusBadge" model="o.Status" /></td>
+                            <td class="num"><strong>@Ui.Money(o.Total)</strong></td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+    </div>
+</section>
+<p class="small muted mt-2">@Model.Orders.TotalCount order(s)</p>
+<partial name="_Pager" model="(Model.Orders.Page, Model.Orders.TotalPages, (Func<int, string>)Model.PageUrl)" />

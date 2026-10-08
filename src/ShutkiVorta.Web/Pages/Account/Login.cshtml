@@ -1,0 +1,41 @@
+@page "/account/login"
+@model ShutkiVorta.Web.Pages.Account.LoginModel
+
+<section class="section">
+    <div class="container auth-wrap">
+        <div class="auth-head">
+            <p class="bn" lang="bn">আবার স্বাগতম</p>
+            <h1>Welcome back</h1>
+            <p class="muted">Sign in to follow your orders and check out faster.</p>
+        </div>
+        <form method="post" class="form-card kantha">
+            <partial name="_StatusMessage" />
+            <div asp-validation-summary="ModelOnly" class="validation-summary-errors"></div>
+            <input type="hidden" asp-for="ReturnUrl" />
+            <div class="field mb-2">
+                <label asp-for="Input.Email"></label>
+                <input asp-for="Input.Email" type="email" autocomplete="username" autofocus />
+                <span asp-validation-for="Input.Email" class="field-validation-error"></span>
+            </div>
+            <div class="field mb-2">
+                <label asp-for="Input.Password"></label>
+                <input asp-for="Input.Password" autocomplete="current-password" />
+                <span asp-validation-for="Input.Password" class="field-validation-error"></span>
+            </div>
+            <div class="flex justify-between items-center wrap gap-1 mb-3">
+                <label class="check"><input asp-for="Input.RememberMe" /> Keep me signed in</label>
+                <a class="small" href="/account/forgot-password">Forgot password?</a>
+            </div>
+            <button class="btn btn-primary btn-block btn-lg" type="submit">Sign in</button>
+            @if (Model.ShowResendLink)
+            {
+                <p class="small text-center mt-2"><a href="/account/resend-confirmation">Resend the confirmation email</a></p>
+            }
+        </form>
+        <p class="auth-alt">New here? <a href="/account/register@(string.IsNullOrEmpty(Model.ReturnUrl) ? "" : "?returnUrl=" + Uri.EscapeDataString(Model.ReturnUrl))">Create an account</a></p>
+    </div>
+</section>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+}

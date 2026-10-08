@@ -1,0 +1,24 @@
+@page "/account/orders/{orderNumber}"
+@model ShutkiVorta.Web.Pages.Account.Orders.DetailsModel
+
+<section class="section-sm">
+    <div class="container">
+        <p><a href="/account/orders">&larr; All my orders</a></p>
+        <div class="container-narrow" style="margin:0 auto;">
+            <partial name="_StatusMessage" />
+            <partial name="_OrderView" model="Model.Order" />
+            @if (Model.Order.CanCustomerCancel)
+            {
+                <form method="post" asp-page-handler="Cancel" class="form-card mt-3" data-confirm="Cancel this order? This cannot be undone.">
+                    <h2 style="font-size:1.4rem;">Need to cancel?</h2>
+                    <p class="small muted">You can cancel online until we confirm your order.</p>
+                    <div class="field mb-2">
+                        <label for="reason">Reason (optional)</label>
+                        <input id="reason" name="reason" maxlength="300" />
+                    </div>
+                    <button class="btn btn-outline" type="submit">Cancel order</button>
+                </form>
+            }
+        </div>
+    </div>
+</section>

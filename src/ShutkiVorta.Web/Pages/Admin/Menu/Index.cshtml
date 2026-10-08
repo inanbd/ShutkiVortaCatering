@@ -1,0 +1,49 @@
+@page
+@model ShutkiVorta.Web.Pages.Admin.Menu.IndexModel
+@section Actions {
+    <a class="btn btn-primary btn-sm" href="/admin/menu/edit">@Icons.Get("plus") New item</a>
+}
+
+<section class="panel">
+    <div class="panel-body flush table-wrap">
+        <table class="table">
+            <thead>
+                <tr><th></th><th>Item</th><th>Category</th><th class="num">Price</th><th>Min / step</th><th>Status</th><th>Page</th><th></th></tr>
+            </thead>
+            <tbody>
+                @foreach (var item in Model.Items)
+                {
+                    <tr>
+                        <td>@if (!string.IsNullOrWhiteSpace(item.ImageUrl)) { <img class="thumb" src="@item.ImageUrl" alt="" loading="lazy" /> }</td>
+                        <td>
+                            <a class="strong" href="/admin/menu/edit/@item.Id">@item.Name</a>
+                            @if (item.IsFeatured) { <span class="pill pill-on">Featured</span> }
+                            <br /><span class="bn muted">@item.BengaliName</span>
+                        </td>
+                        <td>@item.CategoryName</td>
+                        <td class="num"><strong>@Ui.Money(item.PricePerUnit)</strong> / @item.Unit</td>
+                        <td class="small">@Ui.Qty(item.MinimumQuantity, item.Unit) / @Ui.Qty(item.QuantityStep, item.Unit)</td>
+                        <td>
+                            <form method="post" asp-page-handler="Availability" class="toggle-form">
+                                <input type="hidden" name="id" value="@item.Id" />
+                                <input type="hidden" name="isAvailable" value="@((!item.IsAvailable).ToString().ToLowerInvariant())" />
+                                <button class="btn-link small" type="submit" title="Click to toggle">
+                                    <span class="pill @(item.IsAvailable ? "pill-on" : "pill-off")">@(item.IsAvailable ? "Available" : "Hidden")</span>
+                                </button>
+                            </form>
+                        </td>
+                        <td><a class="small" href="/menu/@item.Slug" target="_blank" rel="noopener">/menu/@item.Slug</a></td>
+                        <td class="num">
+                            <a class="btn btn-outline btn-sm" href="/admin/menu/edit/@item.Id">@Icons.Get("edit") Edit</a>
+                            <form method="post" asp-page-handler="Delete" class="toggle-form" data-confirm="Delete @item.Name? This cannot be undone.">
+                                <input type="hidden" name="id" value="@item.Id" />
+                                <button class="btn-link small" type="submit">@Icons.Get("trash")</button>
+                            </form>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</section>
+<p class="small muted mt-2">Each menu item automatically gets an SEO page at <code class="inline">/menu/{slug}</code>, is added to <a href="/sitemap.xml" target="_blank">sitemap.xml</a> and listed in <a href="/robots.txt" target="_blank">robots.txt</a>.</p>

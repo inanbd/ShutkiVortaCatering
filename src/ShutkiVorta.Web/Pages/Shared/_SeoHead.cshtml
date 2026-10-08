@@ -1,0 +1,56 @@
+@using Microsoft.Extensions.Options
+@using ShutkiVorta.Application.Common.Options
+@using ShutkiVorta.Application.Common.Interfaces
+@inject IOptions<SiteOptions> SiteOptions
+@inject IOptions<BusinessOptions> BusinessOptions
+@inject IAppUrls Urls
+@{
+    var site = SiteOptions.Value;
+    var business = BusinessOptions.Value;
+    var seo = ViewData.GetSeo();
+    var title = seo?.Title ?? ViewData["Title"] as string ?? business.Name;
+    var fullTitle = seo?.ExactTitle == true || title.Contains(business.Name, StringComparison.OrdinalIgnoreCase) ? title : $"{title} | {business.Name}";
+    var description = seo?.Description ?? site.DefaultMetaDescription;
+    var canonical = Urls.Absolute(seo?.CanonicalPath ?? (Context.Request.Path.HasValue ? Context.Request.Path.Value!.ToLowerInvariant() : "/"));
+    var image = Urls.Absolute(seo?.ImageUrl ?? site.DefaultSocialImage);
+    var noIndex = seo?.NoIndex == true || !site.AllowSearchEngineIndexing || seo is null;
+}
+<title>@fullTitle</title>
+<meta name="description" content="@description" />
+@if (noIndex)
+{
+    <meta name="robots" content="noindex, nofollow" />
+}
+else
+{
+    <meta name="robots" content="index, follow, max-image-preview:large" />
+    <link rel="canonical" href="@canonical" />
+}
+<meta property="og:site_name" content="@business.Name" />
+<meta property="og:type" content="@(seo?.OpenGraphType ?? "website")" />
+<meta property="og:title" content="@fullTitle" />
+<meta property="og:description" content="@description" />
+<meta property="og:url" content="@canonical" />
+<meta property="og:image" content="@image" />
+<meta property="og:locale" content="en_US" />
+<meta name="twitter:card" content="summary_large_image" />
+<meta name="twitter:title" content="@fullTitle" />
+<meta name="twitter:description" content="@description" />
+<meta name="twitter:image" content="@image" />
+<meta name="geo.region" content="US-@business.State" />
+<meta name="geo.placename" content="@business.City" />
+@if (!string.IsNullOrWhiteSpace(site.GoogleSiteVerification))
+{
+    <meta name="google-site-verification" content="@site.GoogleSiteVerification" />
+}
+@if (!string.IsNullOrWhiteSpace(site.BingSiteVerification))
+{
+    <meta name="msvalidate.01" content="@site.BingSiteVerification" />
+}
+@if (seo is not null)
+{
+    foreach (var data in seo.StructuredData)
+    {
+        <!script type="application/ld+json">@Html.Raw(StructuredData.Serialize(data))</!script>
+    }
+}

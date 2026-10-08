@@ -1,0 +1,150 @@
+@page
+@model IndexModel
+@{
+    var b = Model.Business;
+}
+
+<section class="hero" aria-labelledby="hero-title">
+    <div class="hero-media">
+        <img src="~/images/site/hero.webp" alt="A traditional Bangladeshi spread of assorted vortas on a plate" width="1280" height="720" fetchpriority="high" />
+    </div>
+    <partial name="_AlponaRing" />
+    <div class="container">
+        <div class="hero-content">
+            <span class="eyebrow">@b.City &middot; Texas</span>
+            <p class="hero-bn" lang="bn">শুঁটকি ভর্তা</p>
+            <h1 id="hero-title">Authentic Bangladeshi <em>Shutki Vorta</em>, handmade in @b.City</h1>
+            <p class="hero-lead">Flame-roasted dried fish and garden vegetables, pounded on the shil-pata with red onion, garlic, green chili and raw mustard oil &mdash; the way our mothers made it. Ordered by the pound, made fresh for your table.</p>
+            <div class="hero-actions">
+                <a class="btn btn-primary btn-lg" href="/menu">@Icons.Get("bowl") Order by the pound</a>
+                <a class="btn btn-ghost-light btn-lg" href="/catering">Plan event catering</a>
+            </div>
+            <ul class="hero-badges">
+                <li>Made fresh to order</li>
+                <li>Pickup or local delivery</li>
+                <li>Sold by the lb (from ½ lb)</li>
+            </ul>
+        </div>
+    </div>
+    <div class="bunting" aria-hidden="true"></div>
+</section>
+
+<section class="section section-dark" id="signature" aria-labelledby="signature-title">
+    <div class="container">
+        <header class="section-head">
+            <span class="bn-title" lang="bn">আমাদের বিশেষ</span>
+            <span class="eyebrow">Our speciality</span>
+            <h2 id="signature-title">Signature Shutki Vortas</h2>
+            <p>Shutki &mdash; sun-dried fish from the Bay of Bengal &mdash; is the soul of Bangladeshi home cooking. We source the good stuff, clean it carefully and roast it over an open flame before it ever meets the shil-pata.</p>
+        </header>
+        <div class="menu-grid cols-3">
+            @foreach (var item in Model.ShutkiItems)
+            {
+                <partial name="_MenuCard" model="item" />
+            }
+        </div>
+    </div>
+</section>
+
+<section class="section" id="classics" aria-labelledby="classics-title">
+    <div class="container">
+        <header class="section-head">
+            <span class="bn-title" lang="bn">ঘরোয়া ভর্তা</span>
+            <span class="eyebrow">Everyday favorites</span>
+            <h2 id="classics-title">Homestyle Vortas</h2>
+            <p>Smoky begun, buttery aloo, nutty dal &mdash; the vortas that turn a plate of rice into a feast. Mix and match for a true Bengali spread.</p>
+        </header>
+        <div class="menu-grid cols-3">
+            @foreach (var item in Model.ClassicItems)
+            {
+                <partial name="_MenuCard" model="item" />
+            }
+        </div>
+        <p class="text-center mt-4"><a class="btn btn-outline" href="/menu">See the full menu @Icons.Get("arrow-right")</a></p>
+    </div>
+</section>
+
+<partial name="_AlponaDivider" />
+
+<section class="section" aria-labelledby="how-title">
+    <div class="container">
+        <header class="section-head">
+            <span class="bn-title" lang="bn">কীভাবে অর্ডার করবেন</span>
+            <h2 id="how-title">How ordering works</h2>
+            <p>Every vorta is made fresh for your date, so please order at least @Model.Ordering.MinimumLeadTimeHours hours ahead.</p>
+        </header>
+        <div class="steps">
+            <div class="step">
+                <div class="step-num">১</div>
+                <h3>Choose by the pound</h3>
+                <p>Pick your vortas in half-pound steps. A half pound serves two to three people as a side.</p>
+            </div>
+            <div class="step">
+                <div class="step-num">২</div>
+                <h3>Pick a day &amp; time</h3>
+                <p>Collect from our @b.City kitchen or have it delivered across @Model.Ordering.DeliveryAreaDescription.</p>
+            </div>
+            <div class="step">
+                <div class="step-num">৩</div>
+                <h3>We cook, you feast</h3>
+                <p>We roast, pound and finish everything with mustard oil on your day. Just add hot rice.</p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="section section-cream" aria-labelledby="story-title">
+    <div class="container split">
+        <figure class="framed">
+            <img src="~/images/site/dried-fish.webp" alt="Baskets of sun-dried fish (shutki) at a market in Chittagong, Bangladesh" width="1000" height="750" loading="lazy" />
+            <figcaption>Sun-dried shutki in Chattogram &mdash; where the flavor begins.</figcaption>
+        </figure>
+        <div>
+            <p class="quote-bn" lang="bn">শিলপাটায় বাটা, সরিষার তেলে মাখা</p>
+            <span class="eyebrow">Our story</span>
+            <h2 id="story-title">From the shil-pata to your table</h2>
+            <p>In Bangladeshi homes, vorta is love made by hand: something roasted, something pounded, a drizzle of pungent mustard oil and a squeeze of lime. We started cooking for friends in Dallas who missed that taste of home &mdash; and the word spread.</p>
+            <ul class="checklist">
+                <li>Shutki cleaned, soaked and flame-roasted in small batches</li>
+                <li>Cold-pressed mustard oil, fresh chilies and garlic in every batch</li>
+                <li>No preservatives &mdash; made for your date, never sitting on a shelf</li>
+            </ul>
+            <a class="btn btn-green" href="/about">Read our story</a>
+        </div>
+    </div>
+</section>
+
+<section class="section section-dark scallop-top" aria-labelledby="info-title">
+    <div class="container">
+        <header class="section-head">
+            <span class="eyebrow">Good to know</span>
+            <h2 id="info-title">Pickup, delivery &amp; payment</h2>
+        </header>
+        <div class="info-cards">
+            <div class="info-card">
+                @Icons.Get("bag", "icon")
+                <h3>Pickup in @b.City</h3>
+                <p>@b.PickupInstructions</p>
+            </div>
+            <div class="info-card">
+                @Icons.Get("truck", "icon")
+                <h3>Local delivery</h3>
+                <p>We deliver to @Model.Ordering.DeliveryAreaDescription for @Ui.Money(Model.Ordering.DeliveryFee)@(Model.Ordering.FreeDeliveryThreshold is { } t ? $" — free on orders over {Ui.Money(t)}" : "").</p>
+            </div>
+            <div class="info-card">
+                @Icons.Get("receipt", "icon")
+                <h3>Easy payment</h3>
+                <p>@Model.Ordering.PaymentInstructions</p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="section section-maroon cta-band" aria-labelledby="catering-title">
+    <div class="container">
+        <span class="bn-title" lang="bn">দাওয়াত · বিয়ে · ঈদ · পহেলা বৈশাখ</span>
+        <h2 id="catering-title">Hosting a dawat or celebration?</h2>
+        <p>From intimate family dinners to weddings and Pohela Boishakh gatherings, we prepare vorta platters for any crowd. Tell us about your event and we'll suggest the perfect spread.</p>
+        <a class="btn btn-primary btn-lg" href="/catering">Request catering</a>
+    </div>
+</section>

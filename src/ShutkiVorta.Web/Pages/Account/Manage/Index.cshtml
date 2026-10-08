@@ -1,0 +1,69 @@
+@page "/account/manage"
+@model ShutkiVorta.Web.Pages.Account.Manage.IndexModel
+
+<section class="section-sm">
+    <div class="container">
+        <h1 style="font-size:2.4rem;">My account</h1>
+        <div class="account-layout">
+            <partial name="_AccountNav" />
+            <div>
+                <partial name="_StatusMessage" />
+                @if (!Model.EmailConfirmed)
+                {
+                    <form method="post" asp-page-handler="ResendConfirmation" class="alert alert-info">
+                        Please confirm <strong>@Model.Email</strong> to link orders you placed as a guest.
+                        <button class="btn-link" type="submit">Resend confirmation email</button>
+                    </form>
+                }
+                <form method="post" class="form-card kantha">
+                    <h2 style="font-size:1.8rem;">Profile &amp; delivery address</h2>
+                    <div asp-validation-summary="ModelOnly" class="validation-summary-errors"></div>
+                    <div class="form-grid">
+                        <div class="field">
+                            <label asp-for="Input.FullName"></label>
+                            <input asp-for="Input.FullName" autocomplete="name" />
+                            <span asp-validation-for="Input.FullName" class="field-validation-error"></span>
+                        </div>
+                        <div class="field">
+                            <label>Email</label>
+                            <input value="@Model.Email" disabled />
+                        </div>
+                        <div class="field full">
+                            <label asp-for="Input.PhoneNumber"></label>
+                            <input asp-for="Input.PhoneNumber" type="tel" autocomplete="tel" />
+                            <span asp-validation-for="Input.PhoneNumber" class="field-validation-error"></span>
+                        </div>
+                        <div class="field full">
+                            <label asp-for="Input.AddressLine1"></label>
+                            <input asp-for="Input.AddressLine1" autocomplete="address-line1" />
+                        </div>
+                        <div class="field full">
+                            <label asp-for="Input.AddressLine2"></label>
+                            <input asp-for="Input.AddressLine2" autocomplete="address-line2" />
+                        </div>
+                        <div class="field">
+                            <label asp-for="Input.City"></label>
+                            <input asp-for="Input.City" autocomplete="address-level2" />
+                        </div>
+                        <div class="form-grid" style="gap:0 12px;">
+                            <div class="field">
+                                <label asp-for="Input.State"></label>
+                                <input asp-for="Input.State" maxlength="2" />
+                                <span asp-validation-for="Input.State" class="field-validation-error"></span>
+                            </div>
+                            <div class="field">
+                                <label asp-for="Input.PostalCode"></label>
+                                <input asp-for="Input.PostalCode" inputmode="numeric" />
+                                <span asp-validation-for="Input.PostalCode" class="field-validation-error"></span>
+                            </div>
+                        </div>
+                    </div>
+                    <button class="btn btn-primary mt-3" type="submit">Save changes</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</section>
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+}

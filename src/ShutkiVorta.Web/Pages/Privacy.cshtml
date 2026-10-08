@@ -1,0 +1,21 @@
+@page "/privacy"
+@model PrivacyModel
+
+<section class="page-banner" style="padding:44px 0 50px;">
+    <div class="container"><h1>Privacy Policy</h1></div>
+    <div class="bunting" aria-hidden="true"></div>
+</section>
+
+<section class="section-sm">
+    <div class="container prose">
+        <p>@Model.Business.Name respects your privacy. This page explains what we collect and why.</p>
+        <h2>What we collect</h2>
+        <p>When you place an order or send an inquiry we collect your name, email address, phone number and, for deliveries, your address. If you create an account we also store a securely hashed password.</p>
+        <h2>How we use it</h2>
+        <p>We use your information only to prepare and deliver your order, to send order confirmations and status updates, and to reply to your messages. We never sell your information.</p>
+        <h2>Cookies</h2>
+        <p>We use essential cookies to remember the items in your order, keep you signed in and protect forms against forgery. We do not use advertising cookies.</p>
+        <h2>Contact</h2>
+        <p>Questions? Email <a href="mailto:@Model.Business.Email">@Model.Business.Email</a> or call @Model.Business.Phone.</p>
+    </div>
+</section>

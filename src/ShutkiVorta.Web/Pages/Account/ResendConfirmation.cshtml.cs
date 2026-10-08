@@ -1,0 +1,32 @@
+using System.ComponentModel.DataAnnotations;
+using MediatR;
+using Microsoft.AspNetCore.Mvc;
+using ShutkiVorta.Application.Features.Accounts;
+using ShutkiVorta.Web.Infrastructure;
+
+namespace ShutkiVorta.Web.Pages.Account;
+
+public sealed class ResendConfirmationModel(ISender sender) : AppPageModel(sender)
+{
+    [BindProperty]
+    [Required, EmailAddress]
+    [Display(Name = "Email")]
+    public string Email { get; set; } = string.Empty;
+
+    public bool Sent { get; private set; }
+
+    public void OnGet() => ViewData["Title"] = "Resend confirmation email";
+
+    public async Task<IActionResult> OnPostAsync(CancellationToken cancellationToken)
+    {
+        ViewData["Title"] = "Resend confirmation email";
+        if (!ModelState.IsValid)
+        {
+            return Page();
+        }
+
+        await Sender.Send(new ResendConfirmationEmailCommand(Email), cancellationToken);
+        Sent = true;
+        return Page();
+    }
+}

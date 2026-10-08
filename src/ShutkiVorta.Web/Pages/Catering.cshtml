@@ -1,0 +1,62 @@
+@page "/catering"
+@model CateringModel
+
+<section class="page-banner">
+    <div class="container">
+        <span class="bn-title" lang="bn">দাওয়াত · বিয়ে · ঈদ · পহেলা বৈশাখ</span>
+        <h1>Event Catering</h1>
+        <p>A table laden with vortas is how Bengali hospitality begins. Let us bring that warmth to your celebration in Dallas&ndash;Fort Worth.</p>
+    </div>
+    <div class="bunting" aria-hidden="true"></div>
+</section>
+
+<section class="section">
+    <div class="container split">
+        <div>
+            <span class="eyebrow">For every gathering</span>
+            <h2>Vorta platters for 10 to 500 guests</h2>
+            <p>Whether it's a cozy dawat at home, a gaye holud, a wedding reception, an Eid open house or a Pohela Boishakh festival, we prepare generous spreads of shutki and homestyle vortas &mdash; packed in trays, ready to serve with rice.</p>
+            <ul class="checklist">
+                <li>Custom vorta selections, including our signature shutki trio</li>
+                <li>Spice levels adjusted for kids, elders and heat lovers alike</li>
+                <li>Pickup in Dallas or delivery and setup across the metroplex</li>
+                <li>Friendly guidance on quantities &mdash; roughly ¼ lb per guest per vorta</li>
+            </ul>
+            <p>Tell us about your event and we'll reply within one business day with ideas and a quote.</p>
+        </div>
+        <figure class="framed">
+            <img src="~/images/site/market.webp" alt="Dozens of colorful Bangladeshi vortas in bowls at a vorta festival" width="800" height="1000" loading="lazy" />
+        </figure>
+    </div>
+</section>
+
+<partial name="_AlponaDivider" />
+
+<section class="section" id="inquiry">
+    <div class="container container-narrow">
+        <header class="section-head">
+            <span class="bn-title" lang="bn">যোগাযোগ করুন</span>
+            <h2>Request a catering quote</h2>
+        </header>
+        @if (Model.Submitted)
+        {
+            <div class="form-card kantha text-center">
+                <p class="bn" lang="bn" style="font-size:2rem;color:var(--red-700);">ধন্যবাদ!</p>
+                <h3>We received your request</h3>
+                <p class="muted">We'll be in touch within one business day. A copy of your message is on its way to your inbox.</p>
+                <a class="btn btn-green" href="/menu">Browse the menu meanwhile</a>
+            </div>
+        }
+        else
+        {
+            <form method="post" class="form-card kantha">
+                <partial name="_InquiryForm" for="Input" />
+                <button class="btn btn-primary btn-lg mt-3" type="submit">Send request</button>
+            </form>
+        }
+    </div>
+</section>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+}

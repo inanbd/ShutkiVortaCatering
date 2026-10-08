@@ -1,0 +1,141 @@
+@using Microsoft.Extensions.Options
+@using ShutkiVorta.Application.Common.Options
+@using ShutkiVorta.Application.Common.Interfaces
+@inject IOptions<BusinessOptions> BusinessOptions
+@inject ICurrentUser CurrentUser
+@{
+    var business = BusinessOptions.Value;
+    var path = Context.Request.Path.Value ?? "/";
+    string? Current(string prefix) => (prefix == "/" ? path == "/" : path.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)) ? "page" : null;
+    var phoneHref = "tel:" + new string(business.Phone.Where(c => char.IsDigit(c) || c == '+').ToArray());
+}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <partial name="_SeoHead" />
+    <meta name="theme-color" content="#0a3a2c" />
+    <link rel="icon" href="~/images/favicon.svg" type="image/svg+xml" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;0,700;1,500&family=Hind+Siliguri:wght@400;500;600;700&family=Tiro+Bangla&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
+    @await RenderSectionAsync("Head", required: false)
+</head>
+<body>
+    <a class="skip-link" href="#main">Skip to content</a>
+
+    <div class="topbar">
+        <div class="container">
+            <div class="topbar-items">
+                <span class="bn">মায়ের হাতের স্বাদ</span>
+                <span class="hide-sm">Pickup &amp; local delivery in @business.City, @business.State</span>
+            </div>
+            <div class="topbar-items">
+                <a href="@phoneHref">@Icons.Get("phone") @business.Phone</a>
+                <a class="hide-sm" href="mailto:@business.Email">@business.Email</a>
+            </div>
+        </div>
+    </div>
+
+    <header class="site-header">
+        <div class="container">
+            <a class="brand" href="/" aria-label="@business.Name home">
+                <img src="~/images/logo-mark.svg" alt="" width="54" height="54" />
+                <span class="brand-text">
+                    <span class="brand-name">Shutki Vorta</span>
+                    <span class="brand-sub">@business.BengaliName</span>
+                </span>
+            </a>
+
+            <nav class="main-nav" id="main-nav" aria-label="Main">
+                <ul>
+                    <li><a href="/menu" aria-current="@Current("/menu")">Menu</a></li>
+                    <li><a href="/catering" aria-current="@Current("/catering")">Catering</a></li>
+                    <li><a href="/about" aria-current="@Current("/about")">Our Story</a></li>
+                    <li><a href="/faq" aria-current="@Current("/faq")">FAQ</a></li>
+                    <li><a href="/contact" aria-current="@Current("/contact")">Contact</a></li>
+                    <li><a href="/track-order" aria-current="@Current("/track-order")">Track Order</a></li>
+                </ul>
+            </nav>
+
+            <div class="header-actions">
+                @if (CurrentUser.IsAuthenticated)
+                {
+                    @if (CurrentUser.IsAdmin)
+                    {
+                        <a class="icon-link" href="/admin" title="Admin panel">@Icons.Get("dashboard") <span class="icon-label">Admin</span></a>
+                    }
+                    <a class="icon-link" href="/account/orders" title="My account">@Icons.Get("user") <span class="icon-label">My Orders</span></a>
+                }
+                else
+                {
+                    <a class="icon-link" href="/account/login" title="Sign in">@Icons.Get("user") <span class="icon-label">Sign in</span></a>
+                }
+                @await Component.InvokeAsync("CartBadge")
+                <button class="nav-toggle" type="button" aria-controls="main-nav" aria-expanded="false" aria-label="Open menu">@Icons.Get("menu")</button>
+            </div>
+        </div>
+        <div class="header-band" aria-hidden="true"></div>
+    </header>
+
+    <main id="main">
+        @RenderBody()
+    </main>
+
+    <footer class="site-footer">
+        <div class="bunting" aria-hidden="true"></div>
+        <div class="container">
+            <div class="footer-main">
+                <div class="footer-brand">
+                    <a class="brand" href="/">
+                        <img src="~/images/logo-mark.svg" alt="" width="54" height="54" loading="lazy" />
+                        <span class="brand-text">
+                            <span class="brand-name">Shutki Vorta</span>
+                            <span class="footer-bn">@business.BengaliName</span>
+                        </span>
+                    </a>
+                    <p>Authentic Bangladeshi shutki and homestyle vortas, roasted, pounded and finished with mustard oil &mdash; made fresh to order in @business.City, Texas and sold by the pound.</p>
+                </div>
+                <div>
+                    <h3>Our Vortas</h3>
+                    <ul>
+                        <li><a href="/menu/loitta-shutki-vorta">Loitta Shutki Vorta</a></li>
+                        <li><a href="/menu/chingri-shutki-vorta">Chingri Shutki Vorta</a></li>
+                        <li><a href="/menu/begun-vorta">Begun Vorta</a></li>
+                        <li><a href="/menu/aloo-vorta">Aloo Vorta</a></li>
+                        <li><a href="/menu">Full menu &rarr;</a></li>
+                    </ul>
+                </div>
+                <div>
+                    <h3>Ordering</h3>
+                    <ul>
+                        <li><a href="/cart">Your order</a></li>
+                        <li><a href="/track-order">Track an order</a></li>
+                        <li><a href="/catering">Event catering</a></li>
+                        <li><a href="/faq">Pickup &amp; delivery FAQ</a></li>
+                        <li><a href="/account/orders">My account</a></li>
+                    </ul>
+                </div>
+                <div>
+                    <h3>Visit &amp; Contact</h3>
+                    <ul>
+                        <li>@Icons.Get("pin") @business.FullAddress</li>
+                        <li>@Icons.Get("clock") @business.OpeningHoursText</li>
+                        <li><a href="@phoneHref">@Icons.Get("phone") @business.Phone</a></li>
+                        <li><a href="mailto:@business.Email">@Icons.Get("mail") @business.Email</a></li>
+                    </ul>
+                </div>
+            </div>
+            <div class="footer-bottom">
+                <span>&copy; @DateTime.UtcNow.Year @business.Name &middot; Handmade with love in Dallas, Texas</span>
+                <span><a href="/privacy">Privacy</a> &middot; <a href="/about#photo-credits">Photo credits</a> &middot; <a href="/sitemap.xml">Sitemap</a></span>
+            </div>
+        </div>
+    </footer>
+
+    <script src="~/js/site.js" asp-append-version="true"></script>
+    @await RenderSectionAsync("Scripts", required: false)
+</body>
+</html>

@@ -1,0 +1,43 @@
+@page "/account/orders"
+@model ShutkiVorta.Web.Pages.Account.Orders.IndexModel
+@using ShutkiVorta.Application.Common.Formatting
+
+<section class="section-sm">
+    <div class="container">
+        <h1 style="font-size:2.4rem;">My account</h1>
+        <div class="account-layout">
+            <partial name="_AccountNav" />
+            <div>
+                <partial name="_StatusMessage" />
+                <h2 style="font-size:1.8rem;">My orders</h2>
+                @if (Model.Orders.Count == 0)
+                {
+                    <div class="form-card kantha empty-state">
+                        <p class="bn" lang="bn">এখনো কোনো অর্ডার নেই</p>
+                        <p class="muted">You haven't placed any orders yet.</p>
+                        <a class="btn btn-primary" href="/menu">Order your first vorta</a>
+                    </div>
+                }
+                else
+                {
+                    <div class="orders-list">
+                        @foreach (var order in Model.Orders)
+                        {
+                            <a class="order-row-card" href="/account/orders/@order.OrderNumber">
+                                <div>
+                                    <div class="num">@order.OrderNumber</div>
+                                    <div class="small muted">@order.FulfillmentName &middot; @Format.DateTime(order.ScheduledFor)</div>
+                                    <div class="small">@order.ItemsPreview</div>
+                                </div>
+                                <div style="text-align:right;">
+                                    <partial name="_StatusBadge" model="order.Status" />
+                                    <div class="price" style="font-size:1.3rem;margin-top:6px;">@Ui.Money(order.Total)</div>
+                                </div>
+                            </a>
+                        }
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+</section>

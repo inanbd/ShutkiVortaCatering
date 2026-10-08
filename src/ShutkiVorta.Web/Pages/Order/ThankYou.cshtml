@@ -1,0 +1,49 @@
+@page "/order/{orderNumber}/thank-you"
+@model ShutkiVorta.Web.Pages.Order.ThankYouModel
+@using ShutkiVorta.Application.Common.Formatting
+@{
+    var o = Model.Order;
+}
+
+<section class="section thankyou">
+    <div class="container container-narrow">
+        <p class="bn-big" lang="bn">ধন্যবাদ!</p>
+        <partial name="_AlponaDivider" />
+        <h1 class="mt-2">Thank you, @o.CustomerName.Split(' ')[0]!</h1>
+        <p class="muted">Your order has been received. A confirmation is on its way to <strong>@o.Email</strong>.</p>
+        <p><span class="order-number">@o.OrderNumber</span></p>
+
+        <div class="form-card kantha mt-4" style="text-align:left;">
+            <dl class="order-meta">
+                <div><dt>@o.FulfillmentName</dt><dd>@Format.Date(o.ScheduledFor)<br />@Format.Time(o.ScheduledFor)</dd></div>
+                @if (o.IsDelivery)
+                {
+                    <div><dt>Delivering to</dt><dd>@o.DeliveryAddress</dd></div>
+                }
+                else
+                {
+                    <div><dt>Pickup</dt><dd>@Model.Business.FullAddress<br /><span class="small muted">@Model.Business.PickupInstructions</span></dd></div>
+                }
+                <div><dt>Total</dt><dd>@Ui.Money(o.Total)</dd></div>
+            </dl>
+            <ul class="summary-lines mt-3">
+                @foreach (var line in o.Lines)
+                {
+                    <li><span>@line.ItemName <span class="muted">× @line.QuantityText</span></span><span>@Ui.Money(line.LineTotal)</span></li>
+                }
+            </ul>
+            <p class="alert alert-info small mt-2 mb-0">@Icons.Get("receipt") @Model.Ordering.PaymentInstructions</p>
+        </div>
+
+        <div class="steps mt-4" style="text-align:left;">
+            <div class="step"><div class="step-num">১</div><h3>We confirm</h3><p>Our kitchen reviews your order and emails you a confirmation.</p></div>
+            <div class="step"><div class="step-num">২</div><h3>We cook fresh</h3><p>Roasted, pounded and finished with mustard oil for your time slot.</p></div>
+            <div class="step"><div class="step-num">৩</div><h3>You enjoy</h3><p>We'll let you know when it's ready or on the way.</p></div>
+        </div>
+
+        <div class="flex gap-2 wrap mt-4" style="justify-content:center;">
+            <a class="btn btn-green" href="/order/@o.OrderNumber?token=@Uri.EscapeDataString(o.TrackingToken)">Track this order</a>
+            <a class="btn btn-outline" href="/menu">Back to the menu</a>
+        </div>
+    </div>
+</section>

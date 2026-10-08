@@ -1,0 +1,65 @@
+@model OrderDetailsDto
+@using ShutkiVorta.Application.Common.Formatting
+<div class="form-card">
+    <div class="flex justify-between items-center wrap gap-2 mb-3">
+        <div>
+            <span class="muted small">Order number</span>
+            <div class="order-number" style="font-size:1.4rem;padding:4px 16px;">@Model.OrderNumber</div>
+        </div>
+        <partial name="_StatusBadge" model="Model.Status" />
+    </div>
+
+    <partial name="_OrderTimeline" model="Model" />
+    <p class="mt-3 text-center"><strong>@Model.StatusMessage</strong></p>
+
+    <dl class="order-meta mt-3">
+        <div><dt>@Model.FulfillmentName</dt><dd>@Format.Date(Model.ScheduledFor)<br />@Format.Time(Model.ScheduledFor)</dd></div>
+        @if (Model.IsDelivery)
+        {
+            <div><dt>Deliver to</dt><dd>@Model.DeliveryAddress</dd></div>
+        }
+        <div><dt>Contact</dt><dd>@Model.CustomerName<br /><span class="small">@Model.Phone</span></dd></div>
+        <div><dt>Placed</dt><dd>@Format.DateTime(Model.CreatedAtLocal)</dd></div>
+    </dl>
+
+    <h2 class="mt-4" style="font-size:1.6rem;">Items</h2>
+    <table class="items-table">
+        <thead><tr><th>Item</th><th class="num">Qty</th><th class="num">Price</th><th class="num">Amount</th></tr></thead>
+        <tbody>
+            @foreach (var line in Model.Lines)
+            {
+                <tr>
+                    <td><strong>@line.ItemName</strong>@if (!string.IsNullOrWhiteSpace(line.ItemBengaliName)) {<text><br /><span class="bn muted">@line.ItemBengaliName</span></text>}</td>
+                    <td class="num">@line.QuantityText</td>
+                    <td class="num">@Ui.Money(line.UnitPrice) / @line.Unit</td>
+                    <td class="num">@Ui.Money(line.LineTotal)</td>
+                </tr>
+            }
+        </tbody>
+    </table>
+    <table class="totals mt-2" style="max-width:340px;margin-left:auto;">
+        <tr><td>Subtotal</td><td>@Ui.Money(Model.Subtotal)</td></tr>
+        @if (Model.IsDelivery)
+        {
+            <tr><td>Delivery</td><td>@(Model.DeliveryFee == 0 ? "Free" : Ui.Money(Model.DeliveryFee))</td></tr>
+        }
+        <tr><td>Sales tax</td><td>@Ui.Money(Model.Tax)</td></tr>
+        <tr class="grand"><td>Total</td><td>@Ui.Money(Model.Total)</td></tr>
+    </table>
+
+    @if (!string.IsNullOrWhiteSpace(Model.CustomerNotes))
+    {
+        <p class="mt-3"><strong>Your notes:</strong> @Model.CustomerNotes</p>
+    }
+
+    @if (Model.History.Count > 0)
+    {
+        <h2 class="mt-4" style="font-size:1.4rem;">History</h2>
+        <ul class="history">
+            @foreach (var h in Model.History.Reverse())
+            {
+                <li><time>@Format.DateTime(h.ChangedAtLocal)</time><span><strong>@h.StatusName</strong>@(string.IsNullOrWhiteSpace(h.Note) ? "" : " — " + h.Note)</span></li>
+            }
+        </ul>
+    }
+</div>

@@ -1,0 +1,33 @@
+@model OrderDetailsDto
+@{
+    var steps = new List<(string Label, OrderStatus Status)>
+    {
+        ("Placed", OrderStatus.Pending),
+        ("Confirmed", OrderStatus.Confirmed),
+        ("Preparing", OrderStatus.Preparing),
+        (Model.IsDelivery ? "On the way" : "Ready", Model.IsDelivery ? OrderStatus.OutForDelivery : OrderStatus.ReadyForPickup),
+        ("Completed", OrderStatus.Completed),
+    };
+    int Rank(OrderStatus s) => s switch
+    {
+        OrderStatus.Pending => 0, OrderStatus.Confirmed => 1, OrderStatus.Preparing => 2,
+        OrderStatus.ReadyForPickup or OrderStatus.OutForDelivery => 3, OrderStatus.Completed => 4, _ => -1,
+    };
+    var current = Rank(Model.Status);
+}
+@if (Model.Status == OrderStatus.Cancelled)
+{
+    <div class="alert alert-error">This order was cancelled. @Model.StatusMessage</div>
+}
+else
+{
+    <ol class="timeline" aria-label="Order progress">
+        @for (var i = 0; i < steps.Count; i++)
+        {
+            <li class="@(i <= current ? "done" : null) @(i == current ? "current" : null)">
+                <span class="dot">@Ui.BengaliNumber(i + 1)</span>
+                @steps[i].Label
+            </li>
+        }
+    </ol>
+}

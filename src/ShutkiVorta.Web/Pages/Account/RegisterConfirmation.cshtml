@@ -1,0 +1,15 @@
+@page "/account/register-confirmation"
+@{
+    ViewData["Title"] = "Check your email";
+    var email = Request.Query["email"].ToString();
+}
+<section class="section">
+    <div class="container auth-wrap text-center">
+        <div class="form-card kantha">
+            <p class="bn" lang="bn" style="font-size:2rem;color:var(--red-700);">প্রায় শেষ!</p>
+            <h1 style="font-size:2rem;">Check your email</h1>
+            <p>We sent a confirmation link to <strong>@email</strong>. Click it to activate your account.</p>
+            <p class="small muted">Didn't get it? Check spam, or <a href="/account/resend-confirmation">send it again</a>.</p>
+        </div>
+    </div>
+</section>

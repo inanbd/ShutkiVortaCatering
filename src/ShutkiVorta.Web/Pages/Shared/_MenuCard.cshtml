@@ -1,0 +1,42 @@
+@model MenuItemDto
+<article class="menu-card">
+    <div class="menu-card-media">
+        @if (Model.Category == MenuCategory.ShutkiVorta)
+        {
+            <span class="ribbon">Signature</span>
+        }
+        else if (Model.IsFeatured)
+        {
+            <span class="ribbon">Favorite</span>
+        }
+        @if (!string.IsNullOrWhiteSpace(Model.ImageUrl))
+        {
+            <img src="@Model.ImageUrl" alt="@Model.DisplayImageAlt" width="480" height="360" loading="lazy" decoding="async" />
+        }
+    </div>
+    <div class="menu-card-body">
+        @if (!string.IsNullOrWhiteSpace(Model.BengaliName))
+        {
+            <span class="bn-name" lang="bn">@Model.BengaliName</span>
+        }
+        <h3><a href="/menu/@Model.Slug">@Model.Name</a></h3>
+        <p>@Model.ShortDescription</p>
+        <div class="menu-card-meta">
+            <partial name="_Spice" model="Model.SpiceLevel" />
+            <span class="price">@Ui.Money(Model.PricePerUnit) <small>/ @Model.Unit</small></span>
+        </div>
+    </div>
+    <form class="menu-card-actions" method="post" action="/cart?handler=Add">
+        @Html.AntiForgeryToken()
+        <input type="hidden" name="menuItemId" value="@Model.Id" />
+        <input type="hidden" name="returnUrl" value="@Context.Request.Path" />
+        <label class="visually-hidden" for="qty-@Model.Id">Quantity for @Model.Name</label>
+        <select class="input" id="qty-@Model.Id" name="quantity">
+            @foreach (var q in Ui.QuantityOptions(Model.MinimumQuantity, Model.QuantityStep, 5m))
+            {
+                <option value="@Ui.Number(q)" selected="@(q == Math.Max(1m, Model.MinimumQuantity) ? "selected" : null)">@Ui.Qty(q, Model.Unit)</option>
+            }
+        </select>
+        <button class="btn btn-primary btn-sm" type="submit">@Icons.Get("cart") Add</button>
+    </form>
+</article>

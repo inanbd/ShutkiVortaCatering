@@ -1,0 +1,13 @@
+@{
+    var path = Context.Request.Path.Value ?? string.Empty;
+    string? Active(string p) => path.StartsWith(p, StringComparison.OrdinalIgnoreCase) ? "active" : null;
+}
+<nav class="account-nav" aria-label="Account">
+    <a class="@Active("/account/orders")" href="/account/orders">@Icons.Get("receipt") My orders</a>
+    <a class="@(path.Equals("/account/manage", StringComparison.OrdinalIgnoreCase) ? "active" : null)" href="/account/manage">@Icons.Get("user") Profile &amp; address</a>
+    <a class="@Active("/account/manage/change-password")" href="/account/manage/change-password">@Icons.Get("settings") Password</a>
+    <form method="post" action="/account/logout">
+        @Html.AntiForgeryToken()
+        <button type="submit">@Icons.Get("logout") Sign out</button>
+    </form>
+</nav>

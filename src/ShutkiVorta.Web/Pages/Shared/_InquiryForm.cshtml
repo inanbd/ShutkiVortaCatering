@@ -1,0 +1,44 @@
+@model InquiryInput
+@{
+    var showEventFields = ViewData["ShowEventFields"] as bool? ?? true;
+}
+<div asp-validation-summary="ModelOnly" class="validation-summary-errors"></div>
+<div class="visually-hidden" aria-hidden="true">
+    <label asp-for="Website">Leave this field empty</label>
+    <input asp-for="Website" tabindex="-1" autocomplete="off" />
+</div>
+<div class="form-grid">
+    <div class="field">
+        <label asp-for="Name"></label>
+        <input asp-for="Name" autocomplete="name" />
+        <span asp-validation-for="Name" class="field-validation-error"></span>
+    </div>
+    <div class="field">
+        <label asp-for="Email"></label>
+        <input asp-for="Email" type="email" autocomplete="email" />
+        <span asp-validation-for="Email" class="field-validation-error"></span>
+    </div>
+    <div class="field @(showEventFields ? null : "full")">
+        <label asp-for="Phone"></label>
+        <input asp-for="Phone" type="tel" autocomplete="tel" />
+    </div>
+    @if (showEventFields)
+    {
+        <div class="form-grid" style="gap:0 12px;">
+            <div class="field">
+                <label asp-for="EventDate"></label>
+                <input asp-for="EventDate" type="date" />
+                <span asp-validation-for="EventDate" class="field-validation-error"></span>
+            </div>
+            <div class="field">
+                <label asp-for="GuestCount"></label>
+                <input asp-for="GuestCount" type="number" min="1" max="5000" />
+            </div>
+        </div>
+    }
+    <div class="field full">
+        <label asp-for="Message">@(showEventFields ? "Tell us about your event" : "Message")</label>
+        <textarea asp-for="Message" rows="5" placeholder="@(showEventFields ? "Occasion, vortas you love, pickup or delivery, budget…" : "How can we help?")"></textarea>
+        <span asp-validation-for="Message" class="field-validation-error"></span>
+    </div>
+</div>

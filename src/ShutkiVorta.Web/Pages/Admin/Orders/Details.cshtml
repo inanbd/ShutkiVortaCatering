@@ -1,0 +1,131 @@
+@page "/admin/orders/{orderNumber}"
+@model ShutkiVorta.Web.Pages.Admin.Orders.DetailsModel
+@inject ShutkiVorta.Application.Common.Interfaces.IAppUrls Urls
+@{
+    var o = Model.Order;
+    var phoneHref = "tel:" + new string(o.Phone.Where(c => char.IsDigit(c) || c == '+').ToArray());
+}
+@section Actions {
+    <a class="btn btn-outline btn-sm" href="/admin/orders">&larr; Orders</a>
+    <button class="btn btn-outline btn-sm" type="button" onclick="window.print()">@Icons.Get("print") Print</button>
+}
+
+<div class="detail-grid">
+    <div>
+        <section class="panel">
+            <div class="panel-head">
+                <h2>@o.FulfillmentName on @Format.Date(o.ScheduledFor) at @Format.Time(o.ScheduledFor)</h2>
+                <partial name="_StatusBadge" model="o.Status" />
+            </div>
+            <div class="panel-body">
+                <dl class="kv">
+                    <dt>Customer</dt><dd><strong>@o.CustomerName</strong> @(o.CustomerId is null ? "(guest)" : "(account)")</dd>
+                    <dt>Phone</dt><dd><a href="@phoneHref">@o.Phone</a></dd>
+                    <dt>Email</dt><dd><a href="mailto:@o.Email?subject=Your order @o.OrderNumber">@o.Email</a></dd>
+                    @if (o.IsDelivery)
+                    {
+                        <dt>Deliver to</dt>
+                        <dd>@o.DeliveryAddress<br /><a class="small" target="_blank" rel="noopener" href="https://www.google.com/maps/search/?api=1&query=@Uri.EscapeDataString(o.DeliveryAddress ?? string.Empty)">Open in Google Maps</a></dd>
+                    }
+                    <dt>Placed</dt><dd>@Format.DateTime(o.CreatedAtLocal)</dd>
+                    @if (!string.IsNullOrWhiteSpace(o.CustomerNotes))
+                    {
+                        <dt>Customer notes</dt><dd><div class="alert alert-info mb-0">@o.CustomerNotes</div></dd>
+                    }
+                </dl>
+            </div>
+        </section>
+
+        <section class="panel">
+            <div class="panel-head"><h2>Items</h2></div>
+            <div class="panel-body flush table-wrap">
+                <table class="table">
+                    <thead><tr><th>Item</th><th class="num">Quantity</th><th class="num">Unit price</th><th class="num">Amount</th></tr></thead>
+                    <tbody>
+                        @foreach (var line in o.Lines)
+                        {
+                            <tr>
+                                <td><strong>@line.ItemName</strong> <span class="bn muted">@line.ItemBengaliName</span></td>
+                                <td class="num"><strong>@line.QuantityText</strong></td>
+                                <td class="num">@Ui.Money(line.UnitPrice)</td>
+                                <td class="num">@Ui.Money(line.LineTotal)</td>
+                            </tr>
+                        }
+                        <tr><td colspan="3" class="num">Subtotal</td><td class="num">@Ui.Money(o.Subtotal)</td></tr>
+                        @if (o.IsDelivery)
+                        {
+                            <tr><td colspan="3" class="num">Delivery</td><td class="num">@Ui.Money(o.DeliveryFee)</td></tr>
+                        }
+                        <tr><td colspan="3" class="num">Sales tax</td><td class="num">@Ui.Money(o.Tax)</td></tr>
+                        <tr><td colspan="3" class="num"><strong>Total</strong></td><td class="num"><strong>@Ui.Money(o.Total)</strong></td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <section class="panel">
+            <div class="panel-head"><h2>History</h2></div>
+            <div class="panel-body">
+                <ul class="history">
+                    @foreach (var h in o.History.Reverse())
+                    {
+                        <li><time>@Format.DateTime(h.ChangedAtLocal)</time><span><partial name="_StatusBadge" model="h.Status" /> by @h.ChangedBy@(string.IsNullOrWhiteSpace(h.Note) ? "" : " — " + h.Note)</span></li>
+                    }
+                </ul>
+            </div>
+        </section>
+    </div>
+
+    <div class="no-print">
+        <section class="panel">
+            <div class="panel-head"><h2>Update status</h2></div>
+            <div class="panel-body">
+                @if (o.AllowedNextStatuses.Count == 0)
+                {
+                    <p class="muted mb-0">This order is @o.StatusName.ToLowerInvariant(). No further changes are possible.</p>
+                }
+                else
+                {
+                    <form method="post" asp-page-handler="Status">
+                        <div class="field mb-2">
+                            <label for="newStatus">New status</label>
+                            <select id="newStatus" name="newStatus">
+                                @foreach (var s in o.AllowedNextStatuses)
+                                {
+                                    <option value="@s">@s.DisplayName()</option>
+                                }
+                            </select>
+                        </div>
+                        <div class="field mb-2">
+                            <label for="note">Note to customer (optional)</label>
+                            <textarea id="note" name="note" rows="3" maxlength="500" placeholder="e.g. Your order will be ready at the side door."></textarea>
+                        </div>
+                        <label class="check mb-2"><input type="checkbox" name="notifyCustomer" value="true" checked /> Email the customer</label>
+                        <button class="btn btn-primary btn-block" type="submit">Update status</button>
+                    </form>
+                }
+            </div>
+        </section>
+
+        <section class="panel">
+            <div class="panel-head"><h2>Kitchen notes</h2></div>
+            <div class="panel-body">
+                <form method="post" asp-page-handler="Notes">
+                    <div class="field mb-2">
+                        <label for="adminNotes" class="visually-hidden">Internal notes</label>
+                        <textarea id="adminNotes" name="adminNotes" rows="5" maxlength="2000" placeholder="Internal notes — never shown to the customer">@o.AdminNotes</textarea>
+                    </div>
+                    <button class="btn btn-green btn-sm" type="submit">Save notes</button>
+                </form>
+            </div>
+        </section>
+
+        <section class="panel">
+            <div class="panel-head"><h2>Customer link</h2></div>
+            <div class="panel-body small">
+                <p>Share this private status page with the customer:</p>
+                <input class="input" readonly value="@Urls.OrderStatus(o.OrderNumber, o.TrackingToken)" onclick="this.select()" />
+            </div>
+        </section>
+    </div>
+</div>

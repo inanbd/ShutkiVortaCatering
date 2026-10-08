@@ -1,0 +1,19 @@
+@page "/account/resend-confirmation"
+@model ShutkiVorta.Web.Pages.Account.ResendConfirmationModel
+<section class="section">
+    <div class="container auth-wrap">
+        <div class="auth-head"><h1 style="font-size:2.2rem;">Resend confirmation</h1></div>
+        <form method="post" class="form-card kantha">
+            @if (Model.Sent)
+            {
+                <div class="alert alert-success">If an unconfirmed account exists for that address, a new confirmation link is on its way.</div>
+            }
+            <div class="field mb-3">
+                <label asp-for="Email"></label>
+                <input asp-for="Email" type="email" autocomplete="email" />
+                <span asp-validation-for="Email" class="field-validation-error"></span>
+            </div>
+            <button class="btn btn-primary btn-block" type="submit">Send link</button>
+        </form>
+    </div>
+</section>

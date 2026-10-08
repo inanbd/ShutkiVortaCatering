@@ -1,0 +1,50 @@
+@page "/account/register"
+@model ShutkiVorta.Web.Pages.Account.RegisterModel
+
+<section class="section">
+    <div class="container auth-wrap">
+        <div class="auth-head">
+            <p class="bn" lang="bn">স্বাগতম</p>
+            <h1>Create your account</h1>
+            <p class="muted">Track every order, save your address and check out in seconds.</p>
+        </div>
+        <form method="post" class="form-card kantha">
+            <div asp-validation-summary="ModelOnly" class="validation-summary-errors"></div>
+            <input type="hidden" asp-for="ReturnUrl" />
+            <div class="field mb-2">
+                <label asp-for="Input.FullName"></label>
+                <input asp-for="Input.FullName" autocomplete="name" />
+                <span asp-validation-for="Input.FullName" class="field-validation-error"></span>
+            </div>
+            <div class="form-grid mb-2">
+                <div class="field">
+                    <label asp-for="Input.Email"></label>
+                    <input asp-for="Input.Email" type="email" autocomplete="email" />
+                    <span asp-validation-for="Input.Email" class="field-validation-error"></span>
+                </div>
+                <div class="field">
+                    <label asp-for="Input.Phone"></label>
+                    <input asp-for="Input.Phone" type="tel" autocomplete="tel" />
+                    <span asp-validation-for="Input.Phone" class="field-validation-error"></span>
+                </div>
+                <div class="field">
+                    <label asp-for="Input.Password"></label>
+                    <input asp-for="Input.Password" autocomplete="new-password" />
+                    <span asp-validation-for="Input.Password" class="field-validation-error"></span>
+                </div>
+                <div class="field">
+                    <label asp-for="Input.ConfirmPassword"></label>
+                    <input asp-for="Input.ConfirmPassword" autocomplete="new-password" />
+                    <span asp-validation-for="Input.ConfirmPassword" class="field-validation-error"></span>
+                </div>
+            </div>
+            <p class="small muted">At least 8 characters, including a number and a lowercase letter.</p>
+            <button class="btn btn-primary btn-block btn-lg" type="submit">Create account</button>
+        </form>
+        <p class="auth-alt">Already have an account? <a href="/account/login">Sign in</a></p>
+    </div>
+</section>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+}

@@ -1,0 +1,38 @@
+@page
+@model ShutkiVorta.Web.Pages.Admin.Inquiries.IndexModel
+@section Actions {
+    <a class="btn btn-sm @(Model.All ? "btn-outline" : "btn-green")" href="/admin/inquiries">Open</a>
+    <a class="btn btn-sm @(Model.All ? "btn-green" : "btn-outline")" href="/admin/inquiries?all=true">All</a>
+}
+
+@if (Model.Inquiries.Items.Count == 0)
+{
+    <section class="panel"><div class="panel-body"><p class="muted mb-0">No @(Model.All ? "" : "open ")inquiries. 🎉</p></div></section>
+}
+@foreach (var i in Model.Inquiries.Items)
+{
+    <section class="panel">
+        <div class="panel-head">
+            <h2>@i.Name <span class="small muted" style="font-family:var(--font-body);font-weight:400;">&middot; @Format.DateTime(i.CreatedAtLocal)</span></h2>
+            <span class="pill @(i.IsHandled ? "pill-off" : "pill-on")">@(i.IsHandled ? "Handled" : "Open")</span>
+        </div>
+        <div class="panel-body">
+            <dl class="kv mb-2">
+                <dt>Email</dt><dd><a href="mailto:@i.Email">@i.Email</a></dd>
+                @if (!string.IsNullOrWhiteSpace(i.Phone)) {<text><dt>Phone</dt><dd>@i.Phone</dd></text>}
+                @if (i.EventDate is { } date) {<text><dt>Event date</dt><dd>@Format.Date(date)</dd></text>}
+                @if (i.GuestCount is { } guests) {<text><dt>Guests</dt><dd>@guests</dd></text>}
+            </dl>
+            <p style="white-space:pre-line;">@i.Message</p>
+            <div class="flex gap-1 wrap">
+                <a class="btn btn-green btn-sm" href="mailto:@i.Email?subject=Your catering inquiry">@Icons.Get("mail") Reply by email</a>
+                <form method="post" asp-page-handler="Handled" asp-route-all="@Model.All" class="toggle-form">
+                    <input type="hidden" name="id" value="@i.Id" />
+                    <input type="hidden" name="isHandled" value="@((!i.IsHandled).ToString().ToLowerInvariant())" />
+                    <button class="btn btn-outline btn-sm" type="submit">@(i.IsHandled ? "Re-open" : "Mark as handled")</button>
+                </form>
+            </div>
+        </div>
+    </section>
+}
+<partial name="_Pager" model="(Model.Inquiries.Page, Model.Inquiries.TotalPages, (Func<int, string>)Model.PageUrl)" />

@@ -1,0 +1,21 @@
+@page "/account/confirm-email"
+@model ShutkiVorta.Web.Pages.Account.ConfirmEmailModel
+<section class="section">
+    <div class="container auth-wrap text-center">
+        <div class="form-card kantha">
+            @if (Model.Succeeded)
+            {
+                <p class="bn" lang="bn" style="font-size:2rem;color:var(--green-800);">ধন্যবাদ!</p>
+                <h1 style="font-size:2rem;">Your email is confirmed</h1>
+                <p>Orders you placed as a guest with this email now appear in your account.</p>
+                <a class="btn btn-primary" href="/account/orders">Go to my orders</a>
+            }
+            else
+            {
+                <h1 style="font-size:2rem;">This link has expired</h1>
+                <p>The confirmation link is invalid or has already been used.</p>
+                <a class="btn btn-outline" href="/account/resend-confirmation">Send a new link</a>
+            }
+        </div>
+    </div>
+</section>

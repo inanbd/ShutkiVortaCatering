@@ -1,0 +1,25 @@
+@model (int Page, int TotalPages, Func<int, string> Url)
+@if (Model.TotalPages > 1)
+{
+    <nav class="pager" aria-label="Pages">
+        @if (Model.Page > 1)
+        {
+            <a href="@Model.Url(Model.Page - 1)" rel="prev">&larr; Prev</a>
+        }
+        @for (var p = Math.Max(1, Model.Page - 3); p <= Math.Min(Model.TotalPages, Model.Page + 3); p++)
+        {
+            if (p == Model.Page)
+            {
+                <span class="current" aria-current="page">@p</span>
+            }
+            else
+            {
+                <a href="@Model.Url(p)">@p</a>
+            }
+        }
+        @if (Model.Page < Model.TotalPages)
+        {
+            <a href="@Model.Url(Model.Page + 1)" rel="next">Next &rarr;</a>
+        }
+    </nav>
+}

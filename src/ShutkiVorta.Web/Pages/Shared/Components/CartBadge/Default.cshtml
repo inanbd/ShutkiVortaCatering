@@ -1,0 +1,5 @@
+@model int
+<a class="icon-link cart-link" href="/cart" aria-label="Your order, @Model item(s)">
+    @Icons.Get("cart") <span class="icon-label">Order</span>
+    <span class="cart-count" data-cart-count>@Model</span>
+</a>

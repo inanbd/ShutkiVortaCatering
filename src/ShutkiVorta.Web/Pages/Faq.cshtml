@@ -1,0 +1,25 @@
+@page "/faq"
+@model FaqModel
+
+<section class="page-banner">
+    <div class="container">
+        <span class="bn-title" lang="bn">সাধারণ প্রশ্ন</span>
+        <h1>Frequently Asked Questions</h1>
+        <p>Everything you need to know about ordering, pickup, delivery and enjoying your vortas.</p>
+    </div>
+    <div class="bunting" aria-hidden="true"></div>
+</section>
+
+<section class="section">
+    <div class="container container-narrow faq">
+        @for (var i = 0; i < Model.Entries.Count; i++)
+        {
+            var (question, answer) = Model.Entries[i];
+            <details open="@(i == 0 ? "open" : null)">
+                <summary>@question</summary>
+                <p>@answer</p>
+            </details>
+        }
+        <p class="text-center mt-4">Still have a question? <a href="/contact">Get in touch</a>.</p>
+    </div>
+</section>

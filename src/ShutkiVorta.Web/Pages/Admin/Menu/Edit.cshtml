@@ -1,0 +1,146 @@
+@page "/admin/menu/edit/{id:int?}"
+@model ShutkiVorta.Web.Pages.Admin.Menu.EditModel
+@section Actions {
+    <a class="btn btn-outline btn-sm" href="/admin/menu">&larr; Menu items</a>
+    @if (!Model.IsNew)
+    {
+        <a class="btn btn-outline btn-sm" href="/menu/@Model.Input.Slug" target="_blank" rel="noopener">@Icons.Get("eye") View page</a>
+    }
+}
+
+<form method="post" enctype="multipart/form-data">
+    <div asp-validation-summary="ModelOnly" class="validation-summary-errors"></div>
+    <div class="detail-grid">
+        <div>
+            <section class="panel">
+                <div class="panel-head"><h2>Details</h2></div>
+                <div class="panel-body form-grid">
+                    <div class="field">
+                        <label asp-for="Input.Name"></label>
+                        <input asp-for="Input.Name" data-slug-source />
+                        <span asp-validation-for="Input.Name" class="field-validation-error"></span>
+                    </div>
+                    <div class="field">
+                        <label asp-for="Input.BengaliName"></label>
+                        <input asp-for="Input.BengaliName" lang="bn" placeholder="যেমন: লইট্টা শুঁটকি ভর্তা" />
+                    </div>
+                    <div class="field">
+                        <label asp-for="Input.Category"></label>
+                        <select asp-for="Input.Category">
+                            <option value="@MenuCategory.ShutkiVorta">Shutki Vorta</option>
+                            <option value="@MenuCategory.ClassicVorta">Classic Vorta</option>
+                        </select>
+                    </div>
+                    <div class="field">
+                        <label asp-for="Input.Slug"></label>
+                        <input asp-for="Input.Slug" placeholder="generated from the name" data-slug-target />
+                        <span class="hint">Page address: /menu/<strong data-slug-preview>@Model.Input.Slug</strong></span>
+                        <span asp-validation-for="Input.Slug" class="field-validation-error"></span>
+                    </div>
+                    <div class="field full">
+                        <label asp-for="Input.ShortDescription"></label>
+                        <textarea asp-for="Input.ShortDescription" rows="2"></textarea>
+                        <span asp-validation-for="Input.ShortDescription" class="field-validation-error"></span>
+                    </div>
+                    <div class="field full">
+                        <label asp-for="Input.Description"></label>
+                        <textarea asp-for="Input.Description" rows="9"></textarea>
+                        <span class="hint">Separate paragraphs with a blank line.</span>
+                        <span asp-validation-for="Input.Description" class="field-validation-error"></span>
+                    </div>
+                    <div class="field full">
+                        <label asp-for="Input.Ingredients"></label>
+                        <input asp-for="Input.Ingredients" />
+                    </div>
+                </div>
+            </section>
+
+            <section class="panel">
+                <div class="panel-head"><h2>Pricing &amp; quantity</h2></div>
+                <div class="panel-body form-grid">
+                    <div class="field">
+                        <label asp-for="Input.PricePerUnit"></label>
+                        <input asp-for="Input.PricePerUnit" type="number" step="0.01" min="0.01" />
+                        <span asp-validation-for="Input.PricePerUnit" class="field-validation-error"></span>
+                    </div>
+                    <div class="field">
+                        <label asp-for="Input.Unit"></label>
+                        <input asp-for="Input.Unit" />
+                        <span class="hint">Usually “lb”.</span>
+                    </div>
+                    <div class="field">
+                        <label asp-for="Input.MinimumQuantity"></label>
+                        <input asp-for="Input.MinimumQuantity" type="number" step="0.25" min="0.25" />
+                        <span asp-validation-for="Input.MinimumQuantity" class="field-validation-error"></span>
+                    </div>
+                    <div class="field">
+                        <label asp-for="Input.QuantityStep"></label>
+                        <input asp-for="Input.QuantityStep" type="number" step="0.25" min="0.25" />
+                        <span asp-validation-for="Input.QuantityStep" class="field-validation-error"></span>
+                    </div>
+                    <div class="field">
+                        <label asp-for="Input.SpiceLevel"></label>
+                        <input asp-for="Input.SpiceLevel" type="number" min="0" max="5" />
+                    </div>
+                    <div class="field">
+                        <label asp-for="Input.SortOrder"></label>
+                        <input asp-for="Input.SortOrder" type="number" />
+                    </div>
+                </div>
+            </section>
+
+            <section class="panel">
+                <div class="panel-head"><h2>Search engine optimisation</h2></div>
+                <div class="panel-body form-grid">
+                    <div class="field full">
+                        <label asp-for="Input.MetaTitle"></label>
+                        <input asp-for="Input.MetaTitle" maxlength="70" placeholder="e.g. Loitta Shutki Vorta by the Pound in Dallas, TX" />
+                        <span class="hint">Up to 70 characters. Leave empty to generate from the name.</span>
+                    </div>
+                    <div class="field full">
+                        <label asp-for="Input.MetaDescription"></label>
+                        <textarea asp-for="Input.MetaDescription" rows="2" maxlength="170"></textarea>
+                        <span class="hint">Up to 170 characters. Shown in Google results; defaults to the short description.</span>
+                    </div>
+                </div>
+            </section>
+        </div>
+
+        <div>
+            <section class="panel">
+                <div class="panel-head"><h2>Visibility</h2></div>
+                <div class="panel-body">
+                    <label class="check mb-2"><input asp-for="Input.IsAvailable" /> Available to order</label>
+                    <label class="check mb-3"><input asp-for="Input.IsFeatured" /> Featured on the home page</label>
+                    <button class="btn btn-primary btn-block btn-lg" type="submit">Save item</button>
+                </div>
+            </section>
+
+            <section class="panel">
+                <div class="panel-head"><h2>Photo</h2></div>
+                <div class="panel-body">
+                    <img class="img-preview mb-2" src="@(string.IsNullOrWhiteSpace(Model.Input.ImageUrl) ? "/images/logo-mark.svg" : Model.Input.ImageUrl)" alt="" data-image-preview />
+                    <div class="field mb-2">
+                        <label for="ImageFile">Upload a new photo</label>
+                        <input id="ImageFile" name="ImageFile" type="file" accept="image/jpeg,image/png,image/webp" data-image-input />
+                        <span class="hint">JPG, PNG or WebP, up to 5 MB. Landscape 4:3 looks best.</span>
+                        <span asp-validation-for="ImageFile" class="field-validation-error"></span>
+                    </div>
+                    <div class="field mb-2">
+                        <label asp-for="Input.ImageUrl"></label>
+                        <input asp-for="Input.ImageUrl" placeholder="/images/menu/... or https://..." />
+                        <span asp-validation-for="Input.ImageUrl" class="field-validation-error"></span>
+                    </div>
+                    <div class="field mb-2">
+                        <label asp-for="Input.ImageAlt"></label>
+                        <input asp-for="Input.ImageAlt" placeholder="Describe the photo for accessibility & SEO" />
+                    </div>
+                    <div class="field">
+                        <label asp-for="Input.ImageCredit"></label>
+                        <input asp-for="Input.ImageCredit" />
+                    </div>
+                </div>
+            </section>
+        </div>
+    </div>
+</form>
