@@ -73,9 +73,14 @@ public sealed partial class KitchenTests(TestServers servers)
             Assert.Null(inquiry.EventDate);
         }
 
-        var mails = await WaitForMailAsync(factory, marker, expected: 2);
-        Assert.Contains(mails, m => m.Contains("To: kitchen@test.local") && m.Contains("Test Homemaker would like to cook with us"));
-        Assert.Contains(mails, m => m.Contains($"To: {email}") && m.Contains("Thank you for wanting to share your hands"));
+        var kitchenMail = Assert.Single(await WaitForMailAsync(factory, marker, expected: 1));
+        Assert.Contains("To: kitchen@test.local", kitchenMail);
+        Assert.Contains("Test Homemaker would like to cook with us", kitchenMail);
+
+        // The applicant is thanked, but what a visitor typed is never echoed back (so the form is useless for spam).
+        var reply = Assert.Single(await WaitForMailAsync(factory, $"To: {email}", expected: 1));
+        Assert.Contains("Thank you for wanting to share your hands", reply);
+        Assert.DoesNotContain(marker, reply);
     }
 
     [Fact]

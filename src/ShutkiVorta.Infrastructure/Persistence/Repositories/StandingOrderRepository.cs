@@ -14,7 +14,7 @@ internal sealed class StandingOrderRepository(IDbConnectionFactory connections, 
     private const string Columns = """
         Id, Reference, CustomerId, BusinessName, ContactName, Email, Phone, TaxPermitNumber, Fulfillment, AddressLine1,
         AddressLine2, City, State, PostalCode, DaysOfWeek, PreferredTimeMinutes, StartDate, EndDate, Notes, AdminNotes,
-        Status, StatusReason, TaxExempt, DeliveryFee, CreatedAtUtc, UpdatedAtUtc, ApprovedAtUtc
+        Status, StatusReason, PausedByKitchen, TaxExempt, DeliveryFee, CreatedAtUtc, UpdatedAtUtc, ApprovedAtUtc
         """;
 
     private const string SummaryColumns = """
@@ -27,10 +27,10 @@ internal sealed class StandingOrderRepository(IDbConnectionFactory connections, 
         const string sql = """
             INSERT INTO StandingOrders (Reference, CustomerId, BusinessName, ContactName, Email, Phone, TaxPermitNumber, Fulfillment,
                 AddressLine1, AddressLine2, City, State, PostalCode, DaysOfWeek, PreferredTimeMinutes, StartDate, EndDate, Notes,
-                AdminNotes, Status, StatusReason, TaxExempt, DeliveryFee, CreatedAtUtc, UpdatedAtUtc, ApprovedAtUtc)
+                AdminNotes, Status, StatusReason, PausedByKitchen, TaxExempt, DeliveryFee, CreatedAtUtc, UpdatedAtUtc, ApprovedAtUtc)
             VALUES (@Reference, @CustomerId, @BusinessName, @ContactName, @Email, @Phone, @TaxPermitNumber, @Fulfillment,
                 @AddressLine1, @AddressLine2, @City, @State, @PostalCode, @DaysOfWeek, @PreferredTimeMinutes, @StartDate, @EndDate, @Notes,
-                @AdminNotes, @Status, @StatusReason, @TaxExempt, @DeliveryFee, @CreatedAtUtc, @UpdatedAtUtc, @ApprovedAtUtc)
+                @AdminNotes, @Status, @StatusReason, @PausedByKitchen, @TaxExempt, @DeliveryFee, @CreatedAtUtc, @UpdatedAtUtc, @ApprovedAtUtc)
             """;
 
         await using var connection = await connections.OpenAsync(cancellationToken);
@@ -53,7 +53,7 @@ internal sealed class StandingOrderRepository(IDbConnectionFactory connections, 
                 TaxPermitNumber = @TaxPermitNumber, Fulfillment = @Fulfillment, AddressLine1 = @AddressLine1,
                 AddressLine2 = @AddressLine2, City = @City, State = @State, PostalCode = @PostalCode, DaysOfWeek = @DaysOfWeek,
                 PreferredTimeMinutes = @PreferredTimeMinutes, StartDate = @StartDate, EndDate = @EndDate, Notes = @Notes,
-                AdminNotes = @AdminNotes, Status = @Status, StatusReason = @StatusReason, TaxExempt = @TaxExempt,
+                AdminNotes = @AdminNotes, Status = @Status, StatusReason = @StatusReason, PausedByKitchen = @PausedByKitchen, TaxExempt = @TaxExempt,
                 DeliveryFee = @DeliveryFee, UpdatedAtUtc = @UpdatedAtUtc, ApprovedAtUtc = @ApprovedAtUtc
             WHERE Id = @Id
             """;
@@ -67,6 +67,14 @@ internal sealed class StandingOrderRepository(IDbConnectionFactory connections, 
         await connection.ExecuteAsync(new CommandDefinition(
             "DELETE FROM StandingOrderLines WHERE StandingOrderId = @Id", new { order.Id }, transaction, cancellationToken: cancellationToken));
         await InsertLinesAsync(connection, transaction, order, cancellationToken);
+        await InsertNewEventsAsync(connection, transaction, order, cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+    }
+
+    public async Task AddNewEventsAsync(StandingOrder order, CancellationToken cancellationToken = default)
+    {
+        await using var connection = await connections.OpenAsync(cancellationToken);
+        await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
         await InsertNewEventsAsync(connection, transaction, order, cancellationToken);
         await transaction.CommitAsync(cancellationToken);
     }
@@ -227,6 +235,20 @@ internal sealed class StandingOrderRepository(IDbConnectionFactory connections, 
             cancellationToken: cancellationToken));
     }
 
+    public async Task<bool> TryReclaimOrphanAsync(int standingOrderId, DateOnly date, DateTime staleBeforeUtc, DateTime nowUtc, CancellationToken cancellationToken = default)
+    {
+        // Refreshing CreatedAtUtc acts as the lock: a second caller no longer sees a stale, unlinked claim.
+        await using var connection = await connections.OpenAsync(cancellationToken);
+        return await connection.ExecuteAsync(new CommandDefinition(
+            """
+            UPDATE StandingOrderOccurrences SET CreatedAtUtc = @NowUtc
+            WHERE StandingOrderId = @StandingOrderId AND OccurrenceDate = @OccurrenceDate AND Status = @Generated
+              AND OrderId IS NULL AND CreatedAtUtc < @StaleBeforeUtc
+            """,
+            new { StandingOrderId = standingOrderId, OccurrenceDate = ToDate(date), Generated = (int)OccurrenceStatus.Generated, StaleBeforeUtc = staleBeforeUtc, NowUtc = nowUtc },
+            cancellationToken: cancellationToken)) == 1;
+    }
+
     public async Task UpdateOccurrenceAsync(int standingOrderId, DateOnly date, OccurrenceStatus status, string? reason, CancellationToken cancellationToken = default)
     {
         await using var connection = await connections.OpenAsync(cancellationToken);
@@ -294,6 +316,7 @@ internal sealed class StandingOrderRepository(IDbConnectionFactory connections, 
         o.AdminNotes,
         Status = (int)o.Status,
         o.StatusReason,
+        o.PausedByKitchen,
         o.TaxExempt,
         o.DeliveryFee,
         o.CreatedAtUtc,

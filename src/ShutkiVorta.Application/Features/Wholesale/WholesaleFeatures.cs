@@ -319,6 +319,8 @@ internal sealed class WholesaleCommandHandlers(
     IRequestHandler<UpdateStandingOrderTermsCommand>,
     IRequestHandler<GenerateStandingOrderDeliveriesCommand, GenerationReport>
 {
+    private const int MaxRequestsAwaitingApproval = 3;
+
     public async Task<string> Handle(SubmitStandingOrderCommand request, CancellationToken cancellationToken)
     {
         var w = wholesale.Value;
@@ -361,6 +363,14 @@ internal sealed class WholesaleCommandHandlers(
             }
 
             address = new DeliveryAddress(request.AddressLine1!, request.AddressLine2, request.City!, request.State!.ToUpperInvariant(), request.PostalCode!);
+        }
+
+        var awaiting = (await standingOrders.GetForCustomerAsync(currentUser.UserId!, cancellationToken))
+            .Count(o => o.Status == StandingOrderStatus.PendingApproval);
+        if (awaiting >= MaxRequestsAwaitingApproval)
+        {
+            throw new ValidationException(
+                $"You already have {awaiting} restaurant orders waiting for our approval. We'll be in touch soon — or call us if something has changed.");
         }
 
         var lines = await BuildLinesAsync(request.Items.Select(i => (i.MenuItemId, i.Quantity, (decimal?)null)), requireAvailable: true, cancellationToken);
@@ -421,13 +431,13 @@ internal sealed class WholesaleCommandHandlers(
     public async Task Handle(SkipStandingOrderDateCommand request, CancellationToken cancellationToken)
     {
         var so = await standingOrders.GetByIdAsync(request.Id, cancellationToken) ?? throw new NotFoundException("Standing order", request.Id);
-        await SkipAsync(so, request.Date, request.Skip, currentUser.Email ?? "Admin", cancellationToken);
+        await SkipAsync(so, request.Date, request.Skip, currentUser.Email ?? "Admin", byKitchen: true, cancellationToken);
     }
 
     public async Task Handle(SkipMyStandingOrderDateCommand request, CancellationToken cancellationToken)
     {
         var so = await LoadOwnAsync(request.Reference, cancellationToken);
-        await SkipAsync(so, request.Date, request.Skip, so.ContactName, cancellationToken);
+        await SkipAsync(so, request.Date, request.Skip, so.ContactName, byKitchen: false, cancellationToken);
         await publisher.Publish(new StandingOrderDateChangedNotification(so.Id, request.Date, request.Skip), cancellationToken);
     }
 
@@ -437,9 +447,10 @@ internal sealed class WholesaleCommandHandlers(
         var lines = await BuildLinesAsync(request.Lines.Select(l => (l.MenuItemId, l.Quantity, (decimal?)l.UnitPrice)), requireAvailable: false, cancellationToken);
         var by = currentUser.Email ?? "Admin";
 
+        bool termsChanged;
         try
         {
-            so.UpdateTerms(lines, WeekDaysExtensions.Combine(request.Days), request.PreferredTime, request.StartDate, request.EndDate,
+            termsChanged = so.UpdateTerms(lines, WeekDaysExtensions.Combine(request.Days), request.PreferredTime, request.StartDate, request.EndDate,
                 request.DeliveryFee, request.TaxExempt, WholesaleRulesFor.Rules(wholesale.Value), by, clock.UtcNow);
             so.UpdateAdminNotes(request.AdminNotes, clock.UtcNow);
         }
@@ -451,11 +462,11 @@ internal sealed class WholesaleCommandHandlers(
         await standingOrders.UpdateAsync(so, cancellationToken);
 
         // Re-issue upcoming orders that the kitchen has not started so they reflect the new terms.
-        if (so.Status == StandingOrderStatus.Active)
+        if (termsChanged && so.Status == StandingOrderStatus.Active)
         {
             await scheduler.WithdrawUpcomingAsync(so, null, OccurrenceStatus.Cancelled, "Standing order terms changed", by, cancellationToken);
             await scheduler.ReopenWithdrawnDatesAsync(so, cancellationToken);
-            await scheduler.GenerateAsync(so, cancellationToken);
+            await scheduler.GenerateAsync(so, respectCutoff: false, cancellationToken);
         }
     }
 
@@ -475,10 +486,10 @@ internal sealed class WholesaleCommandHandlers(
                     so.Decline(by, note, clock.UtcNow);
                     break;
                 case StandingOrderAction.Pause:
-                    so.Pause(by, note, clock.UtcNow);
+                    so.Pause(by, note, clock.UtcNow, byKitchen: !byRestaurant);
                     break;
                 case StandingOrderAction.Resume:
-                    so.Resume(by, clock.UtcNow);
+                    so.Resume(by, clock.UtcNow, byRestaurant);
                     break;
                 case StandingOrderAction.Cancel:
                     so.Cancel(by, note, clock.UtcNow);
@@ -500,7 +511,7 @@ internal sealed class WholesaleCommandHandlers(
             case StandingOrderAction.Approve:
             case StandingOrderAction.Resume:
                 await scheduler.ReopenWithdrawnDatesAsync(so, cancellationToken);
-                await scheduler.GenerateAsync(so, cancellationToken);
+                await scheduler.GenerateAsync(so, respectCutoff: byRestaurant, cancellationToken);
                 break;
             case StandingOrderAction.Pause:
             case StandingOrderAction.Cancel:
@@ -524,22 +535,29 @@ internal sealed class WholesaleCommandHandlers(
         return $"Standing order {so.Reference} {verb}.{lockedNote}";
     }
 
-    private async Task SkipAsync(StandingOrder so, DateOnly date, bool skip, string by, CancellationToken cancellationToken)
+    /// <summary>Skips or restores a date; a request that would change nothing is rejected (so it is not recorded or emailed).</summary>
+    private async Task SkipAsync(StandingOrder so, DateOnly date, bool skip, string by, bool byKitchen, CancellationToken cancellationToken)
     {
+        if (so.Status != StandingOrderStatus.Active)
+        {
+            throw new ValidationException($"Deliveries can only be changed while the standing order is active (it is {so.Status.DisplayName().ToLowerInvariant()}).");
+        }
+
+        bool changed;
         try
         {
-            if (skip)
-            {
-                await scheduler.SkipDateAsync(so, date, by, cancellationToken);
-            }
-            else
-            {
-                await scheduler.UnskipDateAsync(so, date, by, cancellationToken);
-            }
+            changed = skip
+                ? await scheduler.SkipDateAsync(so, date, by, byKitchen, cancellationToken)
+                : await scheduler.UnskipDateAsync(so, date, by, byKitchen, cancellationToken);
         }
         catch (DomainException ex)
         {
             throw new ValidationException(ex.Message);
+        }
+
+        if (!changed)
+        {
+            throw new ValidationException(skip ? "That delivery is already skipped." : "That delivery is not skipped.");
         }
     }
 

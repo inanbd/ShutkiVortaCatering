@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Localization;
 using Microsoft.AspNetCore.ResponseCompression;
 using ShutkiVorta.Application.Common.Interfaces;
 using ShutkiVorta.Application.Common.Security;
+using ShutkiVorta.Web.Infrastructure;
 using ShutkiVorta.Web.Services;
 
 namespace ShutkiVorta.Web;
@@ -19,6 +20,8 @@ public static class DependencyInjection
         services.AddSingleton<IAppUrls, AppUrls>();
         services.AddScoped<ICurrentUser, CurrentUser>();
         services.AddScoped<CartService>();
+
+        services.AddFormRateLimiting(configuration);
 
         services.AddRazorPages(options =>
         {

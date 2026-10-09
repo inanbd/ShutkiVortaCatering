@@ -51,6 +51,7 @@ public sealed class AppFactory : WebApplicationFactory<Program>
             ["Seed:AdminPassword"] = AdminPassword,
             ["Ordering:MinimumLeadTimeHours"] = "24",
             ["Wholesale:AutoGenerate"] = "false", // tests drive the standing-order scheduler explicitly
+            ["RateLimiting:FormPostsPerWindow"] = "1000", // many tests post forms from the same in-memory client
         };
 
         foreach (var (key, value) in _overrides)

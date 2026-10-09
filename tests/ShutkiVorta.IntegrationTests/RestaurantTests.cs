@@ -80,7 +80,7 @@ public sealed partial class RestaurantTests(TestServers servers)
 
         // Skip one delivery: its order is cancelled and the date stays skipped on the next run.
         var skipDate = DateOnly.FromDateTime(generated[0].ScheduledFor);
-        await scheduler.SkipDateAsync(so, skipDate, "Test Chef");
+        Assert.True(await scheduler.SkipDateAsync(so, skipDate, "Test Chef", byKitchen: false));
         var skippedOrder = (await orders.GetByNumberAsync(generated[0].OrderNumber))!;
         Assert.Equal(OrderStatus.Cancelled, skippedOrder.Status);
         Assert.Equal(0, (await scheduler.GenerateAsync(so)).Generated);
@@ -90,7 +90,7 @@ public sealed partial class RestaurantTests(TestServers servers)
         Assert.True(skipped.CanUnskip);
 
         // Restore it: a fresh order is generated for that date.
-        await scheduler.UnskipDateAsync(so, skipDate, "Test Chef");
+        Assert.True(await scheduler.UnskipDateAsync(so, skipDate, "Test Chef", byKitchen: false));
         var restored = (await orders.GetForStandingOrderAsync(so.Id, range.from, range.to))
             .Where(o => DateOnly.FromDateTime(o.ScheduledFor) == skipDate).ToList();
         Assert.Equal(2, restored.Count);
@@ -115,6 +115,75 @@ public sealed partial class RestaurantTests(TestServers servers)
         var row = Assert.Single(search.Items, s => s.Id == so.Id);
         Assert.Equal(120m, row.SubtotalPerDelivery);
         Assert.Contains("Loitta Shutki Vorta", row.ItemsPreview);
+    }
+
+    [Theory]
+    [MemberData(nameof(TestServers.Providers), MemberType = typeof(TestServers))]
+    public async Task Scheduler_RespectsKitchenDecisions(string provider)
+    {
+        using var scope = servers.Get(provider).Services.CreateScope();
+        var services = scope.ServiceProvider;
+        var repository = services.GetRequiredService<IStandingOrderRepository>();
+        var orders = services.GetRequiredService<IOrderRepository>();
+        var scheduler = services.GetRequiredService<StandingOrderScheduler>();
+        var clock = services.GetRequiredService<IDateTimeProvider>();
+        var item = (await services.GetRequiredService<IMenuItemRepository>().GetBySlugAsync("aloo-vorta"))!;
+        var today = DateOnly.FromDateTime(clock.BusinessNow);
+
+        var created = StandingOrder.Submit(
+            $"RO-KIT-{Guid.NewGuid():N}"[..16], null, "Kitchen Rules Cafe", new CustomerContact("Chef", "chef@rules.test", "(214) 555-0101"),
+            null, FulfillmentMethod.Pickup, null, WeekDays.EveryDay, new TimeOnly(11, 0), today.AddDays(2), null, null,
+            [new StandingOrderLineRequest(item.Id, item.Name, null, item.Unit, 20m, 6m)], 0m, new WholesaleRules(5m, 1m, 100m), clock.UtcNow);
+        await repository.AddAsync(created);
+        created.Approve("test", null, clock.UtcNow);
+        await repository.UpdateAsync(created);
+        var so = (await repository.GetByIdAsync(created.Id))!;
+        await scheduler.GenerateAsync(so);
+
+        var range = (from: today.ToDateTime(TimeOnly.MinValue), to: today.AddDays(30).ToDateTime(TimeOnly.MaxValue));
+        var generated = (await orders.GetForStandingOrderAsync(so.Id, range.from, range.to)).OrderBy(o => o.ScheduledFor).ToList();
+        Assert.True(generated.Count >= 3);
+
+        // 1. The kitchen cancels one generated order directly; a pause + resume must not bring it back.
+        var cancelledByKitchen = (await orders.GetByNumberAsync(generated[0].OrderNumber))!;
+        cancelledByKitchen.ChangeStatus(OrderStatus.Cancelled, "Restaurant phoned to cancel", "admin", clock.UtcNow);
+        await orders.UpdateAsync(cancelledByKitchen);
+
+        so.Pause("admin", null, clock.UtcNow, byKitchen: true);
+        await repository.UpdateAsync(so);
+        await scheduler.WithdrawUpcomingAsync(so, null, OccurrenceStatus.Cancelled, "Paused", "admin");
+        so.Resume("admin", clock.UtcNow);
+        await repository.UpdateAsync(so);
+        await scheduler.ReopenWithdrawnDatesAsync(so);
+        await scheduler.GenerateAsync(so);
+
+        var cancelledDate = DateOnly.FromDateTime(generated[0].ScheduledFor);
+        var onCancelledDate = (await orders.GetForStandingOrderAsync(so.Id, range.from, range.to))
+            .Where(o => DateOnly.FromDateTime(o.ScheduledFor) == cancelledDate).ToList();
+        Assert.All(onCancelledDate, o => Assert.Equal(OrderStatus.Cancelled, o.Status));
+        Assert.DoesNotContain(await scheduler.GetUpcomingAsync(so, 10), u => u.Date == cancelledDate && u.IsExpected);
+
+        // 2. A date skipped by the kitchen cannot be restored by the restaurant; repeating a skip changes nothing.
+        var kitchenSkip = DateOnly.FromDateTime(generated[1].ScheduledFor);
+        Assert.True(await scheduler.SkipDateAsync(so, kitchenSkip, "admin", byKitchen: true));
+        Assert.False(await scheduler.SkipDateAsync(so, kitchenSkip, "admin", byKitchen: true));
+        Assert.True((await scheduler.GetUpcomingAsync(so, 10)).Single(u => u.Date == kitchenSkip).SkippedByKitchen);
+        await Assert.ThrowsAsync<ShutkiVorta.Domain.Common.DomainException>(() => scheduler.UnskipDateAsync(so, kitchenSkip, "Chef", byKitchen: false));
+        Assert.True(await scheduler.UnskipDateAsync(so, kitchenSkip, "admin", byKitchen: true));
+        Assert.False(await scheduler.UnskipDateAsync(so, kitchenSkip, "admin", byKitchen: true));
+
+        // 3. Only one process can take over an orphaned claim (an order that was never linked).
+        var orphanDate = today.AddDays(25);
+        Assert.True(await repository.TryAddOccurrenceAsync(so.Id, orphanDate, OccurrenceStatus.Generated, null));
+        Assert.False(await repository.TryReclaimOrphanAsync(so.Id, orphanDate, DateTime.UtcNow.AddMinutes(-5), DateTime.UtcNow)); // still fresh
+        Assert.True(await repository.TryReclaimOrphanAsync(so.Id, orphanDate, DateTime.UtcNow.AddMinutes(1), DateTime.UtcNow.AddMinutes(10)));
+        Assert.False(await repository.TryReclaimOrphanAsync(so.Id, orphanDate, DateTime.UtcNow.AddMinutes(1), DateTime.UtcNow.AddMinutes(10)));
+        await repository.DeleteOccurrenceAsync(so.Id, orphanDate);
+
+        // The audit trail was appended without rewriting the standing order.
+        var reloaded = (await repository.GetByIdAsync(so.Id))!;
+        Assert.Contains(reloaded.Events, e => e.Description.Contains("skipped by the kitchen"));
+        Assert.Equal(StandingOrderStatus.Active, reloaded.Status);
     }
 
     [Fact]

@@ -23,6 +23,11 @@ public sealed class StandingOrderScheduler(
     IOptions<OrderingOptions> ordering,
     ILogger<StandingOrderScheduler> logger)
 {
+    /// <summary>Ledger reasons with a meaning of their own.</summary>
+    public const string KitchenClosedReason = "Kitchen closed";
+    public const string KitchenSkipReason = "Skipped by our kitchen";
+    public const string TooLateReason = "Too close to the delivery to schedule online";
+
     private static readonly TimeSpan OrphanAfter = TimeSpan.FromMinutes(5);
 
     private WholesaleOptions Wholesale => wholesale.Value;
@@ -43,19 +48,26 @@ public sealed class StandingOrderScheduler(
         var recovered = 0;
         var errors = new List<string>();
 
-        foreach (var standingOrder in active)
+        foreach (var snapshot in active)
         {
             try
             {
-                var report = await GenerateAsync(standingOrder, cancellationToken);
+                // Reload right before generating so a pause, cancellation or terms change made meanwhile is respected.
+                var standingOrder = await standingOrders.GetByIdAsync(snapshot.Id, cancellationToken);
+                if (standingOrder is null)
+                {
+                    continue;
+                }
+
+                var report = await GenerateAsync(standingOrder, respectCutoff: false, cancellationToken);
                 generated += report.Generated;
                 skipped += report.Skipped;
                 recovered += report.Recovered;
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
-                logger.LogError(ex, "Generating orders for standing order {Reference} failed", standingOrder.Reference);
-                errors.Add($"{standingOrder.Reference}: {ex.Message}");
+                logger.LogError(ex, "Generating orders for standing order {Reference} failed", snapshot.Reference);
+                errors.Add($"{snapshot.Reference}: {ex.Message}");
             }
         }
 
@@ -67,7 +79,12 @@ public sealed class StandingOrderScheduler(
         return new GenerationReport(generated, skipped, recovered, errors);
     }
 
-    public async Task<GenerationReport> GenerateAsync(StandingOrder standingOrder, CancellationToken cancellationToken = default)
+    /// <summary>
+    /// Creates the orders for upcoming delivery dates that have none yet. With <paramref name="respectCutoff"/> (used for
+    /// actions taken by the restaurant) dates already inside the change cut-off are not created, because the kitchen has
+    /// planned without them; they are recorded as skipped instead.
+    /// </summary>
+    public async Task<GenerationReport> GenerateAsync(StandingOrder standingOrder, bool respectCutoff = false, CancellationToken cancellationToken = default)
     {
         if (!standingOrder.GeneratesOrders)
         {
@@ -86,21 +103,49 @@ public sealed class StandingOrderScheduler(
                 continue; // Today's slot already passed.
             }
 
+            var closed = Ordering.IsKitchenClosed(date);
             if (ledger.TryGetValue(date, out var existing))
             {
-                // Recover a claim whose order was never written (e.g. the app stopped mid-way).
-                if (existing is { Status: OccurrenceStatus.Generated, OrderId: null } && existing.CreatedAtUtc < clock.UtcNow - OrphanAfter)
+                var changeable = IsChangeable(standingOrder, date);
+                if (existing is { Status: OccurrenceStatus.Skipped, Reason: KitchenClosedReason } && !closed && changeable)
                 {
-                    await CreateOrderAsync(standingOrder, date, cancellationToken);
-                    recovered++;
+                    // The closure was lifted (e.g. a holiday moved): deliver on this date after all.
+                    await standingOrders.DeleteOccurrenceAsync(standingOrder.Id, date, cancellationToken);
+                }
+                else if (existing.Status == OccurrenceStatus.Generated && closed && changeable)
+                {
+                    // A closure was added after the order was generated.
+                    var (withdrawn, _) = await WithdrawUpcomingAsync(standingOrder, date, OccurrenceStatus.Skipped, KitchenClosedReason, "System", cancellationToken);
+                    skipped += withdrawn;
+                    continue;
+                }
+                else
+                {
+                    // Recover a claim whose order was never linked (e.g. the app stopped mid-way). Only one process wins the reclaim.
+                    if (existing is { Status: OccurrenceStatus.Generated, OrderId: null }
+                        && await standingOrders.TryReclaimOrphanAsync(standingOrder.Id, date, clock.UtcNow - OrphanAfter, clock.UtcNow, cancellationToken))
+                    {
+                        await RecoverOrphanAsync(standingOrder, date, cancellationToken);
+                        recovered++;
+                    }
+
+                    continue;
+                }
+            }
+
+            if (closed)
+            {
+                if (await standingOrders.TryAddOccurrenceAsync(standingOrder.Id, date, OccurrenceStatus.Skipped, KitchenClosedReason, cancellationToken))
+                {
+                    skipped++;
                 }
 
                 continue;
             }
 
-            if (Ordering.IsKitchenClosed(date))
+            if (respectCutoff && !IsChangeable(standingOrder, date))
             {
-                if (await standingOrders.TryAddOccurrenceAsync(standingOrder.Id, date, OccurrenceStatus.Skipped, "Kitchen closed", cancellationToken))
+                if (await standingOrders.TryAddOccurrenceAsync(standingOrder.Id, date, OccurrenceStatus.Skipped, TooLateReason, cancellationToken))
                 {
                     skipped++;
                 }
@@ -113,7 +158,7 @@ public sealed class StandingOrderScheduler(
                 continue; // Another instance claimed this date.
             }
 
-            await CreateOrderAsync(standingOrder, date, cancellationToken);
+            await CreateOrderAsync(standingOrder, date);
             generated++;
         }
 
@@ -123,6 +168,7 @@ public sealed class StandingOrderScheduler(
     /// <summary>
     /// Cancels generated orders the kitchen has not started on and that are still beyond the change cut-off,
     /// marking their dates in the ledger. Returns how many were withdrawn and how many were too close to change.
+    /// Orders that were already cancelled or completed separately are left alone, so they are never re-created.
     /// </summary>
     public async Task<(int Withdrawn, int Locked)> WithdrawUpcomingAsync(
         StandingOrder standingOrder, DateOnly? onlyDate, OccurrenceStatus markAs, string reason, string changedBy, CancellationToken cancellationToken = default)
@@ -143,8 +189,13 @@ public sealed class StandingOrderScheduler(
             if (occurrence.OrderNumber is not null)
             {
                 var order = await orders.GetByNumberAsync(occurrence.OrderNumber, cancellationToken);
-                if (order is not null && !order.Status.IsFinal())
+                if (order is not null)
                 {
+                    if (order.Status.IsFinal())
+                    {
+                        continue;
+                    }
+
                     if (!order.CanBeWithdrawnBySchedule)
                     {
                         locked++;
@@ -165,7 +216,7 @@ public sealed class StandingOrderScheduler(
 
     /// <summary>
     /// Re-opens future dates that were withdrawn (after a resume or a change of terms) so they are generated again
-    /// with the current terms. Dates the restaurant explicitly skipped stay skipped.
+    /// with the current terms. Dates that were skipped stay skipped.
     /// </summary>
     public async Task ReopenWithdrawnDatesAsync(StandingOrder standingOrder, CancellationToken cancellationToken = default)
     {
@@ -176,49 +227,54 @@ public sealed class StandingOrderScheduler(
         }
     }
 
-    /// <summary>Skips one delivery date (cancelling its generated order if needed).</summary>
-    public async Task SkipDateAsync(StandingOrder standingOrder, DateOnly date, string changedBy, CancellationToken cancellationToken = default)
+    /// <summary>
+    /// Skips one delivery date (cancelling its generated order if needed). Returns false when it was already skipped.
+    /// A date skipped by the kitchen can only be restored by the kitchen.
+    /// </summary>
+    public async Task<bool> SkipDateAsync(StandingOrder standingOrder, DateOnly date, string changedBy, bool byKitchen, CancellationToken cancellationToken = default)
     {
         EnsureIsDeliveryDate(standingOrder, date);
-        if (!IsChangeable(standingOrder, date))
-        {
-            throw new DomainException($"Deliveries within {Wholesale.ChangeCutoffHours} hours can no longer be changed online. Please call us.");
-        }
+        EnsureChangeable(standingOrder, date);
 
         var existing = (await standingOrders.GetOccurrencesAsync(standingOrder.Id, date, date, cancellationToken)).FirstOrDefault();
-        var reason = $"Skipped by {changedBy}";
-        if (existing is null)
+        var reason = byKitchen ? KitchenSkipReason : $"Skipped by {changedBy}";
+        switch (existing)
         {
-            if (!await standingOrders.TryAddOccurrenceAsync(standingOrder.Id, date, OccurrenceStatus.Skipped, reason, cancellationToken))
-            {
-                await SkipDateAsync(standingOrder, date, changedBy, cancellationToken); // Generated meanwhile; withdraw it.
-            }
-        }
-        else if (existing.Status == OccurrenceStatus.Generated)
-        {
-            var (withdrawn, _) = await WithdrawUpcomingAsync(standingOrder, date, OccurrenceStatus.Skipped, reason, changedBy, cancellationToken);
-            if (withdrawn == 0)
-            {
-                throw new DomainException("The kitchen has already started on this delivery, so it can no longer be skipped online. Please call us.");
-            }
-        }
-        else if (existing.Status == OccurrenceStatus.Cancelled)
-        {
-            await standingOrders.UpdateOccurrenceAsync(standingOrder.Id, date, OccurrenceStatus.Skipped, reason, cancellationToken);
+            case null:
+                if (!await standingOrders.TryAddOccurrenceAsync(standingOrder.Id, date, OccurrenceStatus.Skipped, reason, cancellationToken))
+                {
+                    return await SkipDateAsync(standingOrder, date, changedBy, byKitchen, cancellationToken); // Generated meanwhile; withdraw it.
+                }
+
+                break;
+            case { Status: OccurrenceStatus.Generated, OrderStatus: OrderStatus.Cancelled }:
+                await standingOrders.UpdateOccurrenceAsync(standingOrder.Id, date, OccurrenceStatus.Skipped, reason, cancellationToken);
+                break;
+            case { Status: OccurrenceStatus.Generated }:
+                var (withdrawn, _) = await WithdrawUpcomingAsync(standingOrder, date, OccurrenceStatus.Skipped, reason, changedBy, cancellationToken);
+                if (withdrawn == 0)
+                {
+                    throw new DomainException("The kitchen has already started on this delivery, so it can no longer be skipped online. Please call us.");
+                }
+
+                break;
+            case { Status: OccurrenceStatus.Cancelled }:
+                await standingOrders.UpdateOccurrenceAsync(standingOrder.Id, date, OccurrenceStatus.Skipped, reason, cancellationToken);
+                break;
+            default:
+                return false; // Already skipped.
         }
 
-        standingOrder.RecordEvent($"Delivery on {date:ddd, MMM d} skipped", changedBy, clock.UtcNow);
-        await standingOrders.UpdateAsync(standingOrder, cancellationToken);
+        standingOrder.RecordEvent($"Delivery on {date:ddd, MMM d} skipped{(byKitchen ? " by the kitchen" : string.Empty)}", changedBy, clock.UtcNow);
+        await standingOrders.AddNewEventsAsync(standingOrder, cancellationToken);
+        return true;
     }
 
-    /// <summary>Restores a previously skipped delivery date; it is generated again on the next run.</summary>
-    public async Task UnskipDateAsync(StandingOrder standingOrder, DateOnly date, string changedBy, CancellationToken cancellationToken = default)
+    /// <summary>Restores a previously skipped delivery date and generates its order. Returns false when it was not skipped.</summary>
+    public async Task<bool> UnskipDateAsync(StandingOrder standingOrder, DateOnly date, string changedBy, bool byKitchen, CancellationToken cancellationToken = default)
     {
         EnsureIsDeliveryDate(standingOrder, date);
-        if (!IsChangeable(standingOrder, date))
-        {
-            throw new DomainException($"Deliveries within {Wholesale.ChangeCutoffHours} hours can no longer be changed online. Please call us.");
-        }
+        EnsureChangeable(standingOrder, date);
 
         if (Ordering.IsKitchenClosed(date))
         {
@@ -226,13 +282,21 @@ public sealed class StandingOrderScheduler(
         }
 
         var existing = (await standingOrders.GetOccurrencesAsync(standingOrder.Id, date, date, cancellationToken)).FirstOrDefault();
-        if (existing is { Status: OccurrenceStatus.Skipped or OccurrenceStatus.Cancelled })
+        if (existing is not { Status: OccurrenceStatus.Skipped or OccurrenceStatus.Cancelled })
         {
-            await standingOrders.DeleteOccurrenceAsync(standingOrder.Id, date, cancellationToken);
-            standingOrder.RecordEvent($"Delivery on {date:ddd, MMM d} restored", changedBy, clock.UtcNow);
-            await standingOrders.UpdateAsync(standingOrder, cancellationToken);
-            await GenerateAsync(standingOrder, cancellationToken);
+            return false;
         }
+
+        if (!byKitchen && existing.Reason == KitchenSkipReason)
+        {
+            throw new DomainException("Our kitchen cancelled this delivery. Please call us if you need it after all.");
+        }
+
+        await standingOrders.DeleteOccurrenceAsync(standingOrder.Id, date, cancellationToken);
+        standingOrder.RecordEvent($"Delivery on {date:ddd, MMM d} restored", changedBy, clock.UtcNow);
+        await standingOrders.AddNewEventsAsync(standingOrder, cancellationToken);
+        await GenerateAsync(standingOrder, respectCutoff: !byKitchen, cancellationToken);
+        return true;
     }
 
     /// <summary>The next few weeks of deliveries with their state, for the restaurant and admin views.</summary>
@@ -259,7 +323,7 @@ public sealed class StandingOrderScheduler(
                 var state = occurrence.Status switch
                 {
                     OccurrenceStatus.Generated => DeliveryState.OrderCreated,
-                    OccurrenceStatus.Skipped when occurrence.Reason == "Kitchen closed" => DeliveryState.KitchenClosed,
+                    OccurrenceStatus.Skipped when occurrence.Reason == KitchenClosedReason => DeliveryState.KitchenClosed,
                     OccurrenceStatus.Skipped => DeliveryState.Skipped,
                     _ => DeliveryState.Cancelled,
                 };
@@ -267,7 +331,10 @@ public sealed class StandingOrderScheduler(
                 result.Add(new UpcomingDeliveryDto(
                     date, scheduledFor, state, occurrence.OrderNumber, occurrence.OrderStatus, occurrence.Reason,
                     CanSkip: changeable && state == DeliveryState.OrderCreated && orderOpen && standingOrder.Status == StandingOrderStatus.Active,
-                    CanUnskip: changeable && state is DeliveryState.Skipped or DeliveryState.Cancelled && standingOrder.Status == StandingOrderStatus.Active));
+                    CanUnskip: changeable && state is DeliveryState.Skipped or DeliveryState.Cancelled && standingOrder.Status == StandingOrderStatus.Active)
+                {
+                    SkippedByKitchen = occurrence.Reason == KitchenSkipReason,
+                });
                 continue;
             }
 
@@ -328,6 +395,7 @@ public sealed class StandingOrderScheduler(
             StatusReason = so.StatusReason,
             TaxExempt = so.TaxExempt,
             DeliveryFee = so.DeliveryFee,
+            PausedByKitchen = so.PausedByKitchen,
             SubtotalPerDelivery = so.SubtotalPerDelivery,
             EstimatePerDelivery = estimate,
             DeliveriesPerWeek = perWeek,
@@ -341,9 +409,10 @@ public sealed class StandingOrderScheduler(
         };
     }
 
-    private async Task CreateOrderAsync(StandingOrder standingOrder, DateOnly date, CancellationToken cancellationToken)
+    private async Task CreateOrderAsync(StandingOrder standingOrder, DateOnly date)
     {
-        var number = await UniqueOrderNumberAsync(cancellationToken);
+        // Not cancellable: the order and its ledger link must both be written once the date is claimed.
+        var number = await UniqueOrderNumberAsync(CancellationToken.None);
         var order = Order.CreateFromStandingOrder(
             number,
             numbers.NewTrackingToken(),
@@ -352,8 +421,24 @@ public sealed class StandingOrderScheduler(
             standingOrder.PricingPolicy(Ordering.TaxRate, Ordering.TaxDeliveryFee),
             clock.UtcNow);
 
-        await orders.AddAsync(order, cancellationToken);
-        await standingOrders.SetOccurrenceOrderAsync(standingOrder.Id, date, order.Id, cancellationToken);
+        await orders.AddAsync(order, CancellationToken.None);
+        await standingOrders.SetOccurrenceOrderAsync(standingOrder.Id, date, order.Id, CancellationToken.None);
+    }
+
+    /// <summary>Links an order that was written but never linked, or creates it if it really is missing.</summary>
+    private async Task RecoverOrphanAsync(StandingOrder standingOrder, DateOnly date, CancellationToken cancellationToken)
+    {
+        var existing = (await orders.GetForStandingOrderAsync(
+                standingOrder.Id, date.ToDateTime(TimeOnly.MinValue), date.ToDateTime(TimeOnly.MaxValue), cancellationToken))
+            .FirstOrDefault(o => o.Status != OrderStatus.Cancelled);
+
+        if (existing is not null)
+        {
+            await standingOrders.SetOccurrenceOrderAsync(standingOrder.Id, date, existing.Id, cancellationToken);
+            return;
+        }
+
+        await CreateOrderAsync(standingOrder, date);
     }
 
     private async Task<string> UniqueOrderNumberAsync(CancellationToken cancellationToken)
@@ -368,6 +453,14 @@ public sealed class StandingOrderScheduler(
         }
 
         throw new InvalidOperationException("Could not generate a unique order number.");
+    }
+
+    private void EnsureChangeable(StandingOrder standingOrder, DateOnly date)
+    {
+        if (!IsChangeable(standingOrder, date))
+        {
+            throw new DomainException($"Deliveries within {Wholesale.ChangeCutoffHours} hours can no longer be changed online. Please call us.");
+        }
     }
 
     private static void EnsureIsDeliveryDate(StandingOrder standingOrder, DateOnly date)

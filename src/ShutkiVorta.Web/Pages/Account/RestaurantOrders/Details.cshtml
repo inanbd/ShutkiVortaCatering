@@ -120,7 +120,7 @@
                                             <button class="btn btn-outline btn-sm" type="submit">Skip</button>
                                         </form>
                                     }
-                                    else if (d.CanUnskip)
+                                    else if (d.CanUnskip && !d.SkippedByKitchen)
                                     {
                                         <form method="post" asp-page-handler="Restore" asp-route-reference="@so.Reference">
                                             <input type="hidden" name="date" value="@date" />
@@ -139,7 +139,11 @@
                 <section class="form-card mt-3">
                     <h2 style="font-size:1.5rem;">Change your standing order</h2>
                     <div class="standing-actions">
-                        @if (so.CanResume)
+                        @if (so.CanResume && so.PausedByKitchen)
+                        {
+                            <p class="alert alert-info mb-0">Our kitchen has paused your deliveries. Please call us to restart them.</p>
+                        }
+                        @if (so.CanRestaurantResume)
                         {
                             <form method="post" asp-page-handler="Resume" asp-route-reference="@so.Reference">
                                 <p class="small muted">Deliveries start again from the next available date.</p>

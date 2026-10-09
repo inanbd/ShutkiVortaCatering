@@ -150,6 +150,42 @@ public sealed class StandingOrderTests
     }
 
     [Fact]
+    public void KitchenPause_CanOnlyBeLiftedByTheKitchen()
+    {
+        var order = Submit();
+        order.Approve("admin", null, TestData.Now);
+
+        order.Pause("admin@kitchen", "Unpaid invoices", TestData.Now, byKitchen: true);
+        Assert.True(order.PausedByKitchen);
+        var ex = Assert.Throws<DomainException>(() => order.Resume("Kamal", TestData.Now, byRestaurant: true));
+        Assert.Contains("call us", ex.Message);
+
+        order.Resume("admin@kitchen", TestData.Now);
+        Assert.Equal(StandingOrderStatus.Active, order.Status);
+        Assert.False(order.PausedByKitchen);
+
+        order.Pause("Kamal", "Holiday", TestData.Now);
+        order.Resume("Kamal", TestData.Now, byRestaurant: true); // the restaurant's own pause
+        Assert.Equal(StandingOrderStatus.Active, order.Status);
+    }
+
+    [Fact]
+    public void UpdateTerms_ReportsWhetherGeneratedOrdersAreAffected()
+    {
+        var order = Submit();
+        order.Approve("admin", null, TestData.Now);
+        var events = order.Events.Count;
+
+        var unchanged = order.UpdateTerms([Line()], order.DaysOfWeek, order.PreferredTime, order.StartDateOnly, order.EndDateOnly,
+            order.DeliveryFee, order.TaxExempt, Rules, "admin", TestData.Now);
+        Assert.False(unchanged);
+        Assert.Equal(events, order.Events.Count);
+
+        Assert.True(order.UpdateTerms([Line(1, 11m)], order.DaysOfWeek, order.PreferredTime, order.StartDateOnly, order.EndDateOnly,
+            order.DeliveryFee, order.TaxExempt, Rules, "admin", TestData.Now));
+    }
+
+    [Fact]
     public void GeneratedOrder_UsesAgreedPricesAndStartsConfirmed()
     {
         var order = Submit(lines: [Line(1, 10m, 21.24m), Line(2, 6m, 10.19m)]);

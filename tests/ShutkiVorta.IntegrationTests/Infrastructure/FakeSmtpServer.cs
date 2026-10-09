@@ -11,7 +11,7 @@ namespace ShutkiVorta.IntegrationTests.Infrastructure;
 /// </summary>
 public sealed class FakeSmtpServer : IAsyncDisposable
 {
-    private readonly TcpListener _listener = new(IPAddress.Loopback, 0);
+    private readonly TcpListener _listener = new(IPAddress.Any, 0); // also reachable as 127.0.0.2 ("another machine" for TLS tests)
     private readonly CancellationTokenSource _stop = new();
     private readonly Task _acceptLoop;
 

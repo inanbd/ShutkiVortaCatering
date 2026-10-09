@@ -11,8 +11,16 @@ internal sealed class EmailOutboxRepository(IDbConnectionFactory connections, IS
 {
     private const string SummaryColumns = """
         Id, ToAddresses, Subject, Status, Attempts, LastError, DeliveryMethod, DeliveryDetail,
-        CreatedAtUtc, LastAttemptAtUtc, SentAtUtc, NextAttemptAtUtc
+        CreatedAtUtc, LastAttemptAtUtc, SentAtUtc, NextAttemptAtUtc, IsSensitive
         """;
+
+    /// <summary>Replaces the content of a sensitive email once it no longer needs to be sent (see EmailMessage.Sensitive).</summary>
+    private const string RedactSensitive = """
+        HtmlBody = CASE WHEN IsSensitive = 1 THEN @Redacted ELSE HtmlBody END,
+        TextBody = CASE WHEN IsSensitive = 1 THEN @Redacted ELSE TextBody END
+        """;
+
+    private const string RedactedBody = "[Removed after delivery: this email contained a private sign-in link.]";
 
     /// <summary>An email claimed by "Sending" for longer than this is assumed lost (e.g. the app restarted) and retried.</summary>
     private static readonly TimeSpan StaleSendingAfter = TimeSpan.FromMinutes(10);
@@ -76,9 +84,9 @@ internal sealed class EmailOutboxRepository(IDbConnectionFactory connections, IS
     {
         await using var connection = await connections.OpenAsync(cancellationToken);
         await connection.ExecuteAsync(new CommandDefinition(
-            """
+            $"""
             UPDATE EmailOutbox SET Status = @Status, DeliveryMethod = @Method, DeliveryDetail = @Detail, LastError = NULL,
-                SentAtUtc = @Now, NextAttemptAtUtc = NULL
+                SentAtUtc = @Now, NextAttemptAtUtc = NULL, {RedactSensitive}
             WHERE Id = @Id
             """,
             new
@@ -88,6 +96,7 @@ internal sealed class EmailOutboxRepository(IDbConnectionFactory connections, IS
                 result.Method,
                 Detail = Truncate(result.Detail, 1000),
                 Now = UtcNow,
+                Redacted = RedactedBody,
             },
             cancellationToken: cancellationToken));
     }
@@ -96,8 +105,8 @@ internal sealed class EmailOutboxRepository(IDbConnectionFactory connections, IS
     {
         await using var connection = await connections.OpenAsync(cancellationToken);
         await connection.ExecuteAsync(new CommandDefinition(
-            """
-            UPDATE EmailOutbox SET Status = @Status, DeliveryMethod = @Method, LastError = @Error, NextAttemptAtUtc = @RetryAt
+            $"""
+            UPDATE EmailOutbox SET Status = @Status, DeliveryMethod = @Method, LastError = @Error, NextAttemptAtUtc = @RetryAt{(retryAtUtc is null ? ", " + RedactSensitive : string.Empty)}
             WHERE Id = @Id
             """,
             new
@@ -107,6 +116,7 @@ internal sealed class EmailOutboxRepository(IDbConnectionFactory connections, IS
                 Method = method,
                 Error = Truncate(error, 4000),
                 RetryAt = retryAtUtc,
+                Redacted = RedactedBody,
             },
             cancellationToken: cancellationToken));
     }
@@ -115,8 +125,8 @@ internal sealed class EmailOutboxRepository(IDbConnectionFactory connections, IS
     {
         await using var connection = await connections.OpenAsync(cancellationToken);
         await connection.ExecuteAsync(new CommandDefinition(
-            "UPDATE EmailOutbox SET Status = @Status, LastError = @Error, NextAttemptAtUtc = NULL WHERE Id = @Id",
-            new { Id = id, Status = (int)EmailStatus.Disabled, Error = "Email:Enabled is false — not sent." },
+            $"UPDATE EmailOutbox SET Status = @Status, LastError = @Error, NextAttemptAtUtc = NULL, {RedactSensitive} WHERE Id = @Id",
+            new { Id = id, Status = (int)EmailStatus.Disabled, Error = "Email:Enabled is false — not sent.", Redacted = RedactedBody },
             cancellationToken: cancellationToken));
     }
 
@@ -142,14 +152,21 @@ internal sealed class EmailOutboxRepository(IDbConnectionFactory connections, IS
     {
         await using var connection = await connections.OpenAsync(cancellationToken);
         return await connection.QuerySingleOrDefaultAsync<EmailLogEntryDto>(new CommandDefinition(
-            $"SELECT {SummaryColumns}, HtmlBody, TextBody FROM EmailOutbox WHERE Id = @Id", new { Id = id }, cancellationToken: cancellationToken));
+            $"""
+            SELECT {SummaryColumns},
+                CASE WHEN IsSensitive = 1 THEN NULL ELSE HtmlBody END AS HtmlBody,
+                CASE WHEN IsSensitive = 1 THEN NULL ELSE TextBody END AS TextBody
+            FROM EmailOutbox WHERE Id = @Id
+            """,
+            new { Id = id },
+            cancellationToken: cancellationToken));
     }
 
     public async Task<bool> RetryAsync(long id, CancellationToken cancellationToken = default)
     {
         await using var connection = await connections.OpenAsync(cancellationToken);
         var rows = await connection.ExecuteAsync(new CommandDefinition(
-            "UPDATE EmailOutbox SET Status = @Pending, NextAttemptAtUtc = @Now, Attempts = 0 WHERE Id = @Id AND Status IN (@Failed, @Disabled, @SavedToFolder)",
+            "UPDATE EmailOutbox SET Status = @Pending, NextAttemptAtUtc = @Now, Attempts = 0 WHERE Id = @Id AND IsSensitive = 0 AND Status IN (@Failed, @Disabled, @SavedToFolder)",
             new
             {
                 Id = id,
@@ -167,7 +184,7 @@ internal sealed class EmailOutboxRepository(IDbConnectionFactory connections, IS
     {
         await using var connection = await connections.OpenAsync(cancellationToken);
         return await connection.ExecuteAsync(new CommandDefinition(
-            "UPDATE EmailOutbox SET Status = @Pending, NextAttemptAtUtc = @Now, Attempts = 0 WHERE Status = @Failed",
+            "UPDATE EmailOutbox SET Status = @Pending, NextAttemptAtUtc = @Now, Attempts = 0 WHERE Status = @Failed AND IsSensitive = 0",
             new { Pending = (int)EmailStatus.Pending, Failed = (int)EmailStatus.Failed, Now = UtcNow },
             cancellationToken: cancellationToken));
     }
@@ -197,17 +214,18 @@ internal sealed class EmailOutboxRepository(IDbConnectionFactory connections, IS
         await connection.ExecuteAsync(new CommandDefinition(
             """
             INSERT INTO EmailOutbox (ToAddresses, ReplyTo, Subject, HtmlBody, TextBody, Status, Attempts, LastError, DeliveryMethod,
-                DeliveryDetail, CreatedAtUtc, NextAttemptAtUtc, LastAttemptAtUtc, SentAtUtc)
+                DeliveryDetail, CreatedAtUtc, NextAttemptAtUtc, LastAttemptAtUtc, SentAtUtc, IsSensitive)
             VALUES (@ToAddresses, @ReplyTo, @Subject, @HtmlBody, @TextBody, @Status, @Attempts, @LastError, @DeliveryMethod,
-                @DeliveryDetail, @CreatedAtUtc, @NextAttemptAtUtc, @LastAttemptAtUtc, @SentAtUtc)
+                @DeliveryDetail, @CreatedAtUtc, @NextAttemptAtUtc, @LastAttemptAtUtc, @SentAtUtc, @IsSensitive)
             """,
             new
             {
                 ToAddresses = Truncate(string.Join(", ", message.To), 2000),
                 ReplyTo = Truncate(message.ReplyTo, 256),
                 Subject = Truncate(message.Subject, 500),
-                message.HtmlBody,
-                message.TextBody,
+                HtmlBody = message.Sensitive && status != EmailStatus.Pending ? RedactedBody : message.HtmlBody,
+                TextBody = message.Sensitive && status != EmailStatus.Pending ? RedactedBody : message.TextBody,
+                IsSensitive = message.Sensitive,
                 Status = (int)status,
                 Attempts = attempts,
                 LastError = Truncate(error, 4000),

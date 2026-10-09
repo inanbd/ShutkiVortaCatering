@@ -50,6 +50,9 @@ public sealed class StandingOrder : Entity
     public StandingOrderStatus Status { get; private set; }
     public string? StatusReason { get; private set; }
 
+    /// <summary>True when the kitchen (an admin) paused the order; only the kitchen can then resume it.</summary>
+    public bool PausedByKitchen { get; private set; }
+
     /// <summary>Set by an administrator once a resale certificate is on file.</summary>
     public bool TaxExempt { get; private set; }
 
@@ -149,18 +152,25 @@ public sealed class StandingOrder : Entity
         Touch(string.IsNullOrWhiteSpace(reason) ? "Declined" : $"Declined — {reason.Trim()}", declinedBy, nowUtc);
     }
 
-    public void Pause(string pausedBy, string? reason, DateTime nowUtc)
+    public void Pause(string pausedBy, string? reason, DateTime nowUtc, bool byKitchen = false)
     {
         EnsureStatus("paused", StandingOrderStatus.Active);
         Status = StandingOrderStatus.Paused;
+        PausedByKitchen = byKitchen;
         StatusReason = Guard.Optional(reason, "Reason", 500);
         Touch(string.IsNullOrWhiteSpace(reason) ? "Paused" : $"Paused — {reason.Trim()}", pausedBy, nowUtc);
     }
 
-    public void Resume(string resumedBy, DateTime nowUtc)
+    public void Resume(string resumedBy, DateTime nowUtc, bool byRestaurant = false)
     {
         EnsureStatus("resumed", StandingOrderStatus.Paused);
+        if (byRestaurant && PausedByKitchen)
+        {
+            throw new DomainException("Our kitchen paused this standing order. Please call us to resume your deliveries.");
+        }
+
         Status = StandingOrderStatus.Active;
+        PausedByKitchen = false;
         StatusReason = null;
         Touch("Resumed", resumedBy, nowUtc);
     }
@@ -169,12 +179,16 @@ public sealed class StandingOrder : Entity
     {
         EnsureStatus("cancelled", StandingOrderStatus.PendingApproval, StandingOrderStatus.Active, StandingOrderStatus.Paused);
         Status = StandingOrderStatus.Cancelled;
+        PausedByKitchen = false;
         StatusReason = Guard.Optional(reason, "Reason", 500);
         Touch(string.IsNullOrWhiteSpace(reason) ? "Cancelled" : $"Cancelled — {reason.Trim()}", cancelledBy, nowUtc);
     }
 
-    /// <summary>Admin changes to the agreement: items, prices, days, time, dates, fee and tax status.</summary>
-    public void UpdateTerms(
+    /// <summary>
+    /// Admin changes to the agreement: items, prices, days, time, dates, fee and tax status.
+    /// Returns true when anything that affects generated orders changed.
+    /// </summary>
+    public bool UpdateTerms(
         IEnumerable<StandingOrderLineRequest> lines,
         WeekDays days,
         TimeOnly preferredTime,
@@ -217,7 +231,14 @@ public sealed class StandingOrder : Entity
 
         TaxExempt = taxExempt;
         DeliveryFee = Money.Round(Math.Max(0, deliveryFee));
-        Touch(changes.Count == 0 ? "Terms saved (no changes)" : "Terms changed: " + string.Join(", ", changes), changedBy, nowUtc);
+        if (changes.Count == 0)
+        {
+            UpdatedAtUtc = nowUtc;
+            return false;
+        }
+
+        Touch("Terms changed: " + string.Join(", ", changes), changedBy, nowUtc);
+        return true;
     }
 
     public void UpdateAdminNotes(string? notes, DateTime nowUtc)

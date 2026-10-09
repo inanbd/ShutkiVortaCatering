@@ -49,6 +49,7 @@ app.UseStaticFiles(new StaticFileOptions
 
 app.UseRequestLocalization();
 app.UseRouting();
+app.UseRateLimiter();
 app.UseAuthentication();
 app.UseAuthorization();
 app.UseMiddleware<ApplicationExceptionMiddleware>();

@@ -7,6 +7,12 @@ public sealed record EmailMessage(
     string TextBody,
     string? ReplyTo = null)
 {
+    /// <summary>
+    /// Contains a secret (password-reset or confirmation link). Its content is removed from the email log once it has
+    /// been delivered and it is never re-sent from the log; the user simply requests a new link.
+    /// </summary>
+    public bool Sensitive { get; init; }
+
     public static EmailMessage Create(string to, RenderedEmail rendered, string? replyTo = null) =>
         new([to], rendered.Subject, rendered.Html, rendered.Text, replyTo);
 

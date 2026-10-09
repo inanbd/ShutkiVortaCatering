@@ -27,13 +27,13 @@ public sealed class EmailDeliveryTests : IAsyncLifetime
         await _smtp.DisposeAsync();
     }
 
-    private AppFactory CreateApp(string password) => new("Sqlite", new Dictionary<string, string?>
+    private AppFactory CreateApp(string password, string host = "127.0.0.1", string security = "None") => new("Sqlite", new Dictionary<string, string?>
     {
         ["Email:DeliveryMethod"] = "Auto",
         ["Email:FromAddress"] = "orders@shutki.test",
-        ["Email:Smtp:Host"] = "127.0.0.1",
+        ["Email:Smtp:Host"] = host,
         ["Email:Smtp:Port"] = _smtp.Port.ToString(System.Globalization.CultureInfo.InvariantCulture),
-        ["Email:Smtp:Security"] = "None",
+        ["Email:Smtp:Security"] = security,
         ["Email:Smtp:UserName"] = _smtp.UserName,
         ["Email:Smtp:Password"] = password,
         ["Email:Smtp:TimeoutSeconds"] = "10",
@@ -108,5 +108,50 @@ public sealed class EmailDeliveryTests : IAsyncLifetime
         var test = await transport.TestConnectionAsync();
         Assert.False(test.Succeeded);
         Assert.Contains(test.Steps, s => s.Name == "Sign in" && !s.Succeeded);
+    }
+
+    [Fact]
+    public async Task SensitiveEmails_AreDeliveredInFull_ButRemovedFromTheLog()
+    {
+        using var scope = _app.Services.CreateScope();
+        var message = Message("reset.user@shutki.test", "Reset your password") with { Sensitive = true };
+        await scope.ServiceProvider.GetRequiredService<IEmailService>().QueueAsync(message);
+
+        var received = await _smtp.WaitForEmailAsync(e => e.Recipients.Contains("reset.user@shutki.test"), TimeSpan.FromSeconds(15));
+        Assert.Contains("kitchen", received.Data); // the customer gets the real content
+
+        var log = scope.ServiceProvider.GetRequiredService<IEmailLog>();
+        EmailLogEntryDto? entry = null;
+        for (var attempt = 0; attempt < 50 && entry?.Status != EmailStatus.Sent; attempt++)
+        {
+            await Task.Delay(100);
+            var id = (await log.ListAsync(null, 1, 50)).Items.First(e => e.ToAddresses == "reset.user@shutki.test").Id;
+            entry = await log.GetAsync(id);
+        }
+
+        Assert.NotNull(entry);
+        Assert.Equal(EmailStatus.Sent, entry.Status);
+        Assert.True(entry.IsSensitive);
+        Assert.Null(entry.HtmlBody);
+        Assert.False(await log.RetryAsync(entry.Id));
+    }
+
+    [Fact]
+    public async Task AutoSecurity_NeverSignsInUnencrypted_ToAnotherMachine()
+    {
+        // 127.0.0.2 stands in for a remote server that (maliciously or not) does not offer STARTTLS.
+        await using var app = CreateApp(_smtp.Password, host: "127.0.0.2", security: "Auto");
+        using var scope = app.Services.CreateScope();
+        var transport = scope.ServiceProvider.GetRequiredService<IEmailTransport>();
+
+        var ex = await Assert.ThrowsAsync<EmailDeliveryException>(() => transport.SendAsync(Message("owner@shutki.test", "Must not be sent")));
+
+        Assert.Contains("STARTTLS", ex.Message + ex.Hint, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain(_smtp.Received, e => e.Data.Contains("Must not be sent"));
+
+        // A mail server on this machine may still be used without encryption.
+        await using var local = CreateApp(_smtp.Password, host: "127.0.0.1", security: "Auto");
+        using var localScope = local.Services.CreateScope();
+        Assert.True((await localScope.ServiceProvider.GetRequiredService<IEmailTransport>().SendAsync(Message("owner@shutki.test"))).ActuallySent);
     }
 }

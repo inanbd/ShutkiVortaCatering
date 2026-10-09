@@ -73,6 +73,13 @@ public sealed record UpcomingDeliveryDto(
     bool CanSkip,
     bool CanUnskip)
 {
+    /// <summary>Skipped by the kitchen: only an admin can restore it.</summary>
+    public bool SkippedByKitchen { get; init; }
+
+    /// <summary>A delivery that is still going to happen.</summary>
+    public bool IsExpected => State == DeliveryState.Scheduled
+        || (State == DeliveryState.OrderCreated && OrderStatus is not (Domain.Orders.OrderStatus.Cancelled or Domain.Orders.OrderStatus.Completed));
+
     public string StateName => State switch
     {
         DeliveryState.Scheduled => "Scheduled",
@@ -114,6 +121,7 @@ public sealed record StandingOrderDetailsDto
     public required string StatusName { get; init; }
     public string? StatusReason { get; init; }
     public bool TaxExempt { get; init; }
+    public bool PausedByKitchen { get; init; }
     public decimal DeliveryFee { get; init; }
     public decimal SubtotalPerDelivery { get; init; }
     public OrderTotals EstimatePerDelivery { get; init; } = new(0, 0, 0, 0);
@@ -130,7 +138,8 @@ public sealed record StandingOrderDetailsDto
     public bool CanPause => Status == StandingOrderStatus.Active;
     public bool CanResume => Status == StandingOrderStatus.Paused;
     public bool CanCancel => Status is StandingOrderStatus.PendingApproval or StandingOrderStatus.Active or StandingOrderStatus.Paused;
-    public UpcomingDeliveryDto? NextDelivery => Upcoming.FirstOrDefault(u => u.State is DeliveryState.Scheduled or DeliveryState.OrderCreated);
+    public bool CanRestaurantResume => CanResume && !PausedByKitchen;
+    public UpcomingDeliveryDto? NextDelivery => Upcoming.FirstOrDefault(u => u.IsExpected);
 }
 
 public sealed record ProductionItemDto(int MenuItemId, string ItemName, string Unit, decimal OnlineQuantity, decimal RestaurantQuantity, decimal ProjectedQuantity)

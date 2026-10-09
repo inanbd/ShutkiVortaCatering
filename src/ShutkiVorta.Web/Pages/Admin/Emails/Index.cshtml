@@ -49,7 +49,7 @@
                                 }
                             </td>
                             <td class="num">
-                                @if (e.Status is EmailStatus.Failed or EmailStatus.SavedToFolder or EmailStatus.Disabled)
+                                @if (!e.IsSensitive && e.Status is EmailStatus.Failed or EmailStatus.SavedToFolder or EmailStatus.Disabled)
                                 {
                                     <form method="post" asp-page-handler="Retry" asp-route-status="@Model.Status" class="toggle-form">
                                         <input type="hidden" name="id" value="@e.Id" />

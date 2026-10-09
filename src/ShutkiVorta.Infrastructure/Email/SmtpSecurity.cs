@@ -29,8 +29,20 @@ internal static class SmtpSecurity
             return (SecureSocketOptions.StartTls, $"Port {smtp.Port} uses STARTTLS, so \"StartTls\" is used instead of \"SslOnConnect\".");
         }
 
+        // "Auto" must never fall back to plain text on the network: an attacker could strip the STARTTLS offer and read
+        // the password. Only a mail server on this machine may skip encryption when it doesn't offer it.
+        if (requested == SecureSocketOptions.Auto)
+        {
+            return (smtp.Port == 465 ? SecureSocketOptions.SslOnConnect
+                : IsLocalHost(smtp.Host) ? SecureSocketOptions.StartTlsWhenAvailable
+                : SecureSocketOptions.StartTls, null);
+        }
+
         return (requested, null);
     }
+
+    private static bool IsLocalHost(string? host) =>
+        host?.Trim().ToLowerInvariant() is "localhost" or "127.0.0.1" or "::1" or "[::1]";
 
     public static string Describe(SecureSocketOptions option) => option switch
     {
@@ -38,6 +50,6 @@ internal static class SmtpSecurity
         SecureSocketOptions.SslOnConnect => "SSL/TLS",
         SecureSocketOptions.StartTls => "STARTTLS (required)",
         SecureSocketOptions.StartTlsWhenAvailable => "STARTTLS when offered",
-        _ => "automatic (SSL/TLS on 465, otherwise STARTTLS when offered)",
+        _ => "automatic",
     };
 }

@@ -46,6 +46,9 @@ public sealed class EmailLogEntryDto
     public DateTime? NextAttemptAtUtc { get; init; }
     public string? HtmlBody { get; init; }
     public string? TextBody { get; init; }
+
+    /// <summary>Contains a private link; the content is never shown in the log.</summary>
+    public bool IsSensitive { get; init; }
 }
 
 public sealed record EmailStatusCounts(int Pending, int Sent, int Failed, int SavedToFolder, int Disabled)

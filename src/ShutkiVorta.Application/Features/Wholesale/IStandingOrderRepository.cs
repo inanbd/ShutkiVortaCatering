@@ -7,6 +7,9 @@ public interface IStandingOrderRepository
 {
     Task AddAsync(StandingOrder order, CancellationToken cancellationToken = default);
     Task UpdateAsync(StandingOrder order, CancellationToken cancellationToken = default);
+
+    /// <summary>Saves only the new history entries (no other columns), so it cannot overwrite a concurrent change.</summary>
+    Task AddNewEventsAsync(StandingOrder order, CancellationToken cancellationToken = default);
     Task<StandingOrder?> GetByIdAsync(int id, CancellationToken cancellationToken = default);
     Task<StandingOrder?> GetByReferenceAsync(string reference, CancellationToken cancellationToken = default);
     Task<bool> ReferenceExistsAsync(string reference, CancellationToken cancellationToken = default);
@@ -22,6 +25,11 @@ public interface IStandingOrderRepository
     Task<bool> TryAddOccurrenceAsync(int standingOrderId, DateOnly date, OccurrenceStatus status, string? reason, CancellationToken cancellationToken = default);
 
     Task SetOccurrenceOrderAsync(int standingOrderId, DateOnly date, int orderId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Takes over a claim whose order was never linked (claimed before <paramref name="staleBeforeUtc"/>). Only one caller wins.
+    /// </summary>
+    Task<bool> TryReclaimOrphanAsync(int standingOrderId, DateOnly date, DateTime staleBeforeUtc, DateTime nowUtc, CancellationToken cancellationToken = default);
     Task UpdateOccurrenceAsync(int standingOrderId, DateOnly date, OccurrenceStatus status, string? reason, CancellationToken cancellationToken = default);
     Task DeleteOccurrenceAsync(int standingOrderId, DateOnly date, CancellationToken cancellationToken = default);
 }

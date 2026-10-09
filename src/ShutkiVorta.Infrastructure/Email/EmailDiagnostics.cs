@@ -40,10 +40,15 @@ internal sealed class EmailDiagnostics(IOptionsMonitor<EmailOptions> options, IH
                 warnings.Add($"Email:DeliveryMethod is \"Smtp\" but Email:Smtp:Host (\"{smtp.Host}\") is empty or a placeholder.");
             }
 
-            var (_, correction) = SmtpSecurity.Resolve(smtp);
+            var (security, correction) = SmtpSecurity.Resolve(smtp);
             if (correction is not null)
             {
                 warnings.Add(correction);
+            }
+
+            if (security == MailKit.Security.SecureSocketOptions.None && !string.IsNullOrWhiteSpace(smtp.UserName))
+            {
+                warnings.Add("Email:Smtp:Security is \"None\": your SMTP password and every email travel unencrypted. Use \"Auto\" unless the mail server runs on this machine.");
             }
 
             if (smtp.Port == 25)

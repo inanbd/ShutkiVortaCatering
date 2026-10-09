@@ -176,7 +176,7 @@ internal sealed class AccountCommandHandlers(
             ["CustomerFirstName"] = FirstName(user?.FullName),
             ["ResetUrl"] = urls.ResetPassword(emailAddress, code),
         });
-        await email.QueueAsync(EmailMessage.Create(emailAddress, rendered), cancellationToken);
+        await email.QueueAsync(EmailMessage.Create(emailAddress, rendered) with { Sensitive = true }, cancellationToken);
     }
 
     public Task<Result> Handle(ResetPasswordCommand request, CancellationToken cancellationToken) =>
@@ -215,7 +215,7 @@ internal sealed class AccountCommandHandlers(
             ["CustomerFirstName"] = FirstName(fullName),
             ["ConfirmUrl"] = urls.ConfirmEmail(userId, code),
         });
-        await email.QueueAsync(EmailMessage.Create(emailAddress, rendered), cancellationToken);
+        await email.QueueAsync(EmailMessage.Create(emailAddress, rendered) with { Sensitive = true }, cancellationToken);
     }
 
     private static string FirstName(string? fullName) =>

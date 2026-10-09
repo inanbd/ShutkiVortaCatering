@@ -43,7 +43,7 @@ internal static class SmtpErrorHints
             SmtpProtocolException =>
                 $"The server at {target} did not respond like an SMTP server. Check the port and the \"Security\" setting (465 = SslOnConnect, 587 = StartTls).",
             NotSupportedException when message.Contains("STARTTLS", StringComparison.OrdinalIgnoreCase) =>
-                $"{target} does not offer STARTTLS. Use \"Security\": \"Auto\" — or \"None\" only for a server on your own trusted network.",
+                $"{target} does not offer STARTTLS, so your password cannot be sent securely. Use your provider's encrypted port (587 with STARTTLS, or 465 with SSL/TLS). Set \"Security\": \"None\" only for a mail server on your own trusted network.",
             SocketException socket when socket.SocketErrorCode == SocketError.HostNotFound || socket.SocketErrorCode == SocketError.TryAgain =>
                 $"The host name \"{smtp.Host}\" could not be found. Check the spelling of Email:Smtp:Host.",
             SocketException socket when socket.SocketErrorCode == SocketError.ConnectionRefused =>

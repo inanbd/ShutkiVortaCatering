@@ -6,7 +6,7 @@
 }
 @section Actions {
     <a class="btn btn-outline btn-sm" href="/admin/emails">&larr; Email log</a>
-    @if (e.Status is EmailStatus.Failed or EmailStatus.SavedToFolder or EmailStatus.Disabled)
+    @if (!e.IsSensitive && e.Status is EmailStatus.Failed or EmailStatus.SavedToFolder or EmailStatus.Disabled)
     {
         <form method="post" asp-page-handler="Retry" asp-route-id="@e.Id">
             <button class="btn btn-primary btn-sm" type="submit">Send again</button>
@@ -17,9 +17,19 @@
 <div class="detail-grid">
     <section class="panel">
         <div class="panel-head"><h2>@e.Subject</h2><span class="pill @IndexModel.StatusCss(e.Status)">@e.Status.DisplayName()</span></div>
-        <div class="panel-body flush">
-            <iframe class="email-preview" title="Email preview" sandbox srcdoc="@e.HtmlBody"></iframe>
-        </div>
+        @if (e.IsSensitive)
+        {
+            <div class="panel-body">
+                <p class="muted mb-0">This email contains a private link (password reset or email confirmation), so its content is not shown here
+                    and it cannot be re-sent from the log. The customer can simply request a new link.</p>
+            </div>
+        }
+        else
+        {
+            <div class="panel-body flush">
+                <iframe class="email-preview" title="Email preview" sandbox srcdoc="@e.HtmlBody"></iframe>
+            </div>
+        }
     </section>
     <section class="panel">
         <div class="panel-head"><h2>Delivery</h2></div>
