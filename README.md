@@ -34,7 +34,8 @@ stitching, jamdani patterns, alpona motifs, Bengali typography)
   as normal kitchen orders marked "Restaurant". Generation is idempotent (one ledger row per date), skips
   closed days and blackout dates, and runs at startup and every hour.
 - Restaurants manage everything from **My account → Restaurant orders**: upcoming deliveries, skip or restore a
-  date, pause, resume or cancel (up to `Wholesale:ChangeCutoffHours` before a delivery)
+  date, pause, resume or cancel (up to `Wholesale:ChangeCutoffHours` before a delivery). A pause or skip made by
+  the kitchen can only be lifted by the kitchen, and an order the kitchen cancelled is never re-created.
 
 **Customer accounts**
 - Register, sign in, confirm email, forgot/reset password, change password, profile and saved address
@@ -134,7 +135,7 @@ in `App_Data/mail/` (handy for development).
   "Smtp": {
     "Host": "smtp.yourprovider.com",
     "Port": 587,                            // 587 = STARTTLS, 465 = SSL/TLS
-    "Security": "Auto",                     // Auto | StartTls | SslOnConnect | None
+    "Security": "Auto",                     // Auto = SSL/TLS on 465, required STARTTLS otherwise | StartTls | SslOnConnect | None
     "UserName": "orders@yourdomain.com",
     "Password": "app-password",
     "TimeoutSeconds": 30,
@@ -146,6 +147,9 @@ in `App_Data/mail/` (handy for development).
 ```
 
 The templates live in `src/ShutkiVorta.Infrastructure/Email/Templates/`.
+
+`Auto` never sends your password unencrypted over the network. If the server doesn't offer STARTTLS, sending
+fails with an explanation. Only a mail server on the same machine (`localhost`) may skip encryption.
 
 **How sending works.** Emails are written to an outbox table in the database, then a background service
 delivers them. Temporary problems (network, timeouts, "try again later" replies) are retried after 1 min,
@@ -161,6 +165,8 @@ go out once it is back.
   plain-English hint.
 - **Admin → Email log** lists every email with its status (Sent, Failed, Waiting to send, Saved to folder).
   Open one to see the error and the content. **Retry** (or **Retry all failed**) re-sends after you fix the settings.
+  Password-reset and email-confirmation emails contain private links, so their content is removed from the log once
+  delivered and they are never re-sent from it (the customer simply requests a new link).
 
 **Common problems**
 
@@ -183,6 +189,7 @@ go out once it is back.
 | `Wholesale` | `AcceptingRequests`, `DiscountPercent` (default wholesale price = retail minus this, unless a menu item has its own wholesale price), `MinimumQuantityPerItem`, `QuantityStep`, `MinimumSubtotalPerDelivery`, `DeliveryFee`, `LeadTimeDays`, `GenerateDaysAhead`, `AutoGenerate`, `ChangeCutoffHours`, delivery time slots, `PaymentTerms` |
 | `Site` | `BaseUrl` (set your public domain in production, used for canonical URLs, sitemap and email links; empty = current host), `AllowSearchEngineIndexing` (set `false` on staging), search-console verification codes |
 | `Identity` | `RequireConfirmedEmail` (default `false`: customers can sign in before confirming) |
+| `RateLimiting` | `FormPostsPerWindow` / `WindowMinutes`: how often one IP address may submit each public form (contact, catering, join our kitchen, restaurant order, register, password reset); default 10 per 10 minutes |
 | `Seed` | first administrator account and whether to seed the starter menu |
 
 ---
