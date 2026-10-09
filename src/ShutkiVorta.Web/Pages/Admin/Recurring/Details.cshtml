@@ -5,6 +5,11 @@
     var so = Model.Order;
     var phoneHref = "tel:" + new string(so.Phone.Where(c => char.IsDigit(c) || c == '+').ToArray());
     var estimate = so.EstimatePerDelivery;
+
+    // Once cancelled or declined, only dates that actually had an order (or a recorded reason) are worth listing.
+    var upcoming = so.Status.IsFinal()
+        ? so.Upcoming.Where(d => d.OrderNumber is not null || d.Reason is not null).ToList()
+        : so.Upcoming;
     var times = Model.Catalog.TimeSlots.Select(t => t.ToString("HH:mm", CultureInfo.InvariantCulture)).ToList();
     if (!string.IsNullOrEmpty(Model.Input.PreferredTime) && !times.Contains(Model.Input.PreferredTime))
     {
@@ -105,7 +110,7 @@
                 <span class="muted small">Next 4 weeks &middot; changes close @so.ChangeCutoffHours hours before</span>
             </div>
             <div class="panel-body flush table-wrap">
-                @if (so.Upcoming.Count == 0)
+                @if (upcoming.Count == 0)
                 {
                     <p class="muted" style="padding:20px;">No deliveries in the next 4 weeks@(so.Status.IsFinal() ? " — this standing order is " + so.StatusName.ToLowerInvariant() : string.Empty).</p>
                 }
@@ -114,7 +119,7 @@
                     <table class="table">
                         <thead><tr><th>Date &amp; time</th><th>Delivery</th><th>Note</th><th class="no-print"></th></tr></thead>
                         <tbody>
-                            @foreach (var d in so.Upcoming)
+                            @foreach (var d in upcoming)
                             {
                                 <tr class="@(d.State is DeliveryState.Skipped or DeliveryState.KitchenClosed or DeliveryState.Cancelled ? "row-muted" : null)">
                                     <td class="nowrap"><strong>@d.ScheduledFor.ToString("ddd, MMM d", Format.Culture)</strong><br /><span class="small muted">@Format.Time(d.ScheduledFor)</span></td>
@@ -421,10 +426,13 @@
                     <li><span>Sales tax</span><span>@(so.TaxExempt ? "Tax exempt" : Ui.Money(estimate.Tax))</span></li>
                     <li><strong>Total</strong><strong>@Ui.Money(estimate.Total)</strong></li>
                 </ul>
-                <div class="weekly-estimate">
-                    <span>@so.DeliveriesPerWeek deliver@(so.DeliveriesPerWeek == 1 ? "y" : "ies") a week</span>
-                    <strong>≈ @Ui.Money(so.EstimatedWeeklyTotal) / week</strong>
-                </div>
+                @if (!so.Status.IsFinal())
+                {
+                    <div class="weekly-estimate">
+                        <span>@so.DeliveriesPerWeek deliver@(so.DeliveriesPerWeek == 1 ? "y" : "ies") a week</span>
+                        <strong>≈ @Ui.Money(so.EstimatedWeeklyTotal) / week</strong>
+                    </div>
+                }
                 @if (so.NextDelivery is { } next)
                 {
                     <p class="small muted mt-2 mb-0">Next delivery: <strong>@Format.DateTime(next.ScheduledFor)</strong>@(next.OrderNumber is null ? string.Empty : $" (order {next.OrderNumber})")</p>
