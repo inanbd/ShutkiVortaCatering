@@ -16,10 +16,12 @@ public sealed class AppFactory : WebApplicationFactory<Program>
     public const string SqlServerEnvironmentVariable = "SHUTKIVORTA_TEST_SQLSERVER";
 
     private readonly string _sqlServerDatabase = $"ShutkiVortaTests_{Guid.NewGuid():N}";
+    private readonly IReadOnlyDictionary<string, string?> _overrides;
 
-    public AppFactory(string provider)
+    public AppFactory(string provider, IReadOnlyDictionary<string, string?>? overrides = null)
     {
         Provider = provider;
+        _overrides = overrides ?? new Dictionary<string, string?>();
         TempDirectory = Path.Combine(Path.GetTempPath(), "shutkivorta-tests", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(TempDirectory);
     }
@@ -50,6 +52,11 @@ public sealed class AppFactory : WebApplicationFactory<Program>
             ["Ordering:MinimumLeadTimeHours"] = "24",
             ["Wholesale:AutoGenerate"] = "false", // tests drive the standing-order scheduler explicitly
         };
+
+        foreach (var (key, value) in _overrides)
+        {
+            settings[key] = value;
+        }
 
         foreach (var (key, value) in settings)
         {

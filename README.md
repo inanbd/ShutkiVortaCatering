@@ -94,22 +94,61 @@ change the schema.
 
 ### Email
 
+Fill in the `Smtp` section with your mail provider's details. With `"DeliveryMethod": "Auto"` (the default), the
+site sends through SMTP as soon as `Smtp:Host` is filled in. While it is empty, emails are only saved as files
+in `App_Data/mail/` (handy for development).
+
 ```json
 "Email": {
   "Enabled": true,
-  "DeliveryMethod": "Smtp",                 // or "PickupDirectory" for local development
+  "DeliveryMethod": "Auto",                 // Auto | Smtp | PickupDirectory
   "FromName": "Shutki Vorta Catering",
-  "FromAddress": "orders@yourdomain.com",
+  "FromAddress": "orders@yourdomain.com",   // must be an address your SMTP account may send from
   "ReplyToAddress": "hello@yourdomain.com",
   "AdminRecipients": [ "owner@yourdomain.com", "kitchen@yourdomain.com" ],
   "SendCustomerStatusUpdates": true,
-  "Smtp": { "Host": "smtp.yourprovider.com", "Port": 587, "Security": "StartTls", "UserName": "...", "Password": "..." }
+  "Smtp": {
+    "Host": "smtp.yourprovider.com",
+    "Port": 587,                            // 587 = STARTTLS, 465 = SSL/TLS
+    "Security": "Auto",                     // Auto | StartTls | SslOnConnect | None
+    "UserName": "orders@yourdomain.com",
+    "Password": "app-password",
+    "TimeoutSeconds": 30,
+    "AcceptInvalidCertificates": false,     // only for a self-signed certificate on your own server
+    "CheckCertificateRevocation": true,
+    "LocalDomain": ""                       // HELO name, if your server insists on one
+  }
 }
 ```
 
-`Security` accepts `None`, `Auto`, `SslOnConnect` (port 465) or `StartTls` (port 587). Use
-**Admin → Settings → Send test email** to verify the configuration. The templates live in
-`src/ShutkiVorta.Infrastructure/Email/Templates/`.
+The templates live in `src/ShutkiVorta.Infrastructure/Email/Templates/`.
+
+**How sending works.** Emails are written to an outbox table in the database, then a background service
+delivers them. Temporary problems (network, timeouts, "try again later" replies) are retried after 1 min,
+5 min, 30 min and 2 h. Permanent problems (wrong password, rejected sender, certificate errors) fail
+straight away with an explanation. Nothing is lost if the mail server or the site is down; queued emails
+go out once it is back.
+
+**Checking your setup (Admin → Settings → Email):**
+- The panel shows whether real emails are being sent, plus warnings for common mistakes: SMTP host
+  empty, placeholder `example.com` addresses, no password, a port that doesn't match its `Security` setting.
+- **Test connection** connects and signs in step by step (connect → TLS → sign in) and shows where it fails.
+- **Send test email** sends a real message and shows the server's reply, or the exact error with a
+  plain-English hint.
+- **Admin → Email log** lists every email with its status (Sent, Failed, Waiting to send, Saved to folder).
+  Open one to see the error and the content. **Retry** (or **Retry all failed**) re-sends after you fix the settings.
+
+**Common problems**
+
+| Symptom | Fix |
+|---|---|
+| Emails appear in `App_Data/mail` but never arrive | `Smtp:Host` is empty or `DeliveryMethod` is `PickupDirectory`. Fill in the Smtp section and keep `"Auto"`. |
+| "Authentication failed" / 535 | Wrong user name or password. Gmail and Outlook.com need an **app password** (2-step verification on). Microsoft 365 needs *Authenticated SMTP* enabled for the mailbox. |
+| "Sender address rejected" / 550 / 553 | `FromAddress` must be the account you sign in with (or a verified alias/domain at your provider). |
+| Timeout when connecting | Port 465 needs `SslOnConnect`, 587 needs `StartTls` (`Auto` picks the right one). Some hosts block outbound SMTP ports; ask them or use your provider's alternative port (e.g. 2525). |
+| Certificate error | Use the host name on the server's certificate (e.g. `mail.yourdomain.com`, not the IP). Only for your own server with a self-signed certificate, set `AcceptInvalidCertificates: true`. |
+| Delivered but lands in spam | Add SPF, DKIM and DMARC records for your domain at your DNS provider (your mail provider documents the values). |
+| Works locally, not on the server | Settings stored with `dotnet user-secrets` only load in Development. On the server use environment variables, e.g. `Email__Smtp__Password`, `Email__AdminRecipients__0`. |
 
 ### Business, ordering and website
 
