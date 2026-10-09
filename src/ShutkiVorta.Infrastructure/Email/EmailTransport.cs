@@ -11,7 +11,7 @@ using ShutkiVorta.Domain.Common;
 
 namespace ShutkiVorta.Infrastructure.Email;
 
-/// <summary>Delivers email using the method configured in appsettings.json ("Email:DeliveryMethod", default "Auto").</summary>
+/// <summary>Delivers email using the method configured in Admin → Settings → Email (default "Auto").</summary>
 internal sealed class EmailTransport(
     IOptionsMonitor<EmailOptions> options,
     IHostEnvironment environment,
@@ -47,8 +47,8 @@ internal sealed class EmailTransport(
                 "No SMTP server is in use: emails are saved to the pickup folder and are not sent.",
                 steps,
                 string.IsNullOrWhiteSpace(smtp.Host) || !smtp.IsConfigured
-                    ? "Fill in Email:Smtp:Host (and Port, UserName, Password) in appsettings.json and restart the site."
-                    : "Set Email:DeliveryMethod to \"Auto\" or \"Smtp\" in appsettings.json and restart the site.");
+                    ? "Fill in the SMTP server, port, user name and password in Admin → Settings → Email."
+                    : "Set the delivery method to \"Automatic\" in Admin → Settings → Email (Advanced).");
         }
 
         var (security, correction) = SmtpSecurity.Resolve(smtp);

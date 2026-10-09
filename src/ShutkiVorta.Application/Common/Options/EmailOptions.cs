@@ -1,6 +1,6 @@
 namespace ShutkiVorta.Application.Common.Options;
 
-/// <summary>Outgoing email configuration, bound from the "Email" section of appsettings.json.</summary>
+/// <summary>Outgoing email configuration (managed in Admin → Settings → Email).</summary>
 public sealed class EmailOptions
 {
     public const string SectionName = "Email";
@@ -70,6 +70,10 @@ public sealed class SmtpSettings
 
     /// <summary>Optional HELO/EHLO name. Set it if the server rejects the machine's own host name.</summary>
     public string? LocalDomain { get; set; }
+
+    /// <summary>Set at runtime when the saved password exists but can no longer be decrypted (data-protection keys changed).</summary>
+    [Settings.SettingIgnore]
+    public bool PasswordUnreadable { get; set; }
 
     public bool IsConfigured => !string.IsNullOrWhiteSpace(Host) && !IsPlaceholder(Host);
 

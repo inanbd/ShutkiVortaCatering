@@ -6,7 +6,7 @@ public sealed class SiteOptions
     public const string SectionName = "Site";
 
     /// <summary>Public root URL without a trailing slash, e.g. "https://www.shutkivorta.com".</summary>
-    public string BaseUrl { get; set; } = "https://localhost:5001";
+    public string BaseUrl { get; set; } = string.Empty;
 
     /// <summary>When false, robots.txt blocks all crawlers and pages emit noindex (use for staging).</summary>
     public bool AllowSearchEngineIndexing { get; set; } = true;

@@ -202,10 +202,16 @@ internal sealed class SeoQueryHandlers(
     }
 }
 
-/// <summary>Drops cached sitemap/robots content as soon as a menu item is added, edited or removed.</summary>
-internal sealed class SeoCacheInvalidationHandler(IMemoryCache cache) : INotificationHandler<MenuChangedNotification>
+/// <summary>Drops cached sitemap/robots content as soon as a menu item or a website/business setting changes.</summary>
+internal sealed class SeoCacheInvalidationHandler(IMemoryCache cache) :
+    INotificationHandler<MenuChangedNotification>,
+    INotificationHandler<Settings.SettingsChangedNotification>
 {
-    public Task Handle(MenuChangedNotification notification, CancellationToken cancellationToken)
+    public Task Handle(MenuChangedNotification notification, CancellationToken cancellationToken) => Clear();
+
+    public Task Handle(Settings.SettingsChangedNotification notification, CancellationToken cancellationToken) => Clear();
+
+    private Task Clear()
     {
         cache.Remove(SeoCacheKeys.Sitemap);
         cache.Remove(SeoCacheKeys.Robots);

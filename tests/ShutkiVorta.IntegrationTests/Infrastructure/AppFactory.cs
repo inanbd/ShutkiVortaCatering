@@ -36,6 +36,13 @@ public sealed class AppFactory : WebApplicationFactory<Program>
     {
         builder.UseEnvironment("Testing");
 
+        // Catch singletons that capture per-request services such as the live IOptions<T> of database-backed settings.
+        builder.UseDefaultServiceProvider(options =>
+        {
+            options.ValidateScopes = true;
+            options.ValidateOnBuild = true;
+        });
+
         var settings = new Dictionary<string, string?>
         {
             ["Database:Provider"] = Provider,

@@ -2,6 +2,8 @@ using System.Text;
 using Dapper;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.WebUtilities;
+using Microsoft.Extensions.Options;
+using ShutkiVorta.Application.Common.Options;
 using ShutkiVorta.Application.Common.Models;
 using ShutkiVorta.Application.Common.Security;
 using ShutkiVorta.Application.Features.Accounts;
@@ -13,9 +15,10 @@ internal sealed class IdentityService(
     UserManager<ApplicationUser> userManager,
     SignInManager<ApplicationUser> signInManager,
     IDbConnectionFactory connections,
-    ISqlDialect dialect) : IIdentityService
+    ISqlDialect dialect,
+    IOptionsMonitor<AccountOptions> account) : IIdentityService
 {
-    public bool RequireConfirmedEmail => userManager.Options.SignIn.RequireConfirmedEmail;
+    public bool RequireConfirmedEmail => account.CurrentValue.RequireConfirmedEmail;
 
     public async Task<Result<string>> RegisterCustomerAsync(string fullName, string email, string phone, string password)
     {

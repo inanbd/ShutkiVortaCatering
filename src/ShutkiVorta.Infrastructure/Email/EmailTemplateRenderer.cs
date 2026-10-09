@@ -16,7 +16,7 @@ namespace ShutkiVorta.Infrastructure.Email;
 /// Every template is wrapped in _Layout.html, which provides the branded Bangladeshi header and footer.
 /// </summary>
 internal sealed partial class EmailTemplateRenderer(
-    IOptions<BusinessOptions> business,
+    IOptionsMonitor<BusinessOptions> business,
     IAppUrls urls) : IEmailTemplateRenderer
 {
     private const string LayoutName = "_Layout";
@@ -35,7 +35,7 @@ internal sealed partial class EmailTemplateRenderer(
 
     private Dictionary<string, object?> BuildValues(string subject, IReadOnlyDictionary<string, object?> model)
     {
-        var b = business.Value;
+        var b = business.CurrentValue;
         var values = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase)
         {
             ["Subject"] = subject,

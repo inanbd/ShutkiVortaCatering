@@ -21,7 +21,7 @@ public static class DependencyInjection
         services.AddScoped<ICurrentUser, CurrentUser>();
         services.AddScoped<CartService>();
 
-        services.AddFormRateLimiting(configuration);
+        services.AddFormRateLimiting();
 
         services.AddRazorPages(options =>
         {

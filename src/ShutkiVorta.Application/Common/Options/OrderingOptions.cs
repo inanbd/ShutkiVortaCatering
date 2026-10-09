@@ -38,6 +38,6 @@ public sealed class OrderingOptions
     /// <summary>ZIP code prefixes we deliver to (e.g. "752" for Dallas). Empty means no restriction.</summary>
     public List<string> DeliveryZipPrefixes { get; set; } = [];
 
-    public string DeliveryAreaDescription { get; set; } = "Dallas and nearby cities";
+    public string DeliveryAreaDescription { get; set; } = "Dallas and nearby DFW cities";
     public string PaymentInstructions { get; set; } = "Pay at pickup or on delivery with cash, Zelle or card.";
 }

@@ -30,5 +30,11 @@ public sealed class ValidationException : Exception
             .ToDictionary(g => g.Key, g => g.Distinct().ToArray());
     }
 
+    public ValidationException(IReadOnlyDictionary<string, string[]> errors)
+        : base(errors.Values.SelectMany(e => e).FirstOrDefault() ?? "One or more validation failures have occurred.")
+    {
+        Errors = errors;
+    }
+
     public IReadOnlyDictionary<string, string[]> Errors { get; }
 }

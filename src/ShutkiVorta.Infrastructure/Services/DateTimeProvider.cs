@@ -5,27 +5,39 @@ using ShutkiVorta.Application.Common.Options;
 
 namespace ShutkiVorta.Infrastructure.Services;
 
-internal sealed class DateTimeProvider : IDateTimeProvider
+/// <summary>Current time in UTC and in the business' time zone (Admin → Settings → Business; changes apply immediately).</summary>
+internal sealed class DateTimeProvider(TimeProvider timeProvider, IOptionsMonitor<BusinessOptions> business, ILogger<DateTimeProvider> logger) : IDateTimeProvider
 {
-    private readonly TimeProvider _timeProvider;
+    private (string Id, TimeZoneInfo Zone)? _cached;
 
-    public DateTimeProvider(TimeProvider timeProvider, IOptions<BusinessOptions> business, ILogger<DateTimeProvider> logger)
+    public TimeZoneInfo BusinessTimeZone
     {
-        _timeProvider = timeProvider;
-        try
+        get
         {
-            BusinessTimeZone = TimeZoneInfo.FindSystemTimeZoneById(business.Value.TimeZoneId);
-        }
-        catch (Exception ex) when (ex is TimeZoneNotFoundException or InvalidTimeZoneException)
-        {
-            logger.LogWarning("Time zone '{TimeZone}' not found; falling back to UTC", business.Value.TimeZoneId);
-            BusinessTimeZone = TimeZoneInfo.Utc;
+            var id = business.CurrentValue.TimeZoneId;
+            var cached = _cached;
+            if (cached is { } c && c.Id == id)
+            {
+                return c.Zone;
+            }
+
+            TimeZoneInfo zone;
+            try
+            {
+                zone = TimeZoneInfo.FindSystemTimeZoneById(id);
+            }
+            catch (Exception ex) when (ex is TimeZoneNotFoundException or InvalidTimeZoneException or ArgumentException)
+            {
+                logger.LogWarning("Time zone '{TimeZone}' not found; falling back to UTC", id);
+                zone = TimeZoneInfo.Utc;
+            }
+
+            _cached = (id, zone);
+            return zone;
         }
     }
 
-    public TimeZoneInfo BusinessTimeZone { get; }
-
-    public DateTime UtcNow => _timeProvider.GetUtcNow().UtcDateTime;
+    public DateTime UtcNow => timeProvider.GetUtcNow().UtcDateTime;
 
     public DateTime BusinessNow => TimeZoneInfo.ConvertTimeFromUtc(UtcNow, BusinessTimeZone);
 

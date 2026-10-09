@@ -3,7 +3,9 @@ using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Options;
 using ShutkiVorta.Application.Common.Interfaces;
+using ShutkiVorta.Application.Common.Options;
 using ShutkiVorta.Application.Features.Accounts;
 using ShutkiVorta.Application.Features.Emails;
 using ShutkiVorta.Application.Features.Inquiries;
@@ -17,6 +19,7 @@ using ShutkiVorta.Infrastructure.Persistence;
 using ShutkiVorta.Infrastructure.Persistence.Repositories;
 using ShutkiVorta.Infrastructure.Persistence.Seed;
 using ShutkiVorta.Infrastructure.Services;
+using ShutkiVorta.Infrastructure.Settings;
 using ShutkiVorta.Infrastructure.Wholesale;
 
 namespace ShutkiVorta.Infrastructure;
@@ -58,13 +61,15 @@ public static class DependencyInjection
                 options.Password.RequireNonAlphanumeric = false;
                 options.Lockout.MaxFailedAccessAttempts = 5;
                 options.Lockout.DefaultLockoutTimeSpan = TimeSpan.FromMinutes(15);
-                options.SignIn.RequireConfirmedEmail = configuration.GetValue("Identity:RequireConfirmedEmail", false);
+                // Whether the email must be confirmed is a database setting, checked at sign-in by SettingsUserConfirmation.
+                options.SignIn.RequireConfirmedAccount = true;
             })
             .AddUserStore<DapperUserStore>()
             .AddRoleStore<DapperRoleStore>()
             .AddClaimsPrincipalFactory<ApplicationClaimsPrincipalFactory>()
             .AddDefaultTokenProviders();
 
+        services.AddScoped<IUserConfirmation<ApplicationUser>, SettingsUserConfirmation>();
         services.AddScoped<IIdentityService, IdentityService>();
 
         // ---- Email (durable outbox + background dispatcher) ----
@@ -76,6 +81,15 @@ public static class DependencyInjection
         services.AddSingleton<IEmailDiagnostics, EmailDiagnostics>();
         services.AddSingleton<IEmailTemplateRenderer, EmailTemplateRenderer>();
         services.AddHostedService<EmailDispatcher>();
+
+        // ---- Business settings stored in the database (Admin → Settings) ----
+        services.AddSingleton<SettingsSecretProtector>();
+        services.AddSingleton<SettingsRepository>();
+        services.AddSingleton<ISettingsStore>(sp => sp.GetRequiredService<SettingsRepository>());
+        services.AddSingleton(sp => new DatabaseSettingsSource(() => sp.GetRequiredService<SettingsRepository>().LoadAll()));
+        services.AddSingleton<SettingsImporter>();
+        services.AddSingleton<IPostConfigureOptions<EmailOptions>, EmailSecretsPostConfigure>();
+        services.AddHostedService<SettingsReloadService>();
 
         // ---- Misc services ----
         services.AddMemoryCache();
@@ -90,11 +104,33 @@ public static class DependencyInjection
         return services;
     }
 
-    /// <summary>Creates the database (if needed), applies migrations and seeds data. Call once at startup.</summary>
+    /// <summary>
+    /// Creates the database (if needed), applies migrations, seeds data and loads the business settings from the database.
+    /// Call once at startup, after the app is built.
+    /// </summary>
     public static async Task InitializeDatabaseAsync(this IServiceProvider services, CancellationToken cancellationToken = default)
     {
-        await using var scope = services.CreateAsyncScope();
-        await scope.ServiceProvider.GetRequiredService<DatabaseInitializer>().InitializeAsync(cancellationToken);
+        await using (var scope = services.CreateAsyncScope())
+        {
+            await scope.ServiceProvider.GetRequiredService<DatabaseInitializer>().InitializeAsync(cancellationToken);
+        }
+
+        var source = services.GetRequiredService<DatabaseSettingsSource>();
+        if (source.IsAttached)
+        {
+            return;
+        }
+
+        // First run: copy settings from appsettings.json / environment variables into the database. Then add the database as
+        // the last (highest-priority) configuration source, so everything bound from it reflects what admins save.
+        var configuration = services.GetRequiredService<IConfiguration>();
+        await services.GetRequiredService<SettingsImporter>().ImportAsync(configuration, cancellationToken);
+        if (configuration is not IConfigurationBuilder builder)
+        {
+            throw new InvalidOperationException("The application's configuration cannot be extended with the database settings source.");
+        }
+
+        builder.Add(source);
     }
 
     private static string ResolveConnectionString(IConfiguration configuration, DatabaseProvider provider, string contentRoot)

@@ -120,7 +120,7 @@ internal sealed class SettingsHandlers(
         if (!report.Enabled)
         {
             await emailLog.RecordAsync(message, EmailStatus.Disabled, null, null, "Email:Enabled is false", cancellationToken);
-            return new TestEmailOutcome(false, false, "Email is switched off (Email:Enabled = false), so nothing was sent.", "Set \"Enabled\": true in the Email section of appsettings.json.");
+            return new TestEmailOutcome(false, false, "Email is switched off, so nothing was sent.", "Tick \"Send emails\" in Admin → Settings → Email.");
         }
 
         try
