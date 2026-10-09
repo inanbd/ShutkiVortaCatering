@@ -1,0 +1,92 @@
+@model ShutkiVorta.Web.Pages.Admin.Settings.EmailDiagnosticsPanel
+@*
+    Email delivery status with "Test connection" and "Send test email". Shown on the settings overview and on the Email settings
+    page; the tests post to the overview's handlers, which come back to the page named by ReturnTo.
+*@
+@{
+    var s = Model.Settings;
+    var report = s.EmailReport;
+    var counts = s.EmailLast7Days;
+    var onEmailPage = Model.ReturnTo is not null;
+}
+<section class="panel email-diagnostics" id="email-diagnostics">
+    <div class="panel-head">
+        <h2>@(onEmailPage ? "Check email delivery" : "Email delivery")</h2>
+        <div class="flex gap-1 wrap items-center">
+            <span class="pill @(report.SendsRealEmail ? "pill-on" : "pill-warn")">@(report.SendsRealEmail ? "Sending real email" : "Not sending email")</span>
+            @if (!onEmailPage)
+            {
+                <a class="btn btn-outline btn-sm" href="/admin/settings/email">@Icons.Get("edit") Edit email settings</a>
+            }
+        </div>
+    </div>
+    <div class="panel-body">
+        @if (onEmailPage)
+        {
+            <p class="muted mt-0">This checks the settings that are saved now. After changing the mail server, save first, then use <strong>Test connection</strong>.</p>
+        }
+        <p class="email-summary @(report.SendsRealEmail ? "ok" : "bad")"><strong>@report.Summary</strong></p>
+
+        @if (report.Warnings.Count > 0)
+        {
+            <div class="alert alert-error">
+                <strong>Things to fix:</strong>
+                <ul class="mb-0">
+                    @foreach (var warning in report.Warnings)
+                    {
+                        <li>@warning</li>
+                    }
+                </ul>
+            </div>
+        }
+
+        @if (Model.TestResult is { } r)
+        {
+            <div class="alert @(r.Succeeded ? "alert-success" : r.Warning ? "alert-info" : "alert-error")" role="status">
+                <strong>@r.Action:</strong> @r.Message
+                @if (r.Steps.Count > 0)
+                {
+                    <ul class="test-steps">
+                        @foreach (var step in r.Steps)
+                        {
+                            <li class="@(step.Succeeded ? "ok" : "bad")">@(step.Succeeded ? "✔" : "✖") <strong>@step.Name</strong> — @step.Detail</li>
+                        }
+                    </ul>
+                }
+                @if (!string.IsNullOrWhiteSpace(r.Hint))
+                {
+                    <p class="mb-0 mt-1"><strong>What to try:</strong> @r.Hint</p>
+                }
+            </div>
+        }
+
+        <div class="email-tests">
+            <form method="post" asp-page="/Admin/Settings/Index" asp-page-handler="TestConnection" asp-route-returnTo="@Model.ReturnTo">
+                <button class="btn btn-outline btn-sm" type="submit">@Icons.Get("settings") Test connection</button>
+            </form>
+            <form method="post" asp-page="/Admin/Settings/Index" asp-page-handler="TestEmail" asp-route-returnTo="@Model.ReturnTo" class="email-test-send">
+                <label class="visually-hidden" for="TestEmailTo">Send a test email to</label>
+                <input class="input" id="TestEmailTo" name="TestEmailTo" type="email" value="@Model.TestEmailTo" placeholder="you@example.com" autocomplete="email" />
+                <button class="btn btn-green btn-sm" type="submit">@Icons.Get("mail") Send test email</button>
+            </form>
+        </div>
+
+        <div class="grid-2-even">
+            <table class="table settings-table">
+                <tr><td>Delivery method</td><td>@s.Email.DeliveryMethod @(s.Email.DeliveryMethod != s.Email.EffectiveDeliveryMethod ? $"→ {s.Email.EffectiveDeliveryMethod}" : "")</td></tr>
+                <tr><td>SMTP server</td><td>@(string.IsNullOrWhiteSpace(s.Email.SmtpHost) ? "— not set —" : $"{s.Email.SmtpHost}:{s.Email.SmtpPort}") (@s.Email.SmtpSecurity)</td></tr>
+                <tr><td>SMTP sign-in</td><td>@(s.Email.HasSmtpCredentials ? s.Email.SmtpUserName : "None")</td></tr>
+                <tr><td>Certificates</td><td>@(s.Email.AcceptInvalidCertificates ? "Any certificate accepted ⚠" : "Verified")@(s.Email.CheckCertificateRevocation ? "" : ", revocation not checked")</td></tr>
+                <tr><td>Pickup folder</td><td><code class="inline">@s.Email.PickupDirectory</code></td></tr>
+            </table>
+            <table class="table settings-table">
+                <tr><td>From</td><td>@s.Email.FromName &lt;@s.Email.FromAddress&gt;</td></tr>
+                <tr><td>Reply-to</td><td>@(s.Email.ReplyToAddress ?? "—")</td></tr>
+                <tr><td>Admin notifications to</td><td>@(s.Email.AdminRecipients.Count == 0 ? "⚠ none configured" : string.Join(", ", s.Email.AdminRecipients))</td></tr>
+                <tr><td>Customer status emails</td><td>@(s.Email.SendCustomerStatusUpdates ? "On" : "Off")</td></tr>
+                <tr><td>Last 7 days</td><td><a href="/admin/emails?status=Sent">@counts.Sent sent</a> · <a href="/admin/emails?status=Failed">@counts.Failed failed</a> · <a href="/admin/emails?status=Pending">@counts.Pending waiting</a> · <a href="/admin/emails?status=SavedToFolder">@counts.SavedToFolder saved to folder</a></td></tr>
+            </table>
+        </div>
+        <p class="small mt-2 mb-0"><a href="/admin/emails">Open the email log &rarr;</a> Every email the site sends is listed there with its status and any error from the mail server.</p>
+    </div>
+</section>

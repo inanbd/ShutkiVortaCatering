@@ -175,9 +175,11 @@ internal sealed class ManagedSettingsHandlers(
             _ => new SettingFieldValueDto(f, SettingValueFormat.ToDisplay(f, stored.Values.GetValueOrDefault(f.Key)), [], SecretState.Empty),
         }).ToList();
 
-        var labels = page.Fields.ToDictionary(f => f.Key, f => f.Label, StringComparer.OrdinalIgnoreCase);
+        var byKey = page.Fields.ToDictionary(f => f.Key, StringComparer.OrdinalIgnoreCase);
         var history = stored.History
-            .Select(h => new SettingChangeDto(LabelFor(labels, h.Key), h.OldValue, h.NewValue, h.ChangedBy, clock.ToBusinessTime(h.ChangedAtUtc)))
+            .Select(h => byKey.TryGetValue(h.Key, out var field)
+                ? new SettingChangeDto(field.Label, HistoryValue(field, h.OldValue), HistoryValue(field, h.NewValue), h.ChangedBy, clock.ToBusinessTime(h.ChangedAtUtc))
+                : new SettingChangeDto(h.Key, h.OldValue, h.NewValue, h.ChangedBy, clock.ToBusinessTime(h.ChangedAtUtc)))
             .ToList();
 
         return new SettingsPageDto(page, fields, stored.Revision, ToLocal(stored.LastChangedAtUtc), stored.LastChangedBy)
@@ -187,17 +189,16 @@ internal sealed class ManagedSettingsHandlers(
         };
     }
 
-    /// <summary>"Ordering:ClosedDays:1" → "Kitchen closed on".</summary>
-    private static string LabelFor(Dictionary<string, string> labels, string key)
+    /// <summary>Recorded values as admins typed them (8.25 rather than 0.0825; Yes/No for switches).</summary>
+    private static string? HistoryValue(SettingField field, string? value) => field.Kind switch
     {
-        if (labels.TryGetValue(key, out var label))
-        {
-            return label;
-        }
-
-        var colon = key.LastIndexOf(':');
-        return colon > 0 && labels.TryGetValue(key[..colon], out var listLabel) ? listLabel : key;
-    }
+        _ when string.IsNullOrEmpty(value) => value,
+        SettingKind.Secret or SettingKind.List or SettingKind.DaysOfWeek => value,
+        SettingKind.Bool => bool.TryParse(value, out var on) ? (on ? "On" : "Off") : value,
+        SettingKind.Percent => SettingValueFormat.ToDisplay(field, value) + "%",
+        SettingKind.Money => "$" + SettingValueFormat.ToDisplay(field, value),
+        _ => SettingValueFormat.ToDisplay(field, value),
+    };
 
     public async Task<int> Handle(UpdateSettingsPageCommand request, CancellationToken cancellationToken)
     {

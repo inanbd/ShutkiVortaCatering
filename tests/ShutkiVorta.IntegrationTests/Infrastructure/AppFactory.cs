@@ -18,13 +18,22 @@ public sealed class AppFactory : WebApplicationFactory<Program>
     private readonly string _sqlServerDatabase = $"ShutkiVortaTests_{Guid.NewGuid():N}";
     private readonly IReadOnlyDictionary<string, string?> _overrides;
 
-    public AppFactory(string provider, IReadOnlyDictionary<string, string?>? overrides = null)
+    private readonly bool _ownsDirectory;
+
+    /// <param name="directory">
+    /// Run against the SQLite database (and data-protection keys) in this folder, e.g. to restart the "same" site with other
+    /// configuration. The caller deletes it. By default every factory gets a new folder of its own.
+    /// </param>
+    public AppFactory(string provider, IReadOnlyDictionary<string, string?>? overrides = null, string? directory = null)
     {
         Provider = provider;
         _overrides = overrides ?? new Dictionary<string, string?>();
-        TempDirectory = Path.Combine(Path.GetTempPath(), "shutkivorta-tests", Guid.NewGuid().ToString("N"));
+        _ownsDirectory = directory is null;
+        TempDirectory = directory ?? NewDirectory();
         Directory.CreateDirectory(TempDirectory);
     }
+
+    public static string NewDirectory() => Path.Combine(Path.GetTempPath(), "shutkivorta-tests", Guid.NewGuid().ToString("N"));
 
     public string Provider { get; }
     public string TempDirectory { get; }
@@ -97,6 +106,11 @@ public sealed class AppFactory : WebApplicationFactory<Program>
             await using var command = connection.CreateCommand();
             command.CommandText = $"IF DB_ID('{_sqlServerDatabase}') IS NOT NULL BEGIN ALTER DATABASE [{_sqlServerDatabase}] SET SINGLE_USER WITH ROLLBACK IMMEDIATE; DROP DATABASE [{_sqlServerDatabase}]; END";
             await command.ExecuteNonQueryAsync();
+        }
+
+        if (!_ownsDirectory)
+        {
+            return;
         }
 
         try

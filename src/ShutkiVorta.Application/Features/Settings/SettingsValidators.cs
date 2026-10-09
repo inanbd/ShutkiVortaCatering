@@ -110,7 +110,7 @@ internal sealed class OrderingOptionsValidator : AbstractValidator<OrderingOptio
         RuleFor(x => x.MinimumDeliverySubtotal).InclusiveBetween(0, 10000);
         RuleFor(x => x.TaxRate).InclusiveBetween(0, 0.25m).WithMessage("Sales tax must be between 0% and 25%.");
         RuleFor(x => x.TaxRate)
-            .Must(rate => rate == 0 || rate >= 0.01m)
+            .Must(rate => rate <= 0 || rate >= 0.01m)
             .WithMessage(o => $"{o.TaxRate * 100:0.####}% looks too low. Enter the rate as a percentage — for Dallas type 8.25, not 0.0825.");
         RuleForEach(x => x.DeliveryZipPrefixes)
             .Must(z => z is { Length: >= 1 and <= 5 } && z.All(char.IsDigit))
@@ -156,8 +156,6 @@ internal sealed class EmailOptionsValidator : AbstractValidator<EmailOptions>
         RuleFor(x => x.FromAddress).NotEmpty().EmailAddress().MaximumLength(256);
         RuleFor(x => x.ReplyToAddress).EmailAddress().MaximumLength(256).When(x => !string.IsNullOrWhiteSpace(x.ReplyToAddress));
         RuleFor(x => x.AdminRecipients).Must(r => r.Count <= 20).WithMessage("Please list at most 20 addresses.");
-        RuleFor(x => x.AdminRecipients).NotEmpty().When(x => x.Enabled)
-            .WithMessage("Enter at least one address, otherwise nobody hears about new orders.");
         RuleForEach(x => x.AdminRecipients).EmailAddress().WithMessage("'{PropertyValue}' is not an email address.");
         RuleFor(x => x.Smtp.Host).MaximumLength(255)
             .Must(h => string.IsNullOrEmpty(h) || (!h.Contains("://") && !h.Any(char.IsWhiteSpace) && !h.Contains(':')))

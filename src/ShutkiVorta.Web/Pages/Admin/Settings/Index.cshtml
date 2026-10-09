@@ -1,137 +1,89 @@
 @page
 @model ShutkiVorta.Web.Pages.Admin.Settings.IndexModel
-@using ShutkiVorta.Application.Features.Emails
 @{
     var s = Model.Settings;
-    var report = s.EmailReport;
-    var counts = s.EmailLast7Days;
 }
-<p class="muted">Settings are stored in <code class="inline">appsettings.json</code> (or environment variables / user secrets) and take effect after the site restarts. Email settings live under the <code class="inline">"Email"</code> section.</p>
+<p class="settings-lead">Change how the website and the kitchen work. <strong>Changes apply immediately</strong> and are kept in the database, so they survive updates and restarts.</p>
 
-<section class="panel mb-3">
-    <div class="panel-head">
-        <h2>Email delivery</h2>
-        <span class="pill @(report.SendsRealEmail ? "pill-on" : "pill-warn")">@(report.SendsRealEmail ? "Sending real email" : "Not sending email")</span>
+@if (Model.Notices.PagesNeedingReview.Count > 0)
+{
+    <div class="alert alert-warn settings-notice" role="alert" data-settings-review>
+        <strong>Please check these settings:</strong>
+        @for (var i = 0; i < Model.Notices.PagesNeedingReview.Count; i++)
+        {
+            var p = Model.Notices.PagesNeedingReview[i];
+            <text>@(i == 0 ? "" : ", ")<a href="/admin/settings/@p.Slug">@p.Title</a></text>
+        }.
+        They were not found in the server configuration when this version was installed, so the built-in defaults were stored.
+        Open each page, correct anything that is wrong and save it.
     </div>
-    <div class="panel-body">
-        <p class="email-summary @(report.SendsRealEmail ? "ok" : "bad")"><strong>@report.Summary</strong></p>
+}
+@if (Model.Notices.RejectedKeys.Count > 0)
+{
+    <div class="alert alert-error settings-notice" role="alert" data-settings-rejected>
+        <strong>Some saved settings could not be used</strong> and their defaults are in effect: <code class="inline">@string.Join(", ", Model.Notices.RejectedKeys)</code>.
+        Open the page they belong to and save it again.
+    </div>
+}
+@if (Model.Notices.IgnoredConfigurationKeys.Count > 0)
+{
+    <div class="alert alert-info settings-notice" role="status" data-settings-ignored>
+        <strong>Ignored server configuration:</strong> appsettings.json or environment variables on the server set
+        <code class="inline">@string.Join(", ", Model.Notices.IgnoredConfigurationKeys)</code>, but the values saved here are used instead.
+        Ask whoever hosts the site to remove them, so nobody is misled.
+    </div>
+}
 
-        @if (report.Warnings.Count > 0)
-        {
-            <div class="alert alert-error">
-                <strong>Things to fix:</strong>
-                <ul class="mb-0">
-                    @foreach (var warning in report.Warnings)
-                    {
-                        <li>@warning</li>
-                    }
-                </ul>
-            </div>
-        }
-
-        @if (Model.TestResult is { } r)
-        {
-            <div class="alert @(r.Succeeded ? "alert-success" : r.Warning ? "alert-info" : "alert-error")" role="status">
-                <strong>@r.Action:</strong> @r.Message
-                @if (r.Steps.Count > 0)
+<div class="settings-cards">
+    @foreach (var card in Model.Cards)
+    {
+        var sp = card.Page;
+        var href = $"/admin/settings/{sp.Slug}";
+        <article class="settings-card">
+            <span class="settings-card-icon">@Icons.Get(sp.Icon)</span>
+            <div class="settings-card-body">
+                <h2><a href="@href">@sp.Title</a></h2>
+                @if (card.Summary.NeedsReview)
                 {
-                    <ul class="test-steps">
-                        @foreach (var step in r.Steps)
+                    <span class="pill pill-warn">Please check</span>
+                }
+                <p>@sp.Description</p>
+                @if (card.Facts.Count > 0)
+                {
+                    <ul class="settings-card-facts">
+                        @foreach (var fact in card.Facts)
                         {
-                            <li class="@(step.Succeeded ? "ok" : "bad")">@(step.Succeeded ? "✔" : "✖") <strong>@step.Name</strong> — @step.Detail</li>
+                            <li>
+                                @if (fact.Pill is not null)
+                                {
+                                    <span class="pill @fact.Pill">@fact.Text</span>
+                                }
+                                else
+                                {
+                                    @fact.Text
+                                }
+                            </li>
                         }
                     </ul>
                 }
-                @if (!string.IsNullOrWhiteSpace(r.Hint))
-                {
-                    <p class="mb-0 mt-1"><strong>What to try:</strong> @r.Hint</p>
-                }
             </div>
-        }
+            <div class="settings-card-foot">
+                <span class="small muted">@SettingsForm.LastChanged(card.Summary.LastChangedAtLocal, card.Summary.LastChangedBy)</span>
+                <a class="btn btn-outline btn-sm" href="@href" aria-label="Edit @sp.Title">@Icons.Get("edit") Edit</a>
+            </div>
+        </article>
+    }
+</div>
 
-        <div class="flex gap-1 wrap items-center mb-3">
-            <form method="post" asp-page-handler="TestConnection">
-                <button class="btn btn-outline btn-sm" type="submit">@Icons.Get("settings") Test connection</button>
-            </form>
-            <form method="post" asp-page-handler="TestEmail" class="flex gap-1 wrap items-center" style="flex:1;">
-                <input class="input" style="flex:1;min-width:220px;" name="TestEmailTo" type="email" value="@Model.TestEmailTo" placeholder="you@example.com" />
-                <button class="btn btn-green btn-sm" type="submit">@Icons.Get("mail") Send test email</button>
-            </form>
-        </div>
+<partial name="_EmailDiagnostics" model="Model.EmailDiagnostics" />
 
-        <div class="grid-2-even">
-            <table class="table settings-table">
-                <tr><td>Delivery method</td><td>@s.Email.DeliveryMethod @(s.Email.DeliveryMethod != s.Email.EffectiveDeliveryMethod ? $"→ {s.Email.EffectiveDeliveryMethod}" : "")</td></tr>
-                <tr><td>SMTP server</td><td>@(string.IsNullOrWhiteSpace(s.Email.SmtpHost) ? "— not set —" : $"{s.Email.SmtpHost}:{s.Email.SmtpPort}") (@s.Email.SmtpSecurity)</td></tr>
-                <tr><td>SMTP sign-in</td><td>@(s.Email.HasSmtpCredentials ? s.Email.SmtpUserName : "None")</td></tr>
-                <tr><td>Certificates</td><td>@(s.Email.AcceptInvalidCertificates ? "Any certificate accepted ⚠" : "Verified")@(s.Email.CheckCertificateRevocation ? "" : ", revocation not checked")</td></tr>
-                <tr><td>Pickup folder</td><td><code class="inline">@s.Email.PickupDirectory</code></td></tr>
-            </table>
-            <table class="table settings-table">
-                <tr><td>From</td><td>@s.Email.FromName &lt;@s.Email.FromAddress&gt;</td></tr>
-                <tr><td>Reply-to</td><td>@(s.Email.ReplyToAddress ?? "—")</td></tr>
-                <tr><td>Admin notifications to</td><td>@(s.Email.AdminRecipients.Count == 0 ? "⚠ none configured" : string.Join(", ", s.Email.AdminRecipients))</td></tr>
-                <tr><td>Customer status emails</td><td>@(s.Email.SendCustomerStatusUpdates ? "On" : "Off")</td></tr>
-                <tr><td>Last 7 days</td><td><a href="/admin/emails?status=Sent">@counts.Sent sent</a> · <a href="/admin/emails?status=Failed">@counts.Failed failed</a> · <a href="/admin/emails?status=Pending">@counts.Pending waiting</a> · <a href="/admin/emails?status=SavedToFolder">@counts.SavedToFolder saved to folder</a></td></tr>
-            </table>
-        </div>
-        <p class="small mt-2 mb-0"><a href="/admin/emails">Open the email log &rarr;</a> Every email the site sends is listed there with its status and any error from the mail server.</p>
+<section class="panel">
+    <div class="panel-head"><h2>Server</h2><span class="pill pill-off">appsettings.json</span></div>
+    <div class="panel-body">
+        <p class="muted mt-0">A few things are part of the server setup and are changed by whoever hosts the site, not here: the database connection, data-protection keys (which also protect the saved SMTP password), logging, the email pickup folder and the first admin account.</p>
+        <table class="table settings-table">
+            <tr><td>Database</td><td>@s.DatabaseProvider<br /><span class="small muted">@s.DatabaseSource</span></td></tr>
+            <tr><td>Sitemap / robots</td><td><a href="/sitemap.xml" target="_blank" rel="noopener">sitemap.xml</a> &middot; <a href="/robots.txt" target="_blank" rel="noopener">robots.txt</a> <span class="small muted">(updated automatically when the menu or website settings change)</span></td></tr>
+        </table>
     </div>
 </section>
-
-<div class="grid-2-even">
-    <section class="panel">
-        <div class="panel-head"><h2>Ordering</h2><span class="pill @(s.Ordering.AcceptingOrders ? "pill-on" : "pill-off")">@(s.Ordering.AcceptingOrders ? "Accepting orders" : "Paused")</span></div>
-        <div class="panel-body">
-            <table class="table settings-table">
-                <tr><td>Lead time</td><td>@s.Ordering.MinimumLeadTimeHours hours (book up to @s.Ordering.MaxDaysInAdvance days ahead)</td></tr>
-                <tr><td>Time slots</td><td>@s.Ordering.FirstSlot – @s.Ordering.LastSlot, every @s.Ordering.SlotIntervalMinutes min</td></tr>
-                <tr><td>Closed days</td><td>@(s.Ordering.ClosedDays.Count == 0 ? "—" : string.Join(", ", s.Ordering.ClosedDays))</td></tr>
-                <tr><td>Delivery fee</td><td>@Ui.Money(s.Ordering.DeliveryFee)@(s.Ordering.FreeDeliveryThreshold is { } t ? $" (free over {Ui.Money(t)})" : "")</td></tr>
-                <tr><td>Delivery minimum</td><td>@Ui.Money(s.Ordering.MinimumDeliverySubtotal)</td></tr>
-                <tr><td>Delivery ZIP prefixes</td><td>@(s.Ordering.DeliveryZipPrefixes.Count == 0 ? "Any" : string.Join(", ", s.Ordering.DeliveryZipPrefixes))</td></tr>
-                <tr><td>Sales tax</td><td>@((s.Ordering.TaxRate * 100).ToString("0.###"))%@(s.Ordering.TaxDeliveryFee ? " (incl. delivery)" : "")</td></tr>
-                <tr><td>Payment</td><td>@s.Ordering.PaymentInstructions</td></tr>
-            </table>
-        </div>
-    </section>
-
-    <section class="panel">
-        <div class="panel-head"><h2>Restaurant (wholesale) orders</h2><span class="pill @(s.Wholesale.AcceptingRequests ? "pill-on" : "pill-off")">@(s.Wholesale.AcceptingRequests ? "Accepting requests" : "Paused")</span></div>
-        <div class="panel-body">
-            <table class="table settings-table">
-                <tr><td>Default discount</td><td>@s.Wholesale.DiscountPercent.ToString("0.##")% off retail (unless an item has its own wholesale price)</td></tr>
-                <tr><td>Per item, per delivery</td><td>min. @Ui.Number(s.Wholesale.MinimumQuantityPerItem) lb, in @Ui.Number(s.Wholesale.QuantityStep) lb steps</td></tr>
-                <tr><td>Minimum per delivery</td><td>@Ui.Money(s.Wholesale.MinimumSubtotalPerDelivery)</td></tr>
-                <tr><td>Delivery fee</td><td>@(s.Wholesale.DeliveryFee == 0 ? "Free" : Ui.Money(s.Wholesale.DeliveryFee))</td></tr>
-                <tr><td>Lead time</td><td>@s.Wholesale.LeadTimeDays days before the first delivery</td></tr>
-                <tr><td>Order generation</td><td>@s.Wholesale.GenerateDaysAhead days ahead @(s.Wholesale.AutoGenerate ? "(automatic, hourly)" : "(manual only)")</td></tr>
-            </table>
-        </div>
-    </section>
-
-    <section class="panel">
-        <div class="panel-head"><h2>Business</h2></div>
-        <div class="panel-body">
-            <table class="table settings-table">
-                <tr><td>Name</td><td>@s.Business.Name &middot; <span class="bn">@s.Business.BengaliName</span></td></tr>
-                <tr><td>Phone / email</td><td>@s.Business.Phone &middot; @s.Business.Email</td></tr>
-                <tr><td>Address</td><td>@s.Business.FullAddress</td></tr>
-                <tr><td>Hours</td><td>@s.Business.OpeningHoursText</td></tr>
-                <tr><td>Time zone</td><td>@s.Business.TimeZoneId</td></tr>
-            </table>
-        </div>
-    </section>
-
-    <section class="panel">
-        <div class="panel-head"><h2>Website &amp; SEO</h2></div>
-        <div class="panel-body">
-            <table class="table settings-table">
-                <tr><td>Base URL</td><td>@(string.IsNullOrWhiteSpace(s.Site.BaseUrl) ? "(auto: current host)" : s.Site.BaseUrl)</td></tr>
-                <tr><td>Search engine indexing</td><td>@(s.Site.AllowSearchEngineIndexing ? "Allowed" : "Blocked (staging mode)")</td></tr>
-                <tr><td>Sitemap / robots</td><td><a href="/sitemap.xml" target="_blank">sitemap.xml</a> &middot; <a href="/robots.txt" target="_blank">robots.txt</a> (auto-updated on menu changes)</td></tr>
-                <tr><td>Database</td><td>@s.DatabaseProvider<br /><span class="small muted">@s.DatabaseSource</span></td></tr>
-            </table>
-        </div>
-    </section>
-</div>

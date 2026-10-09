@@ -1,0 +1,179 @@
+@model ShutkiVorta.Web.Pages.Admin.Settings.SettingFieldView
+@using System.Globalization
+@using ShutkiVorta.Application.Common.Settings
+@using ShutkiVorta.Application.Features.Settings
+@*
+    One setting in the settings editor. The input NAME is always the setting key (e.g. "Email:Smtp:Port"); see the form contract
+    in Edit.cshtml.cs. Values shown are the stored ones, or exactly what was posted when the form comes back with errors.
+*@
+@{
+    var f = Model.Field;
+    string? Num(decimal? value) => value?.ToString("0.######", CultureInfo.InvariantCulture);
+    var invalid = Model.HasErrors ? "true" : null;
+    var inputCss = Model.HasErrors ? "input input-validation-error" : "input";
+    var kind = f.Kind.ToString().ToLowerInvariant();
+    var choices = Model.Setting.Choices;
+}
+<div class="field setting setting-@kind@(Model.IsWide ? " full" : null)@(Model.HasErrors ? " has-error" : null)" data-setting="@f.Key">
+    @switch (f.Kind)
+    {
+        case SettingKind.Bool:
+            <label class="switch" for="@Model.Id">
+                <input type="checkbox" role="switch" id="@Model.Id" name="@f.Key" value="true" checked="@Model.IsChecked"
+                       aria-describedby="@Model.DescribedBy" aria-invalid="@invalid" />
+                <span class="switch-track" aria-hidden="true"></span>
+                <span class="switch-label">@f.Label</span>
+            </label>
+            break;
+
+        case SettingKind.DaysOfWeek:
+            <fieldset class="setting-days" id="@Model.Id" aria-describedby="@Model.DescribedBy">
+                <legend class="label">@f.Label</legend>
+                <div class="weekday-picker">
+                    @foreach (var choice in choices)
+                    {
+                        var on = Model.Values.Contains(choice.Value, StringComparer.OrdinalIgnoreCase);
+                        <label class="weekday" title="@choice.Label">
+                            <input type="checkbox" name="@f.Key" value="@choice.Value" checked="@on" />
+                            <span><abbr title="@choice.Label">@(choice.Label[..Math.Min(3, choice.Label.Length)])</abbr></span>
+                        </label>
+                    }
+                </div>
+            </fieldset>
+            break;
+
+        default:
+            <label for="@Model.Id">@f.Label</label>
+            switch (f.Kind)
+            {
+                case SettingKind.Multiline:
+                    <textarea class="@inputCss" id="@Model.Id" name="@f.Key" rows="3" placeholder="@f.Placeholder"
+                              aria-describedby="@Model.DescribedBy" aria-invalid="@invalid">@Model.Value</textarea>
+                    break;
+
+                case SettingKind.List:
+                    var lines = Model.ListText.Split('\n').Length;
+                    <textarea class="@inputCss setting-list" id="@Model.Id" name="@f.Key" rows="@(Math.Clamp(lines + 1, 3, 10))"
+                              placeholder="@f.Placeholder" spellcheck="false"
+                              aria-describedby="@Model.DescribedBy" aria-invalid="@invalid">@Model.ListText</textarea>
+                    break;
+
+                case SettingKind.Email:
+                    <input class="@inputCss" type="email" id="@Model.Id" autocomplete="off" name="@f.Key" value="@Model.Value" placeholder="@f.Placeholder"
+                           inputmode="email" spellcheck="false" aria-describedby="@Model.DescribedBy" aria-invalid="@invalid" />
+                    break;
+
+                case SettingKind.Url:
+                    <input class="@inputCss" type="url" id="@Model.Id" autocomplete="off" name="@f.Key" value="@Model.Value" placeholder="@f.Placeholder"
+                           inputmode="url" spellcheck="false" aria-describedby="@Model.DescribedBy" aria-invalid="@invalid" />
+                    break;
+
+                case SettingKind.Phone:
+                    <input class="@inputCss" type="tel" id="@Model.Id" autocomplete="off" name="@f.Key" value="@Model.Value" placeholder="@f.Placeholder"
+                           aria-describedby="@Model.DescribedBy" aria-invalid="@invalid" />
+                    break;
+
+                case SettingKind.Integer:
+                    <input class="@inputCss input-number" type="number" id="@Model.Id" name="@f.Key" value="@Model.Value" placeholder="@f.Placeholder"
+                           inputmode="numeric" min="@Num(f.Min)" max="@Num(f.Max)" step="@(Num(f.Step) ?? "1")"
+                           aria-describedby="@Model.DescribedBy" aria-invalid="@invalid" />
+                    break;
+
+                case SettingKind.Decimal:
+                    <input class="@inputCss input-number" type="number" id="@Model.Id" name="@f.Key" value="@Model.Value" placeholder="@f.Placeholder"
+                           inputmode="decimal" min="@Num(f.Min)" max="@Num(f.Max)" step="@(Num(f.Step) ?? "any")"
+                           aria-describedby="@Model.DescribedBy" aria-invalid="@invalid" />
+                    break;
+
+                case SettingKind.Money:
+                    <div class="input-affix@(Model.HasErrors ? " input-validation-error" : null)">
+                        <span class="affix" aria-hidden="true">$</span>
+                        <input class="input input-number" type="number" id="@Model.Id" name="@f.Key" value="@Model.Value" placeholder="@f.Placeholder"
+                               inputmode="decimal" min="@Num(f.Min)" max="@Num(f.Max)" step="@(Num(f.Step) ?? "0.01")"
+                               aria-describedby="@Model.DescribedBy" aria-invalid="@invalid" />
+                    </div>
+                    break;
+
+                case SettingKind.Percent:
+                    <div class="input-affix@(Model.HasErrors ? " input-validation-error" : null)">
+                        <input class="input input-number" type="number" id="@Model.Id" name="@f.Key" value="@Model.Value" placeholder="@f.Placeholder"
+                               inputmode="decimal" min="@Num(f.Min)" max="@Num(f.Max)" step="@(Num(f.Step) ?? "any")"
+                               aria-describedby="@Model.DescribedBy" aria-invalid="@invalid" />
+                        <span class="affix" aria-hidden="true">%</span>
+                    </div>
+                    break;
+
+                case SettingKind.Time:
+                    <input class="@inputCss input-time" type="time" id="@Model.Id" name="@f.Key" value="@Model.Value" step="60"
+                           aria-describedby="@Model.DescribedBy" aria-invalid="@invalid" />
+                    break;
+
+                case SettingKind.Select or SettingKind.TimeZone:
+                    var listed = choices.Any(c => string.Equals(c.Value, Model.Value, StringComparison.OrdinalIgnoreCase));
+                    <select class="@inputCss" id="@Model.Id" name="@f.Key" aria-describedby="@Model.DescribedBy" aria-invalid="@invalid">
+                        @if (!listed)
+                        {
+                            <option value="@Model.Value" selected>@(string.IsNullOrEmpty(Model.Value) ? "Choose…" : $"{Model.Value} (not in the list)")</option>
+                        }
+                        @foreach (var choice in choices)
+                        {
+                            <option value="@choice.Value" selected="@(string.Equals(choice.Value, Model.Value, StringComparison.OrdinalIgnoreCase))">@choice.Label</option>
+                        }
+                    </select>
+                    break;
+
+                case SettingKind.Secret:
+                    var state = Model.Setting.Secret;
+                    <div class="secret-input">
+                        <input class="@inputCss" type="password" id="@Model.Id" name="@f.Key" value="" autocomplete="new-password" spellcheck="false"
+                               placeholder="@(state == SecretState.Empty ? "Not set" : "Leave blank to keep the saved one")"
+                               aria-describedby="@Model.DescribedBy" aria-invalid="@invalid" data-secret-input />
+                        @switch (state)
+                        {
+                            case SecretState.Saved:
+                                <span class="pill pill-on secret-state">Saved <span aria-hidden="true">●●●●</span></span>
+                                break;
+                            case SecretState.Unreadable:
+                                <span class="pill pill-bad secret-state">Saved but unreadable — please re-enter</span>
+                                break;
+                            default:
+                                <span class="pill pill-off secret-state">Not set</span>
+                                break;
+                        }
+                    </div>
+                    @if (state != SecretState.Empty)
+                    {
+                        <label class="check secret-clear">
+                            <input type="checkbox" name="@(SettingsForm.ClearPrefix + f.Key)" value="true" checked="@Model.ClearChecked" data-secret-clear="@Model.Id" />
+                            Remove saved @f.Label.ToLowerInvariant()
+                        </label>
+                    }
+                    break;
+
+                default:
+                    @* autocomplete=off: browsers must not fill the SMTP user name with the admin's own sign-in. *@
+                    <input class="@inputCss" type="text" id="@Model.Id" name="@f.Key" value="@Model.Value" placeholder="@f.Placeholder"
+                           autocomplete="off" spellcheck="@(f.Key.EndsWith("UserName", StringComparison.Ordinal) ? "false" : null)"
+                           aria-describedby="@Model.DescribedBy" aria-invalid="@invalid" />
+                    break;
+            }
+            break;
+    }
+    @if (!string.IsNullOrEmpty(Model.Help))
+    {
+        <span class="hint" id="@Model.HelpId">@Model.Help</span>
+    }
+    @if (Model.HasErrors || Model.SecretTyped)
+    {
+        <span class="field-validation-error" id="@Model.ErrorId">
+            @foreach (var error in Model.Errors)
+            {
+                <span class="error-line">@error</span>
+            }
+            @if (Model.SecretTyped)
+            {
+                <span class="error-line">The new @f.Label.ToLowerInvariant() was not saved because of the errors on this page. Please type it again.</span>
+            }
+        </span>
+    }
+</div>

@@ -60,6 +60,48 @@
   if (target) target.addEventListener('input', refresh);
   refresh();
 
+  // Settings editor: show when there are unsaved changes and warn before leaving the page with them.
+  const settingsForm = document.querySelector('form[data-settings-form]');
+  if (settingsForm) {
+    const status = settingsForm.querySelector('[data-dirty-status]');
+    let submitting = false;
+    const markDirty = () => {
+      if (settingsForm.hasAttribute('data-dirty') && status && status.textContent) return;
+      settingsForm.setAttribute('data-dirty', 'true');
+      if (status) status.textContent = 'You have unsaved changes.';
+    };
+    settingsForm.addEventListener('input', markDirty);
+    settingsForm.addEventListener('change', markDirty);
+    settingsForm.addEventListener('submit', () => { submitting = true; });
+    window.addEventListener('beforeunload', (event) => {
+      if (submitting || !settingsForm.hasAttribute('data-dirty')) return;
+      event.preventDefault();
+      event.returnValue = '';
+    });
+
+    // "Remove saved password" empties and locks the password box so it is clear what will happen.
+    settingsForm.querySelectorAll('input[data-secret-clear]').forEach((box) => {
+      const input = document.getElementById(box.dataset.secretClear);
+      if (!input) return;
+      const sync = () => {
+        input.disabled = box.checked;
+        if (box.checked) input.value = '';
+      };
+      box.addEventListener('change', sync);
+      sync();
+    });
+
+    // A link in the error summary may point into the collapsed "Advanced settings".
+    settingsForm.querySelectorAll('.settings-error-summary a[href^="#"]').forEach((link) => {
+      link.addEventListener('click', () => {
+        const target = document.getElementById(link.getAttribute('href').slice(1));
+        const details = target && target.closest('details');
+        if (details) details.open = true;
+        if (target && target.focus) setTimeout(() => target.focus(), 0);
+      });
+    });
+  }
+
   // Image preview before upload.
   const fileInput = document.querySelector('[data-image-input]');
   const image = document.querySelector('[data-image-preview]');

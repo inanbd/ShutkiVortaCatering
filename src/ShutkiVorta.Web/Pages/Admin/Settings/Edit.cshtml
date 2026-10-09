@@ -1,0 +1,133 @@
+@page "/admin/settings/{slug}"
+@model ShutkiVorta.Web.Pages.Admin.Settings.EditModel
+@{
+    var sp = Model.Settings.Page;
+    var groups = Model.Fields.Where(f => !f.Field.Advanced).GroupBy(f => f.Field.Group).ToList();
+    var advanced = Model.Fields.Where(f => f.Field.Advanced).GroupBy(f => f.Field.Group).ToList();
+    var advancedCount = advanced.Sum(g => g.Count());
+    var advancedHasErrors = advanced.Any(g => g.Any(f => f.HasErrors));
+    var fieldErrors = Model.FieldsWithErrors;
+    var hasErrors = !ViewData.ModelState.IsValid;
+    var isEmail = Model.EmailDiagnostics is not null;
+}
+@section Actions {
+    <a class="btn btn-outline btn-sm" href="/admin/settings">&larr; All settings</a>
+}
+
+<div class="settings-intro">
+    <span class="settings-card-icon">@Icons.Get(sp.Icon)</span>
+    <div>
+        <p class="mb-0">@sp.Description</p>
+        <p class="small muted mb-0" data-last-changed>@SettingsForm.LastChanged(Model.Settings.LastChangedAtLocal, Model.Settings.LastChangedBy)</p>
+    </div>
+</div>
+
+@if (Model.Settings.NeedsReview && !Model.Saved)
+{
+    <div class="alert alert-warn settings-review" role="alert" data-settings-review>
+        <strong>Please check these settings.</strong> They were not found in the server configuration when this version was installed,
+        so the built-in defaults were stored. Correct anything that is wrong, then press <strong>Save changes</strong> (even if nothing changed) to confirm them.
+    </div>
+}
+
+@if (Model.Saved && !hasErrors)
+{
+    <div class="alert alert-success settings-saved" role="status">
+        <strong>Settings saved.</strong> The changes are live on the website now.
+        @if (isEmail)
+        {
+            <span>Use <a href="#email-diagnostics"><strong>Test connection</strong></a> below to check that the mail server accepts them.</span>
+        }
+    </div>
+}
+
+<form method="post" class="settings-form" novalidate autocomplete="off" data-settings-form data-dirty="@(hasErrors ? "true" : null)">
+    <input name="@SettingsForm.RevisionField" type="hidden" value="@Model.Revision" />
+
+    <div asp-validation-summary="ModelOnly" class="validation-summary-errors" role="alert"></div>
+    @if (fieldErrors.Count > 0)
+    {
+        <div class="alert alert-error settings-error-summary" role="alert">
+            <strong>Nothing was saved yet.</strong> Please check
+            @for (var i = 0; i < fieldErrors.Count; i++)
+            {
+                var f = fieldErrors[i];
+                var separator = i == 0 ? "" : i == fieldErrors.Count - 1 ? " and " : ", ";
+                <text>@separator<a href="#@f.Id">@f.Field.Label</a></text>
+            }.
+        </div>
+    }
+
+    @foreach (var group in groups)
+    {
+        <fieldset class="panel settings-group">
+            <legend>@group.Key</legend>
+            <div class="settings-fields">
+                @foreach (var field in group)
+                {
+                    <partial name="_SettingField" model="field" />
+                }
+            </div>
+        </fieldset>
+    }
+
+    @if (advancedCount > 0)
+    {
+        <details class="panel settings-advanced" open="@advancedHasErrors">
+            <summary>
+                <span class="settings-advanced-title">Advanced settings</span>
+                <span class="small muted">@advancedCount rarely needed @(advancedCount == 1 ? "setting" : "settings")</span>
+            </summary>
+            @foreach (var group in advanced)
+            {
+                <fieldset class="settings-advanced-group">
+                    <legend class="form-section">@group.Key</legend>
+                    <div class="settings-fields">
+                        @foreach (var field in group)
+                        {
+                            <partial name="_SettingField" model="field" />
+                        }
+                    </div>
+                </fieldset>
+            }
+        </details>
+    }
+
+    <div class="settings-savebar">
+        <span class="settings-savebar-status" data-dirty-status aria-live="polite">@(hasErrors ? "Not saved: please fix the errors above." : "")</span>
+        <a class="btn btn-outline" href="/admin/settings">Cancel</a>
+        <button class="btn btn-primary" type="submit">@Icons.Get("check") Save changes</button>
+    </div>
+</form>
+
+@if (Model.EmailDiagnostics is { } diagnostics)
+{
+    <partial name="_EmailDiagnostics" model="diagnostics" />
+}
+
+@if (Model.Settings.History.Count > 0)
+{
+    <details class="panel settings-history" data-settings-history>
+        <summary>
+            <span class="settings-advanced-title">Recent changes</span>
+            <span class="small muted">last @Model.Settings.History.Count @(Model.Settings.History.Count == 1 ? "change" : "changes")</span>
+        </summary>
+        <div class="table-wrap">
+            <table class="table settings-history-table">
+                <thead><tr><th>When</th><th>Setting</th><th>From</th><th>To</th><th>By</th></tr></thead>
+                <tbody>
+                    @foreach (var change in Model.Settings.History)
+                    {
+                        <tr>
+                            <td class="nowrap">@ShutkiVorta.Application.Common.Formatting.Format.DateTime(change.ChangedAtLocal)</td>
+                            <td>@change.Label</td>
+                            <td>@(string.IsNullOrEmpty(change.OldValue) ? "—" : change.OldValue)</td>
+                            <td>@(string.IsNullOrEmpty(change.NewValue) ? "—" : change.NewValue)</td>
+                            <td>@change.ChangedBy</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </details>
+}
