@@ -1,6 +1,10 @@
 @page "/about"
 @model AboutModel
 
+@section Head {
+    <link rel="stylesheet" href="~/css/kitchen.css" asp-append-version="true" />
+}
+
 <section class="page-banner">
     <div class="container">
         <span class="bn-title" lang="bn">আমাদের গল্প</span>
@@ -21,6 +25,27 @@
         <figure class="framed">
             <img src="~/images/site/assorted.webp" alt="Assorted Bangladeshi vortas served together on a plate" width="900" height="900" loading="lazy" />
         </figure>
+    </div>
+</section>
+
+<section class="section section-cream" id="mothers" aria-labelledby="mothers-title">
+    <div class="container split">
+        <figure class="framed captioned heritage-photo">
+            <div class="framed-media"><img src="~/images/kitchen/dhaka-courtyard-kitchen-1953.webp" alt="Black-and-white photograph of women cooking in an outdoor courtyard kitchen in Dhaka, with clay pots and a grinding stone" width="1000" height="669" loading="lazy" /></div>
+            <figcaption>A courtyard kitchen in Dhaka, 1953. For generations, Bangladeshi cooking has been carried by its mothers.</figcaption>
+        </figure>
+        <div>
+            <p class="quote-bn" lang="bn">মায়ের হাতের স্বাদ</p>
+            <span class="eyebrow">Who cooks for you</span>
+            <h2 id="mothers-title">Mothers in our kitchen</h2>
+            <p>The vortas we grew up on were never made by chefs. They were made by our mothers, nanis and khalas &mdash; in courtyard kitchens and small city flats, by feel and by taste, from recipes nobody ever wrote down.</p>
+            <p>That is why our kitchen is built around the same hands. Our vortas are made by Bangladeshi mothers and homemakers from across @Model.Business.ServiceArea, each bringing the local flavors of her home district, from Chattogram shutki to the fiery chilies of Sylhet. We plan shifts around family life, pay fairly for skilled work, and keep a kitchen where Bangla is spoken and recipes are respected.</p>
+            <p>The recipes come from home; the cooking does not. Every order is made in our health-inspected, permitted kitchen in @Model.Business.City by food-handler-certified cooks, then sealed, labeled and dated.</p>
+            <div class="flex wrap gap-1 mt-3">
+                <a class="btn btn-green" href="/kitchen">Meet our kitchen @Icons.Get("arrow-right")</a>
+                <a class="btn btn-outline" href="/kitchen#join">Cook with us</a>
+            </div>
+        </div>
     </div>
 </section>
 
@@ -57,5 +82,16 @@
     <div class="container container-narrow">
         <h2 style="font-size:1.6rem;">Photo credits</h2>
         <p class="small muted">Food photographs on this site are shared under Creative Commons licenses via Wikimedia Commons. Thank you to the photographers: Ferdous (CC BY-SA 3.0), Sm faysal (CC BY-SA 4.0), Atudu (CC BY-SA 4.0), Deeptoe26 (CC BY-SA 4.0), Bellayet (CC BY-SA 3.0), Kritzolina (CC BY-SA 4.0), Dolon Prova (CC BY-SA 4.0) and রিজওয়ান আহমেদ (CC BY-SA 4.0). Photos may be cropped and resized.</p>
+        <p class="small muted mb-0">Photographs of home cooking and kitchens on <a href="/kitchen">Our Kitchen</a>, the home page and this page are illustrative (they are not of our own kitchen) and also come from Wikimedia Commons:</p>
+        <ul class="photo-credit-list small muted">
+            <li>&ldquo;<a href="https://commons.wikimedia.org/wiki/File:Cooking_rice.jpg" rel="noopener">Cooking rice</a>&rdquo; by Zaheed Sarwer Khan, <a href="https://creativecommons.org/licenses/by/4.0/" rel="license noopener">CC BY 4.0</a></li>
+            <li>&ldquo;<a href="https://commons.wikimedia.org/wiki/File:Rural_Kitchen_Setup.jpg" rel="noopener">Rural Kitchen Setup</a>&rdquo; by Muhammad Amdad Hossain, <a href="https://creativecommons.org/licenses/by-sa/4.0/" rel="license noopener">CC BY-SA 4.0</a></li>
+            <li>&ldquo;<a href="https://commons.wikimedia.org/wiki/File:Batan_(stone)_and_u%C3%B1a,_the_traditional_utensils,_are_in_use_of_grinding_spices_at_a_Bengali_household_in_West_Bengal,_India.jpg" rel="noopener">Batan (stone) and uña, the traditional utensils, are in use of grinding spices at a Bengali household in West Bengal, India</a>&rdquo; by Billjones94 (photo by Yogabrata Chakraborty), <a href="https://creativecommons.org/licenses/by-sa/4.0/" rel="license noopener">CC BY-SA 4.0</a></li>
+            <li>&ldquo;<a href="https://commons.wikimedia.org/wiki/File:Spice_market_of_Dhap_Sultanganj_Hat.jpg" rel="noopener">Spice market of Dhap Sultanganj Hat</a>&rdquo; by ROCKY, <a href="https://creativecommons.org/licenses/by-sa/4.0/" rel="license noopener">CC BY-SA 4.0</a></li>
+            <li>&ldquo;<a href="https://commons.wikimedia.org/wiki/File:Home_made_Dal_vorta_(Mashed_lentil).jpg" rel="noopener">Home made Dal vorta (Mashed lentil)</a>&rdquo; by Sm faysal, <a href="https://creativecommons.org/licenses/by-sa/4.0/" rel="license noopener">CC BY-SA 4.0</a></li>
+            <li>&ldquo;<a href="https://commons.wikimedia.org/wiki/File:Homemade_tomato_bhorta_from_Bangladesh.jpg" rel="noopener">Homemade tomato bhorta from Bangladesh</a>&rdquo; by Sm faysal, <a href="https://creativecommons.org/licenses/by-sa/4.0/" rel="license noopener">CC BY-SA 4.0</a></li>
+            <li>&ldquo;<a href="https://commons.wikimedia.org/wiki/File:Women_cooking_at_outdoor_kitchen_in_Dhaka,_Bangladesh.jpg" rel="noopener">Women cooking at outdoor kitchen in Dhaka, Bangladesh</a>&rdquo; by Khaleq, Clarence W. Sorensen Collection (American Geographical Society Library, UW&ndash;Milwaukee), public domain</li>
+            <li>&ldquo;<a href="https://commons.wikimedia.org/wiki/File:DSCF0807_A_busy_market_kitchen_worker_carefully_preparing_fresh_vegetables_at_a_stainless-steel_counter_lined_with_squeeze_bottles_and_ingredients.jpg" rel="noopener">DSCF0807 A busy market kitchen worker carefully preparing fresh vegetables at a stainless-steel counter lined with squeeze bottles and ingredients</a>&rdquo; by PattayaPatrol, <a href="https://creativecommons.org/licenses/by-sa/4.0/" rel="license noopener">CC BY-SA 4.0</a></li>
+        </ul>
     </div>
 </section>

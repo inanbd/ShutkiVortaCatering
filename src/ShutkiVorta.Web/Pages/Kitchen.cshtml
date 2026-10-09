@@ -1,0 +1,332 @@
+@page "/kitchen"
+@model KitchenModel
+@{
+    var b = Model.Business;
+    var phoneHref = "tel:" + new string(b.Phone.Where(c => char.IsDigit(c) || c == '+').ToArray());
+}
+
+@section Head {
+    <link rel="stylesheet" href="~/css/kitchen.css" asp-append-version="true" />
+    <script>
+        // Arriving at a section such as #join (e.g. after posting the form): web fonts loading during a smooth
+        // scroll shift the layout and the page overshoots. Jump instead, and re-align once the fonts are in.
+        if (location.hash.length > 1) {
+            const root = document.documentElement;
+            root.style.scrollBehavior = "auto";
+            addEventListener("load", () => (document.fonts ? document.fonts.ready : Promise.resolve()).then(() => {
+                document.getElementById(decodeURIComponent(location.hash.slice(1)))?.scrollIntoView({ block: "start" });
+                root.style.scrollBehavior = "";
+            }));
+        }
+    </script>
+}
+
+<section class="hero kitchen-hero" aria-labelledby="kitchen-title">
+    <div class="hero-media">
+        <img src="~/images/kitchen/mother-at-clay-stove.webp" alt="A Bangladeshi homemaker in a red sari cooking rice on a traditional clay stove" width="1280" height="853" fetchpriority="high" />
+    </div>
+    <partial name="_AlponaRing" />
+    <div class="container">
+        <div class="hero-content">
+            <span class="eyebrow">Our Kitchen &middot; @b.City</span>
+            <p class="hero-bn" lang="bn">মায়ের হাতের স্বাদ</p>
+            <p class="kitchen-hero-gloss">&ldquo;The taste of a mother&rsquo;s hands&rdquo;</p>
+            <h1 id="kitchen-title">Made by Bangladeshi mothers, <em>the way they make it at home</em></h1>
+            <p class="hero-lead">Every vorta we sell is roasted, pounded and seasoned by Bangladeshi mothers and homemakers from the @b.ServiceArea community &mdash; in small batches, with the recipes they grew up with, in our health-inspected @b.City kitchen.</p>
+            <div class="hero-actions">
+                <a class="btn btn-primary btn-lg" href="/menu">@Icons.Get("bowl") Taste their vortas</a>
+                <a class="btn btn-ghost-light btn-lg" href="#join">Cook with us</a>
+            </div>
+            <ul class="hero-badges">
+                <li>Home-style recipes</li>
+                <li>Small batches, made to order</li>
+                <li>Health-inspected kitchen</li>
+            </ul>
+        </div>
+    </div>
+    <div class="bunting" aria-hidden="true"></div>
+</section>
+
+<section class="section" aria-labelledby="promise-title">
+    <div class="container split">
+        <div>
+            <span class="eyebrow">Our promise</span>
+            <h2 id="promise-title">Vorta the way it tastes at home</h2>
+            <p class="drop-cap">Ask anyone from Bangladesh where the best vorta comes from and the answer is never a restaurant. It comes from home &mdash; from Ammu, Nani or Khala, who roasts a few eggplants on the flame, pounds garlic and chilies on the shil-pata without measuring a thing, and gets it right every single time.</p>
+            <p>That is the taste we want to share, so that is who cooks it. Our vortas are made by Bangladeshi mothers and homemakers who live here in @b.ServiceArea. They cook in small batches, the home-made way: roasting over an open flame, pounding by hand, and finishing with raw mustard oil, fresh green chilies and a squeeze of lime.</p>
+            <p>We don&rsquo;t turn their cooking into a factory recipe. Each vorta keeps the method and balance of the home it comes from &mdash; we simply make sure it is cooked the same careful way every time, in a clean, inspected, professional kitchen.</p>
+        </div>
+        <figure class="framed captioned kitchen-figure">
+            <div class="framed-media"><img src="~/images/kitchen/home-kitchen.webp" alt="A Bangladeshi woman cooking at a clay stove in a traditional home kitchen, with steel bowls and a basket of fresh greens" width="1200" height="800" loading="lazy" /></div>
+            <figcaption>A home kitchen in rural Bangladesh &mdash; the kind of cooking our recipes come from.</figcaption>
+        </figure>
+    </div>
+</section>
+
+<section class="section section-cream" aria-labelledby="districts-title">
+    <div class="container">
+        <header class="section-head">
+            <span class="bn-title" lang="bn">দেশের প্রতিটি কোণের স্বাদ</span>
+            <span class="eyebrow">Local flavors</span>
+            <h2 id="districts-title">Every mother brings her district</h2>
+            <p>Vorta changes from one corner of Bangladesh to the next. Each of our cooks brings the style of her home district &mdash; the way her own mother made it &mdash; and our vortas are richer for it.</p>
+        </header>
+        <div class="district-grid">
+            <article class="district-card">
+                <span class="district-bn" lang="bn">চট্টগ্রাম ও কক্সবাজার</span>
+                <h3>Chattogram &amp; Cox&rsquo;s Bazar</h3>
+                <p>Shutki country. Coastal dried fish such as loitta and chingri, flame-roasted until smoky and pounded with plenty of garlic, onion and dried red chili.</p>
+            </article>
+            <article class="district-card">
+                <span class="district-bn" lang="bn">সিলেট</span>
+                <h3>Sylhet</h3>
+                <p>Hills, tea gardens and big flavors: the bright, bitter-citrus perfume of shatkora and the serious heat of the naga chili.</p>
+            </article>
+            <article class="district-card">
+                <span class="district-bn" lang="bn">বরিশাল</span>
+                <h3>Barishal</h3>
+                <p>River and coconut country in the southern delta, where freshly grated coconut, mustard and kalojira often find their way into the mash.</p>
+            </article>
+            <article class="district-card">
+                <span class="district-bn" lang="bn">খুলনা</span>
+                <h3>Khulna</h3>
+                <p>On the edge of the Sundarbans, the home of shrimp and prawns &mdash; and of chingri vortas pounded with green chili and fresh coriander.</p>
+            </article>
+            <article class="district-card">
+                <span class="district-bn" lang="bn">রাজশাহী</span>
+                <h3>Rajshahi</h3>
+                <p>Mango country in the north-west: tangy green-mango vorta in season, and comforting dal and potato vortas all year round.</p>
+            </article>
+            <article class="district-card">
+                <span class="district-bn" lang="bn">ময়মনসিংহ</span>
+                <h3>Mymensingh</h3>
+                <p>Rivers and haor wetlands, where small freshwater fish become chepa shutki &mdash; cooked down with heaps of onion, garlic and chili.</p>
+            </article>
+        </div>
+    </div>
+</section>
+
+<section class="section" aria-labelledby="process-title">
+    <div class="container">
+        <header class="section-head">
+            <span class="bn-title" lang="bn">ঘরোয়া পদ্ধতিতে</span>
+            <span class="eyebrow">The home-made way</span>
+            <h2 id="process-title">From the bazaar to your table</h2>
+            <p>No pastes from a jar and no shortcuts. Every batch goes through the same five steps a mother follows in her own kitchen.</p>
+        </header>
+        <ol class="process">
+            <li>
+                <span class="step-num" aria-hidden="true">১</span>
+                <span class="process-bn" lang="bn">বাজার</span>
+                <h3>Market</h3>
+                <p>Eggplant, tomatoes, garlic, chilies and coriander bought fresh. Shutki is picked over, cleaned and soaked with care.</p>
+            </li>
+            <li>
+                <span class="step-num" aria-hidden="true">২</span>
+                <span class="process-bn" lang="bn">পোড়ানো</span>
+                <h3>Roast</h3>
+                <p>Vegetables, shutki and dried chilies are roasted over an open flame until smoky and blistered.</p>
+            </li>
+            <li>
+                <span class="step-num" aria-hidden="true">৩</span>
+                <span class="process-bn" lang="bn">বাটা</span>
+                <h3>Pound</h3>
+                <p>Pounded by hand on the shil-pata with raw onion and garlic, to the coarse texture a real vorta should have.</p>
+            </li>
+            <li>
+                <span class="step-num" aria-hidden="true">৪</span>
+                <span class="process-bn" lang="bn">মাখা</span>
+                <h3>Season</h3>
+                <p>Mixed by hand with raw mustard oil, green chilies, salt and herbs &mdash; then tasted by the cook who made it.</p>
+            </li>
+            <li>
+                <span class="step-num" aria-hidden="true">৫</span>
+                <span class="process-bn" lang="bn">প্যাকিং</span>
+                <h3>Pack</h3>
+                <p>Sealed in labeled, dated containers and kept chilled until your pickup or delivery.</p>
+            </li>
+        </ol>
+    </div>
+</section>
+
+<section class="section section-cream" aria-labelledby="gallery-title">
+    <div class="container">
+        <header class="section-head">
+            <span class="bn-title" lang="bn">যেখান থেকে আমাদের স্বাদ</span>
+            <span class="eyebrow">Where our flavors come from</span>
+            <h2 id="gallery-title">Home cooking, Bangladeshi style</h2>
+        </header>
+        <div class="kitchen-gallery">
+            <figure class="gallery-feature">
+                <img src="~/images/kitchen/shil-pata.webp" alt="Whole spices being ground on a shil-pata, the flat grinding stone and stone roller of a Bengali kitchen" width="1200" height="900" loading="lazy" />
+                <figcaption>The shil-pata &mdash; the grinding stone every Bengali home kitchen keeps.</figcaption>
+            </figure>
+            <figure>
+                <img src="~/images/kitchen/spice-haat.webp" alt="Heaps of red chilies, garlic, turmeric, ginger and shallots on tarps at a village spice market in Bangladesh" width="960" height="723" loading="lazy" />
+                <figcaption>Chilies, garlic and turmeric at a village haat in Bogura.</figcaption>
+            </figure>
+            <figure>
+                <img src="~/images/kitchen/dal-vorta.webp" alt="Homemade dal vorta, mashed lentils with onion and chili, in a cut-glass bowl with a green chili on top" width="960" height="721" loading="lazy" />
+                <figcaption>Homemade dal vorta.</figcaption>
+            </figure>
+            <figure>
+                <img src="~/images/kitchen/dhaka-courtyard-kitchen-1953.webp" alt="Black-and-white photograph of women cooking in an outdoor courtyard kitchen in Dhaka, with clay pots and a grinding stone" width="1000" height="669" loading="lazy" />
+                <figcaption>A courtyard kitchen in Dhaka, 1953.</figcaption>
+            </figure>
+            <figure>
+                <img src="~/images/kitchen/tomato-vorta.webp" alt="Homemade Bangladeshi tomato vorta with coriander and green chili in a white leaf-shaped dish" width="960" height="719" loading="lazy" />
+                <figcaption>Homemade tomato vorta.</figcaption>
+            </figure>
+        </div>
+        <p class="gallery-note small muted">Photos from Bangladesh and Bengal via Wikimedia Commons, used under their licenses &mdash; <a href="/about#photo-credits">see photo credits</a>.</p>
+    </div>
+</section>
+
+<section class="section section-dark scallop-top" id="inspected" aria-labelledby="inspected-title">
+    <div class="container">
+        <div class="inspected kantha">
+            <header class="section-head">
+                <span class="bn-title" lang="bn">পরিষ্কার, পরিদর্শিত রান্নাঘর</span>
+                <span class="eyebrow">Inspected kitchen</span>
+                <h2 id="inspected-title">Home-made style, never made at home</h2>
+                <p>Our cooks bring their recipes from home, but your order is never cooked in a home kitchen. Every vorta is made in a permitted commercial kitchen in @b.City that is inspected by the local health authority, to the same rules as any restaurant.</p>
+            </header>
+            <div class="inspected-layout">
+                <figure class="framed inspected-photo">
+                    <img src="~/images/kitchen/clean-prep-kitchen.webp" alt="A cook wearing a hairnet prepares fresh greens at a stainless-steel counter in a commercial kitchen" width="1200" height="800" loading="lazy" />
+                    <svg class="inspected-seal" viewBox="0 0 200 200" role="img" aria-label="Health-inspected kitchen, @b.City, @b.State">
+                        <defs><path id="seal-ring" d="M100 100m-71 0a71 71 0 1 1 142 0a71 71 0 1 1-142 0" /></defs>
+                        <circle cx="100" cy="100" r="97" class="seal-fill" />
+                        <circle cx="100" cy="100" r="90" class="seal-line" stroke-dasharray="3 4" />
+                        <circle cx="100" cy="100" r="54" class="seal-line" />
+                        <text class="seal-text"><textPath href="#seal-ring" textLength="440" lengthAdjust="spacing">HEALTH-INSPECTED KITCHEN ✦ @b.City.ToUpperInvariant(), @b.State.ToUpperInvariant() ✦</textPath></text>
+                        <path class="seal-check" d="m76 101 16 16 32-34" />
+                    </svg>
+                </figure>
+                <ul class="assurances">
+                    <li>@Icons.Get("check-circle")<div><strong>Inspected &amp; permitted</strong><span>A licensed commercial kitchen with routine health inspections &mdash; not a home kitchen.</span></div></li>
+                    <li>@Icons.Get("user")<div><strong>Food-handler certified cooks</strong><span>Every cook completes food-handler training and certification before her first shift.</span></div></li>
+                    <li>@Icons.Get("leaf")<div><strong>Hairnets, aprons &amp; gloves</strong><span>Hair covered, hands washed and gloves on for every step that touches ready-to-eat food.</span></div></li>
+                    <li>@Icons.Get("clock")<div><strong>Temperature-logged storage</strong><span>Fridges and freezers are checked and logged every shift, and cooked vortas are chilled quickly.</span></div></li>
+                    <li>@Icons.Get("receipt")<div><strong>Labeled &amp; dated</strong><span>Every container carries the name of the vorta, the date it was made and its ingredients.</span></div></li>
+                    <li>@Icons.Get("heart")<div><strong>Allergen care</strong><span>Fish and shrimp vortas get their own boards and utensils, and allergens are listed on every label.</span></div></li>
+                    <li>@Icons.Get("bag")<div><strong>Sealed packaging</strong><span>Food-safe containers, sealed in the kitchen and opened only at your table.</span></div></li>
+                    <li>@Icons.Get("check")<div><strong>Clean as we go</strong><span>Counters, grinding stones and utensils are washed and sanitized between batches.</span></div></li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="section" aria-labelledby="why-title">
+    <div class="container">
+        <header class="section-head">
+            <span class="bn-title" lang="bn">কেন মায়েরা?</span>
+            <span class="eyebrow">Why mothers?</span>
+            <h2 id="why-title">The best vorta-makers we know</h2>
+            <p>Bangladeshi mothers are the keepers of our food, yet their skill is rarely paid or recognized outside the family. Our kitchen is built around that skill &mdash; and built around their lives, so that cooking with us never has to come before family.</p>
+        </header>
+        <div class="value-cards">
+            <div class="value-card">
+                @Icons.Get("calendar", "icon")
+                <h3>Flexible shifts</h3>
+                <p>Shifts planned around school runs and family time. Choose the days that work for you.</p>
+            </div>
+            <div class="value-card">
+                @Icons.Get("receipt", "icon")
+                <h3>Fair, reliable pay</h3>
+                <p>Cooking is skilled work. Every hour in our kitchen is paid fairly and on time.</p>
+            </div>
+            <div class="value-card">
+                @Icons.Get("users", "icon")
+                <h3>A community of homemakers</h3>
+                <p>Cook alongside other Bangladeshi women, speak Bangla in the kitchen and share a cup of cha.</p>
+            </div>
+            <div class="value-card">
+                @Icons.Get("heart", "icon")
+                <h3>Your recipes, respected</h3>
+                <p>We taste your vortas, learn your way of making them and keep what makes them yours.</p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="section section-cream" id="join" aria-labelledby="join-title">
+    <div class="container join-layout @(Model.Submitted || !ModelState.IsValid ? "form-first" : null)">
+        <div class="join-intro">
+            <span class="eyebrow">Join our kitchen</span>
+            <h2 id="join-title">Do you make the best vorta in your family?</h2>
+            <p class="quote-bn" lang="bn">আমাদের রান্নাঘরে আপনাকে স্বাগতম</p>
+            <p>We are always glad to meet Bangladeshi mothers and homemakers in @b.ServiceArea who love to cook. You don&rsquo;t need restaurant experience &mdash; just good hands, a few vortas you are proud of, and the wish to cook with other women from home.</p>
+            <ul class="checklist">
+                <li>Flexible shifts that fit around your family</li>
+                <li>We help you get your food-handler certificate</li>
+                <li>Fair pay for skilled work</li>
+                <li>A friendly kitchen where Bangla is spoken</li>
+            </ul>
+            <p class="small muted">Prefer to talk first? Call or text us at <a href="@phoneHref">@b.Phone</a>.</p>
+        </div>
+        <div>
+            @if (Model.Submitted)
+            {
+                <div class="form-card kantha text-center">
+                    <p class="bn" lang="bn" style="font-size:2rem;color:var(--red-700);">ধন্যবাদ!</p>
+                    <h3>Thank you for reaching out</h3>
+                    <p class="muted">We&rsquo;ll call you within a few days to talk about shifts, training and a tasting. A copy of your message is on its way to your inbox.</p>
+                    <a class="btn btn-green" href="/menu">See what our kitchen makes</a>
+                </div>
+            }
+            else
+            {
+                <form method="post" asp-page="/Kitchen" asp-fragment="join" class="form-card kantha">
+                    <h3 class="join-form-title">Tell us about yourself</h3>
+                    <div asp-validation-summary="ModelOnly" class="validation-summary-errors"></div>
+                    <div class="visually-hidden" aria-hidden="true">
+                        <label asp-for="Input.Website">Leave this field empty</label>
+                        <input asp-for="Input.Website" tabindex="-1" autocomplete="off" />
+                    </div>
+                    <div class="form-grid">
+                        <div class="field full">
+                            <label asp-for="Input.Name"></label>
+                            <input asp-for="Input.Name" autocomplete="name" />
+                            <span asp-validation-for="Input.Name" class="field-validation-error"></span>
+                        </div>
+                        <div class="field">
+                            <label asp-for="Input.Phone"></label>
+                            <input asp-for="Input.Phone" type="tel" autocomplete="tel" />
+                            <span asp-validation-for="Input.Phone" class="field-validation-error"></span>
+                        </div>
+                        <div class="field">
+                            <label asp-for="Input.Email"></label>
+                            <input asp-for="Input.Email" type="email" autocomplete="email" />
+                            <span asp-validation-for="Input.Email" class="field-validation-error"></span>
+                        </div>
+                        <div class="field full">
+                            <label asp-for="Input.Message"></label>
+                            <textarea asp-for="Input.Message" rows="5" placeholder="Which vortas are you known for at home? Which area of DFW do you live in? Which days could you cook?"></textarea>
+                            <span asp-validation-for="Input.Message" class="field-validation-error"></span>
+                        </div>
+                    </div>
+                    <button class="btn btn-primary btn-lg mt-3" type="submit">Send</button>
+                    <p class="small muted mt-2 mb-0">We only use your details to get back to you about cooking with us.</p>
+                </form>
+            }
+        </div>
+    </div>
+</section>
+
+<section class="section section-maroon cta-band" aria-labelledby="cta-title">
+    <div class="container">
+        <span class="bn-title" lang="bn">মায়ের হাতের স্বাদ, আপনার টেবিলে</span>
+        <h2 id="cta-title">Taste what a mother&rsquo;s hands make</h2>
+        <p>Order homestyle and shutki vortas by the pound for your family, or set up a standing order for your restaurant &mdash; made fresh by our cooks for your date.</p>
+        <div class="cta-actions">
+            <a class="btn btn-primary btn-lg" href="/menu">@Icons.Get("bowl") Order by the pound</a>
+            <a class="btn btn-ghost-light btn-lg" href="/restaurants">Vortas for restaurants</a>
+        </div>
+    </div>
+</section>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+}

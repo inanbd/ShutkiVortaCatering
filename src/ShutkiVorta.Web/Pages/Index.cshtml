@@ -4,6 +4,10 @@
     var b = Model.Business;
 }
 
+@section Head {
+    <link rel="stylesheet" href="~/css/kitchen.css" asp-append-version="true" />
+}
+
 <section class="hero" aria-labelledby="hero-title">
     <div class="hero-media">
         <img src="~/images/site/hero.webp" alt="A traditional Bangladeshi spread of assorted vortas on a plate" width="1280" height="720" fetchpriority="high" />
@@ -20,7 +24,7 @@
                 <a class="btn btn-ghost-light btn-lg" href="/catering">Plan event catering</a>
             </div>
             <ul class="hero-badges">
-                <li>Made fresh to order</li>
+                <li>Made fresh by Bangladeshi mothers</li>
                 <li>Pickup or local delivery</li>
                 <li>Sold by the lb (from ½ lb)</li>
             </ul>
@@ -61,6 +65,31 @@
             }
         </div>
         <p class="text-center mt-4"><a class="btn btn-outline" href="/menu">See the full menu @Icons.Get("arrow-right")</a></p>
+    </div>
+</section>
+
+<section class="section section-cream mothers-teaser" aria-labelledby="mothers-title">
+    <div class="container mothers-teaser-grid">
+        <div class="photo-stack">
+            <figure class="framed">
+                <img src="~/images/kitchen/mother-at-clay-stove.webp" alt="A Bangladeshi homemaker in a red sari cooking on a traditional clay stove" width="1280" height="853" loading="lazy" />
+            </figure>
+            <figure class="photo-inset">
+                <img src="~/images/kitchen/shil-pata.webp" alt="Spices being ground by hand on a shil-pata grinding stone" width="1200" height="900" loading="lazy" />
+            </figure>
+        </div>
+        <div>
+            <p class="quote-bn" lang="bn">মায়ের হাতের স্বাদ</p>
+            <span class="eyebrow">Our kitchen</span>
+            <h2 id="mothers-title">Made by Bangladeshi mothers</h2>
+            <p>Our vortas are made by Bangladeshi mothers and homemakers from the @b.ServiceArea community, each bringing the flavors of her home district. They roast, pound and season every batch by hand, just as they do at home &mdash; in our health-inspected @b.City kitchen.</p>
+            <ul class="teaser-points">
+                <li>@Icons.Get("heart") Home-style recipes from every corner of Bangladesh</li>
+                <li>@Icons.Get("fire") Roasted on the flame, pounded on the shil-pata</li>
+                <li>@Icons.Get("check-circle") Cooked in a permitted, inspected kitchen</li>
+            </ul>
+            <a class="btn btn-green" href="/kitchen">Meet our kitchen @Icons.Get("arrow-right")</a>
+        </div>
     </div>
 </section>
 
