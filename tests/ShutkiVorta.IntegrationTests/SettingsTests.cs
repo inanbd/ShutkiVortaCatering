@@ -168,7 +168,9 @@ public sealed partial class SettingsTests
         Assert.Contains("Some saved settings could not be used", overview);
         Assert.Contains("Ordering:MaxDaysInAdvance", overview);
 
-        var form = SettingsForm.Read(await client.GetStringAsync("/admin/settings/ordering"));
+        var editor = await client.GetStringAsync("/admin/settings/ordering");
+        Assert.Single(Regex.Matches(editor, "data-setting-rejected"));
+        var form = SettingsForm.Read(editor);
         form.Set("Ordering:MaxDaysInAdvance", "45");
         await SaveAsync(client, "ordering", form);
 

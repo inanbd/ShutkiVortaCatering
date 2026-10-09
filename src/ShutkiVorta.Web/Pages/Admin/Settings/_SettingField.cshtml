@@ -163,6 +163,10 @@
     {
         <span class="hint" id="@Model.HelpId">@Model.Help</span>
     }
+    @if (Model.Setting.Rejected && !Model.HasErrors)
+    {
+        <span class="field-validation-error" data-setting-rejected>The saved value could not be used, so the default is in effect. Enter a valid value and save.</span>
+    }
     @if (Model.HasErrors || Model.SecretTyped)
     {
         <span class="field-validation-error" id="@Model.ErrorId">

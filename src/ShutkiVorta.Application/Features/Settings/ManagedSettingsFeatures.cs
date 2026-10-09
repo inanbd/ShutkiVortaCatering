@@ -92,6 +92,9 @@ public sealed record GetSettingsNoticesQuery : IRequest<SettingsNoticesDto>, IRe
 public sealed record SettingFieldValueDto(SettingField Field, string? Value, IReadOnlyList<string> Values, SecretState Secret)
 {
     public IReadOnlyList<SettingChoice> Choices => Field.Kind == SettingKind.TimeZone ? SettingsCatalog.TimeZones : Field.Choices;
+
+    /// <summary>The saved value could not be used (the default applies until it is corrected).</summary>
+    public bool Rejected { get; init; }
 }
 
 public sealed record SettingsPageDto(SettingsPage Page, IReadOnlyList<SettingFieldValueDto> Fields, int Revision, DateTime? LastChangedAtLocal, string? LastChangedBy)
@@ -168,11 +171,15 @@ internal sealed class ManagedSettingsHandlers(
         }
 
         var stored = await store.GetSectionAsync(page.Section, cancellationToken);
-        var fields = page.Fields.Select(f => f.Kind switch
+        var rejected = diagnostics.RejectedKeys;
+        var fields = page.Fields.Select(f => (f.Kind switch
         {
             SettingKind.Secret => new SettingFieldValueDto(f, null, [], stored.Secrets.GetValueOrDefault(f.Key, SecretState.Empty)),
             SettingKind.List or SettingKind.DaysOfWeek => new SettingFieldValueDto(f, null, ListValues(stored.Values, f.Key), SecretState.Empty),
             _ => new SettingFieldValueDto(f, SettingValueFormat.ToDisplay(f, stored.Values.GetValueOrDefault(f.Key)), [], SecretState.Empty),
+        }) with
+        {
+            Rejected = rejected.Any(k => k.Equals(f.Key, StringComparison.OrdinalIgnoreCase) || k.StartsWith(f.Key + ":", StringComparison.OrdinalIgnoreCase)),
         }).ToList();
 
         var byKey = page.Fields.ToDictionary(f => f.Key, StringComparer.OrdinalIgnoreCase);
