@@ -25,11 +25,14 @@ internal sealed class SettingsRepository(
     public async Task<StoredSection> GetSectionAsync(string section, CancellationToken cancellationToken = default)
     {
         await using var connection = await connections.OpenAsync(cancellationToken);
-        var rows = await ReadSectionAsync(connection, null, section, cancellationToken);
+
+        // The revision is read BEFORE the values: if a save slips in between, the form carries an older revision than its
+        // values and saving it reports a conflict, instead of silently overwriting the other admin's change.
         var state = await connection.QuerySingleOrDefaultAsync<SectionRow>(new CommandDefinition(
             "SELECT Section, Revision, UpdatedAtUtc, UpdatedBy, NeedsReview, ImportHash FROM AppSettingsSections WHERE Section = @Section",
             new { Section = section },
             cancellationToken: cancellationToken));
+        var rows = await ReadSectionAsync(connection, null, section, cancellationToken);
         var history = await connection.QueryAsync<HistoryRow>(new CommandDefinition(
             dialect.Page("SELECT [Key], OldValue, NewValue, ChangedBy, ChangedAtUtc FROM AppSettingsHistory WHERE Section = @Section ORDER BY ChangedAtUtc DESC, Id DESC"),
             new { Section = section, Skip = 0, Take = HistoryShown },
@@ -106,15 +109,28 @@ internal sealed class SettingsRepository(
     {
         await using var connection = await connections.OpenAsync(cancellationToken);
         return await connection.ExecuteScalarAsync<int>(new CommandDefinition(
-            "SELECT (SELECT COUNT(*) FROM Orders) + (SELECT COUNT(*) FROM StandingOrders)", cancellationToken: cancellationToken)) > 0;
+            "SELECT (SELECT COUNT(*) FROM Orders) + (SELECT COUNT(*) FROM StandingOrders) + (SELECT COUNT(*) FROM CateringInquiries)",
+            cancellationToken: cancellationToken)) > 0;
     }
 
-    /// <summary>All stored settings for the configuration provider (secrets still encrypted).</summary>
-    public async Task<IReadOnlyDictionary<string, string?>> LoadAllAsync(CancellationToken cancellationToken = default)
+    /// <summary>Forgets which configuration the re-import switch applied (called while the switch is off).</summary>
+    public async Task ClearImportHashesAsync(CancellationToken cancellationToken = default)
     {
         await using var connection = await connections.OpenAsync(cancellationToken);
+        await connection.ExecuteAsync(new CommandDefinition(
+            "UPDATE AppSettingsSections SET ImportHash = NULL WHERE ImportHash IS NOT NULL", cancellationToken: cancellationToken));
+    }
+
+    /// <summary>All stored settings for the configuration provider (secrets still encrypted), with the revision they belong to.</summary>
+    public async Task<SettingsSnapshot> LoadAllAsync(CancellationToken cancellationToken = default)
+    {
+        await using var connection = await connections.OpenAsync(cancellationToken);
+
+        // Revision first: if a save slips in between, the values are newer than the revision and the next check reloads again.
+        var revision = await connection.ExecuteScalarAsync<long>(new CommandDefinition(
+            "SELECT COALESCE(SUM(Revision), 0) FROM AppSettingsSections", cancellationToken: cancellationToken));
         var rows = await connection.QueryAsync<SettingRow>(new CommandDefinition("SELECT [Key], Value FROM AppSettings", cancellationToken: cancellationToken));
-        return rows.ToDictionary(r => r.Key, r => r.Value, StringComparer.OrdinalIgnoreCase);
+        return new SettingsSnapshot(rows.ToDictionary(r => r.Key, r => r.Value, StringComparer.OrdinalIgnoreCase), revision);
     }
 
     private async Task<int> WriteSectionAsync(

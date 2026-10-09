@@ -165,8 +165,10 @@ orders). Enter the correct values and save each page.
 
 **Recovery switch:** start with `Settings:ReimportFromConfiguration=true` (e.g. the environment variable
 `Settings__ReimportFromConfiguration=true`) to copy the configured values over the saved ones. This is useful
-when a wrong setting locks you out of the admin pages. It runs once for each set of configured values; turn it
-off again afterwards.
+when a wrong setting locks you out of the admin pages. The values are applied once each time the switch is
+turned on. Later starts with the switch still on keep changes made in Admin → Settings, unless the configured
+values change; a changed password alone does not count. Turn it off again afterwards. To apply the same values
+again, start once with it off.
 
 ### Email
 

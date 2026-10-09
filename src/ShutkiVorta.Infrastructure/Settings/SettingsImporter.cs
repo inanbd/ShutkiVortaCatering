@@ -11,8 +11,9 @@ namespace ShutkiVorta.Infrastructure.Settings;
 /// Fills the database with settings on first start: values still present in appsettings.json, appsettings.{Environment}.json,
 /// user secrets or environment variables are imported; everything else gets the built-in defaults. After that the database is
 /// the source of truth (Admin → Settings) and those values are ignored (and reported to admins if they differ).
-/// Recovery switch: Settings:ReimportFromConfiguration=true copies configured values over the database once (again whenever
-/// the configured values change), e.g. to repair a broken setting without the admin UI.
+/// Recovery switch: Settings:ReimportFromConfiguration=true copies the configured values over the database once each time it
+/// is turned on (and again if the configured values, other than passwords, change while it stays on), e.g. to repair a
+/// broken setting without the admin UI.
 /// </summary>
 internal sealed class SettingsImporter(SettingsRepository repository, SettingsStartupReport report, ILogger<SettingsImporter> logger)
 {
@@ -22,26 +23,28 @@ internal sealed class SettingsImporter(SettingsRepository repository, SettingsSt
     public async Task ImportAsync(IConfiguration configuration, CancellationToken cancellationToken = default)
     {
         var reimport = configuration.GetValue(ReimportSwitch, false);
+        if (!reimport)
+        {
+            // Switched off: the next time it is turned on, it applies the configured values again.
+            await repository.ClearImportHashesAsync(cancellationToken);
+        }
+
         var hasBusinessData = await repository.HasBusinessDataAsync(cancellationToken);
-        var ignored = new List<string>();
+        var configuredBySection = new Dictionary<string, IReadOnlyDictionary<string, string?>>(StringComparer.OrdinalIgnoreCase);
 
         foreach (var section in ManagedSettings.Sections)
         {
-            var configured = Canonicalize(section, configuration.GetSection(section.Name));
-            var hash = Hash(configured);
-            var (exists, importedHash) = await repository.GetImportStateAsync(section.Name, cancellationToken);
+            var configured = ConfiguredSettings.Read(section, configuration.GetSection(section.Name));
+            configuredBySection[section.Name] = configured;
+            var hash = ConfiguredSettings.Hash(configured);
+            var (exists, appliedHash) = await repository.GetImportStateAsync(section.Name, cancellationToken);
 
-            if (exists && !(reimport && configured.Count > 0 && hash != importedHash))
+            if (exists && !(reimport && configured.Count > 0 && hash != appliedHash))
             {
-                if (configured.Count > 0)
-                {
-                    ignored.AddRange(await DifferencesAsync(section, configured, cancellationToken));
-                }
-
                 if (reimport && configured.Count > 0)
                 {
                     logger.LogWarning(
-                        "{Switch} is on, but these {Section} values were already re-imported, so changes made since in Admin → Settings are kept. Turn the switch off.",
+                        "{Switch} is on, but the configured {Section} values were already copied in, so changes made since in Admin → Settings are kept. Turn the switch off.",
                         ReimportSwitch, section.Name);
                 }
 
@@ -52,27 +55,29 @@ internal sealed class SettingsImporter(SettingsRepository repository, SettingsSt
                 ? (await repository.GetSectionAsync(section.Name, cancellationToken)).Values
                 : SettingsFlattener.Flatten(section.CreateDefaults(), section.Name);
 
-            var merged = Merge(section, baseline, configured);
-            var options = BindLeniently(section, merged);
+            var options = ConfiguredSettings.BindLeniently(
+                section, ConfiguredSettings.Merge(section, baseline, configured), key => logger.LogWarning("Ignoring the setting {Key}: its value could not be converted", key));
             var values = SettingsFlattener.Flatten(options, section.Name)
                 .Where(kv => !ManagedSettings.IsSecret(kv.Key))
                 .ToDictionary(kv => kv.Key, kv => kv.Value, StringComparer.OrdinalIgnoreCase);
             var secrets = configured
-                .Where(kv => ManagedSettings.IsSecret(kv.Key) && !string.IsNullOrEmpty(kv.Value))
+                .Where(kv => ManagedSettings.IsSecret(kv.Key))
                 .ToDictionary(kv => kv.Key, kv => new SecretChange(Clear: false, kv.Value), StringComparer.OrdinalIgnoreCase);
 
-            // A live site whose settings were only in appsettings.json may have lost them in the upgrade (the file was replaced):
-            // flag the section so admins are asked to check it.
-            var needsReview = !exists && configured.Count == 0 && hasBusinessData;
-            // The fingerprint is only recorded for a re-import, so that the switch, if left on, applies a set of values once;
-            // the first import records none, so the switch can always restore the values the site was set up with.
+            // A live site whose settings were only in appsettings.json may have lost them in the upgrade (the file was replaced,
+            // perhaps leaving only a password in an environment variable or an empty entry): flag the section for admins to check.
+            var needsReview = !exists && hasBusinessData
+                && !configured.Any(kv => !ManagedSettings.IsSecret(kv.Key) && !string.IsNullOrEmpty(kv.Value));
+
+            // The fingerprint is only kept while the switch is on, so that a start with the switch still on does not apply the
+            // same values again over later changes, while turning it off and on again always applies them.
             await repository.ImportSectionAsync(
                 section.Name,
                 values,
                 secrets,
                 exists ? "Re-imported from server configuration" : "Imported from server configuration",
                 needsReview,
-                exists ? hash : null,
+                reimport ? hash : null,
                 cancellationToken);
 
             if (exists)
@@ -90,7 +95,13 @@ internal sealed class SettingsImporter(SettingsRepository repository, SettingsSt
             }
         }
 
-        report.IgnoredConfigurationKeys = ignored;
+        report.Configured = configuredBySection;
+    }
+
+    /// <summary>Logs configured values that differ from the saved settings (call once the saved settings are loaded).</summary>
+    public void ReportIgnoredConfiguration()
+    {
+        var ignored = report.IgnoredConfigurationKeys;
         if (ignored.Count > 0)
         {
             logger.LogWarning(
@@ -98,9 +109,16 @@ internal sealed class SettingsImporter(SettingsRepository repository, SettingsSt
                 string.Join(", ", ignored), ReimportSwitch);
         }
     }
+}
 
-    /// <summary>Configured keys of a section, with the property names' canonical casing (e.g. EMAIL__SMTP__PASSWORD → Email:Smtp:Password).</summary>
-    private static Dictionary<string, string?> Canonicalize(ManagedSection section, IConfigurationSection configured)
+/// <summary>Reading, merging and comparing settings that are present in the application configuration.</summary>
+internal static class ConfiguredSettings
+{
+    /// <summary>
+    /// Configured keys of a section, with the property names' canonical casing (e.g. EMAIL__SMTP__PASSWORD → Email:Smtp:Password).
+    /// An empty secret ("Password": "") counts as not configured.
+    /// </summary>
+    public static Dictionary<string, string?> Read(ManagedSection section, IConfigurationSection configured)
     {
         var properties = SettingsFlattener.DescribeProperties(section.OptionsType, section.Name)
             .ToDictionary(p => p.Path, p => p.Path, StringComparer.OrdinalIgnoreCase);
@@ -115,7 +133,11 @@ internal sealed class SettingsImporter(SettingsRepository repository, SettingsSt
 
             if (properties.TryGetValue(key, out var canonical))
             {
-                result[canonical] = value;
+                if (!(ManagedSettings.IsSecret(canonical) && value.Length == 0))
+                {
+                    result[canonical] = value;
+                }
+
                 continue;
             }
 
@@ -130,18 +152,17 @@ internal sealed class SettingsImporter(SettingsRepository repository, SettingsSt
     }
 
     /// <summary>Configured keys override the baseline; a configured list (even an empty one) replaces the whole list.</summary>
-    private static Dictionary<string, string?> Merge(ManagedSection section, IReadOnlyDictionary<string, string?> baseline, IReadOnlyDictionary<string, string?> configured)
+    public static Dictionary<string, string?> Merge(ManagedSection section, IReadOnlyDictionary<string, string?> baseline, IReadOnlyDictionary<string, string?> configured)
     {
         var merged = new Dictionary<string, string?>(baseline, StringComparer.OrdinalIgnoreCase);
-        var lists = SettingsFlattener.DescribeProperties(section.OptionsType, section.Name)
-            .Where(p => SettingsFlattener.IsListType(p.Type))
-            .Select(p => p.Path);
+        var properties = SettingsFlattener.DescribeProperties(section.OptionsType, section.Name).ToList();
+        var lists = properties.Where(p => SettingsFlattener.IsListType(p.Type)).Select(p => p.Path).ToHashSet(StringComparer.OrdinalIgnoreCase);
 
         foreach (var list in lists)
         {
-            var items = configured.Where(kv => kv.Key.StartsWith(list + ":", StringComparison.OrdinalIgnoreCase)).ToList();
+            var items = configured.Keys.Any(k => k.StartsWith(list + ":", StringComparison.OrdinalIgnoreCase));
             var explicitlyEmpty = configured.TryGetValue(list, out var empty) && string.IsNullOrEmpty(empty);
-            if (items.Count == 0 && !explicitlyEmpty)
+            if (!items && !explicitlyEmpty)
             {
                 continue;
             }
@@ -152,7 +173,7 @@ internal sealed class SettingsImporter(SettingsRepository repository, SettingsSt
             }
         }
 
-        foreach (var (key, value) in configured.Where(kv => !(SettingsFlattener.IsListType(TypeOf(section, kv.Key)) && string.IsNullOrEmpty(kv.Value))))
+        foreach (var (key, value) in configured.Where(kv => !lists.Contains(kv.Key)))
         {
             merged[key] = value;
         }
@@ -160,43 +181,8 @@ internal sealed class SettingsImporter(SettingsRepository repository, SettingsSt
         return merged;
     }
 
-    private static Type TypeOf(ManagedSection section, string key) =>
-        SettingsFlattener.DescribeProperties(section.OptionsType, section.Name)
-            .FirstOrDefault(p => p.Path.Equals(key, StringComparison.OrdinalIgnoreCase)).Type ?? typeof(string);
-
-    /// <summary>Configured settings whose value differs from the database (secrets compared by presence only).</summary>
-    private async Task<IEnumerable<string>> DifferencesAsync(ManagedSection section, Dictionary<string, string?> configured, CancellationToken cancellationToken)
-    {
-        var stored = await repository.GetSectionAsync(section.Name, cancellationToken);
-        var normalized = SettingsFlattener.Flatten(BindLeniently(section, Merge(section, stored.Values, configured)), section.Name);
-
-        return configured.Keys
-            .Select(k => ListPropertyOf(section, k) ?? k)
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .Where(key => ManagedSettings.IsSecret(key)
-                ? stored.Secrets.GetValueOrDefault(key, SecretState.Empty) == SecretState.Empty
-                : !Same(stored.Values, normalized, key))
-            .ToList();
-    }
-
-    private static string? ListPropertyOf(ManagedSection section, string key)
-    {
-        var colon = key.LastIndexOf(':');
-        return colon > 0 && int.TryParse(key[(colon + 1)..], out _) ? key[..colon] : null;
-    }
-
-    private static bool Same(IReadOnlyDictionary<string, string?> stored, IReadOnlyDictionary<string, string?> candidate, string key)
-    {
-        static string Values(IReadOnlyDictionary<string, string?> source, string key) =>
-            string.Join("\n", source.Where(kv => kv.Key.Equals(key, StringComparison.OrdinalIgnoreCase) || kv.Key.StartsWith(key + ":", StringComparison.OrdinalIgnoreCase))
-                .OrderBy(kv => kv.Key, StringComparer.OrdinalIgnoreCase)
-                .Select(kv => $"{kv.Key.ToUpperInvariant()}={kv.Value}"));
-
-        return Values(stored, key) == Values(candidate, key);
-    }
-
-    /// <summary>Binds the merged values; a value that cannot be converted is dropped (with a warning) instead of failing startup.</summary>
-    private object BindLeniently(ManagedSection section, Dictionary<string, string?> values)
+    /// <summary>Binds the merged values; a value that cannot be converted is dropped instead of failing.</summary>
+    public static object BindLeniently(ManagedSection section, Dictionary<string, string?> values, Action<string>? dropped = null)
     {
         for (var attempt = 0; attempt < 100; attempt++)
         {
@@ -206,27 +192,84 @@ internal sealed class SettingsImporter(SettingsRepository repository, SettingsSt
             }
             catch (SettingsBindingException ex) when (ex.Key is not null && values.Remove(ex.Key))
             {
-                logger.LogWarning("Ignoring the setting {Key}: its value could not be converted", ex.Key);
+                dropped?.Invoke(ex.Key);
             }
         }
 
         return section.CreateDefaults();
     }
 
+    /// <summary>
+    /// Configured settings whose value differs from the saved one (a list counts as one setting; a secret only counts when
+    /// nothing is saved, since saved secrets are encrypted).
+    /// </summary>
+    public static IEnumerable<string> Differences(ManagedSection section, IReadOnlyDictionary<string, string?> configured, IReadOnlyDictionary<string, string?> saved)
+    {
+        if (configured.Count == 0)
+        {
+            return [];
+        }
+
+        var candidate = SettingsFlattener.Flatten(BindLeniently(section, Merge(section, saved, configured)), section.Name);
+        return configured.Keys
+            .Select(k => ListPropertyOf(k) ?? k)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Where(key => ManagedSettings.IsSecret(key)
+                ? string.IsNullOrEmpty(saved.GetValueOrDefault(key))
+                : !Same(saved, candidate, key))
+            .ToList();
+    }
+
     /// <summary>Fingerprint of the configured values. Secret values are left out (only their presence counts), so it reveals nothing.</summary>
-    private static string Hash(Dictionary<string, string?> configured)
+    public static string Hash(IReadOnlyDictionary<string, string?> configured)
     {
         var text = string.Join("\n", configured
             .OrderBy(kv => kv.Key, StringComparer.OrdinalIgnoreCase)
             .Select(kv => $"{kv.Key.ToUpperInvariant()}={(ManagedSettings.IsSecret(kv.Key) ? "(set)" : kv.Value)}"));
         return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(text)));
     }
+
+    private static string? ListPropertyOf(string key)
+    {
+        var colon = key.LastIndexOf(':');
+        return colon > 0 && int.TryParse(key[(colon + 1)..], out _) ? key[..colon] : null;
+    }
+
+    private static bool Same(IReadOnlyDictionary<string, string?> saved, IReadOnlyDictionary<string, string?> candidate, string key)
+    {
+        static string Values(IReadOnlyDictionary<string, string?> source, string key) =>
+            string.Join("\n", source.Where(kv => kv.Key.Equals(key, StringComparison.OrdinalIgnoreCase) || kv.Key.StartsWith(key + ":", StringComparison.OrdinalIgnoreCase))
+                .OrderBy(kv => kv.Key, StringComparer.OrdinalIgnoreCase)
+                .Select(kv => $"{kv.Key.ToUpperInvariant()}={kv.Value}"));
+
+        return Values(saved, key) == Values(candidate, key);
+    }
 }
 
-/// <summary>What the importer found at startup, shown to admins (implements <see cref="ISettingsDiagnostics"/> with the provider).</summary>
+/// <summary>
+/// Settings problems shown to admins: saved values that could not be used, and configured values that are ignored because they
+/// differ from the saved ones (worked out from the settings currently in use, so it follows every save).
+/// </summary>
 internal sealed class SettingsStartupReport(SettingsConfiguration settings) : ISettingsDiagnostics
 {
-    public IReadOnlyList<string> IgnoredConfigurationKeys { get; set; } = [];
+    /// <summary>The managed settings found in the application configuration at startup, by section.</summary>
+    public IReadOnlyDictionary<string, IReadOnlyDictionary<string, string?>> Configured { get; set; } =
+        new Dictionary<string, IReadOnlyDictionary<string, string?>>();
 
     public IReadOnlyList<string> RejectedKeys => settings.Provider.RejectedKeys;
+
+    public IReadOnlyList<string> IgnoredConfigurationKeys
+    {
+        get
+        {
+            var saved = settings.Provider.Current;
+            return [.. ManagedSettings.Sections
+                .Where(section => Configured.ContainsKey(section.Name))
+                .SelectMany(section => ConfiguredSettings.Differences(
+                    section,
+                    Configured[section.Name],
+                    saved.Where(kv => kv.Key.StartsWith(section.Name + ":", StringComparison.OrdinalIgnoreCase))
+                        .ToDictionary(kv => kv.Key, kv => kv.Value, StringComparer.OrdinalIgnoreCase)))];
+        }
+    }
 }

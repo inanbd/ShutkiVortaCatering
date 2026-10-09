@@ -8,7 +8,8 @@ namespace ShutkiVorta.Infrastructure.Services;
 /// <summary>Current time in UTC and in the business' time zone (Admin → Settings → Business; changes apply immediately).</summary>
 internal sealed class DateTimeProvider(TimeProvider timeProvider, IOptionsMonitor<BusinessOptions> business, ILogger<DateTimeProvider> logger) : IDateTimeProvider
 {
-    private (string Id, TimeZoneInfo Zone)? _cached;
+    // A reference (not a struct) so that concurrent requests always read a complete id/zone pair.
+    private volatile CachedZone? _cached;
 
     public TimeZoneInfo BusinessTimeZone
     {
@@ -16,9 +17,9 @@ internal sealed class DateTimeProvider(TimeProvider timeProvider, IOptionsMonito
         {
             var id = business.CurrentValue.TimeZoneId;
             var cached = _cached;
-            if (cached is { } c && c.Id == id)
+            if (cached is not null && cached.Id == id)
             {
-                return c.Zone;
+                return cached.Zone;
             }
 
             TimeZoneInfo zone;
@@ -32,7 +33,7 @@ internal sealed class DateTimeProvider(TimeProvider timeProvider, IOptionsMonito
                 zone = TimeZoneInfo.Utc;
             }
 
-            _cached = (id, zone);
+            _cached = new CachedZone(id, zone);
             return zone;
         }
     }
@@ -46,4 +47,6 @@ internal sealed class DateTimeProvider(TimeProvider timeProvider, IOptionsMonito
 
     public DateTime ToUtc(DateTime businessLocal) =>
         TimeZoneInfo.ConvertTimeToUtc(DateTime.SpecifyKind(businessLocal, DateTimeKind.Unspecified), BusinessTimeZone);
+
+    private sealed record CachedZone(string Id, TimeZoneInfo Zone);
 }

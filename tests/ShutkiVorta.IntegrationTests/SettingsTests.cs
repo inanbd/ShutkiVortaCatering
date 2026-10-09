@@ -223,9 +223,21 @@ public sealed partial class SettingsTests
             await using (var app = new AppFactory("Sqlite", changed, directory))
             {
                 Assert.Equal("https://shutki.test", Site(app).BaseUrl);
-                var overview = WebUtility.HtmlDecode(await (await AdminClientAsync(app)).GetStringAsync("/admin/settings"));
+                var client = await AdminClientAsync(app);
+                var overview = WebUtility.HtmlDecode(await client.GetStringAsync("/admin/settings"));
                 Assert.Contains("Ignored server configuration", overview);
                 Assert.Contains("Site:BaseUrl", overview);
+
+                // Once the saved value matches the configuration, nothing is reported any more.
+                var form = SettingsForm.Read(await client.GetStringAsync("/admin/settings/website"));
+                form.Set("Site:BaseUrl", "https://other.test");
+                await SaveAsync(client, "website", form);
+                Assert.DoesNotContain("Ignored server configuration", WebUtility.HtmlDecode(await client.GetStringAsync("/admin/settings")));
+
+                form = SettingsForm.Read(await client.GetStringAsync("/admin/settings/website"));
+                form.Set("Site:BaseUrl", "https://shutki.test");
+                await SaveAsync(client, "website", form);
+                Assert.Contains("Site:BaseUrl", WebUtility.HtmlDecode(await client.GetStringAsync("/admin/settings")));
             }
 
             // The recovery switch copies them in, once.
@@ -286,12 +298,80 @@ public sealed partial class SettingsTests
             {
                 Assert.Equal("https://www.shutkivorta.test", Site(app).BaseUrl);
             }
+
+            // Turned off for a start and on again: applied again.
+            await using (var app = new AppFactory("Sqlite", directory: directory))
+            {
+                Assert.Equal("https://www.shutkivorta.test", Site(app).BaseUrl);
+            }
+
+            await using (var app = new AppFactory("Sqlite", reimport, directory))
+            {
+                Assert.Equal("https://shutki.test", Site(app).BaseUrl);
+            }
         }
         finally
         {
             Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
             Directory.Delete(directory, recursive: true);
         }
+    }
+
+    [Fact]
+    public async Task RecoverySwitch_OnFromTheFirstStart_DoesNotOverwriteLaterChanges()
+    {
+        var directory = AppFactory.NewDirectory();
+        var reimport = new Dictionary<string, string?> { ["Settings:ReimportFromConfiguration"] = "true" };
+        try
+        {
+            await using (var app = new AppFactory("Sqlite", reimport, directory))
+            {
+                Assert.Equal("https://shutki.test", Site(app).BaseUrl);
+                var client = await AdminClientAsync(app);
+                var form = SettingsForm.Read(await client.GetStringAsync("/admin/settings/website"));
+                form.Set("Site:BaseUrl", "https://www.shutkivorta.test");
+                await SaveAsync(client, "website", form);
+            }
+
+            await using (var app = new AppFactory("Sqlite", reimport, directory))
+            {
+                Assert.Equal("https://www.shutkivorta.test", Site(app).BaseUrl);
+            }
+        }
+        finally
+        {
+            Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task ImportedConfiguration_IsNotReportedAsIgnored_NorIsAnEmptyPassword()
+    {
+        await using var app = new AppFactory("Sqlite", new Dictionary<string, string?> { ["Email:Smtp:Password"] = string.Empty });
+        var overview = WebUtility.HtmlDecode(await (await AdminClientAsync(app)).GetStringAsync("/admin/settings"));
+        Assert.DoesNotContain("Ignored server configuration", overview);
+    }
+
+    [Fact]
+    public async Task ChangesSavedOnAnotherServer_AreLoaded_AndAFailedLoadIsRetried()
+    {
+        await using var app = new AppFactory("Sqlite");
+        var reload = app.Services.GetServices<Microsoft.Extensions.Hosting.IHostedService>().OfType<SettingsReloadService>().Single();
+        var business = app.Services.GetRequiredService<IOptionsMonitor<BusinessOptions>>();
+        Assert.False(await reload.CheckAsync(CancellationToken.None)); // nothing new
+
+        // "Another server" saves; while the settings table cannot be read, the change is not marked as seen.
+        await ExecuteAsync(app, "UPDATE AppSettings SET Value = 'Shutki Vorta Dallas' WHERE [Key] = 'Business:Name'");
+        await ExecuteAsync(app, "UPDATE AppSettingsSections SET Revision = Revision + 1 WHERE Section = 'Business'");
+        await ExecuteAsync(app, "ALTER TABLE AppSettings RENAME TO AppSettingsOffline");
+        Assert.False(await reload.CheckAsync(CancellationToken.None));
+        Assert.NotEqual("Shutki Vorta Dallas", business.CurrentValue.Name);
+
+        await ExecuteAsync(app, "ALTER TABLE AppSettingsOffline RENAME TO AppSettings");
+        Assert.True(await reload.CheckAsync(CancellationToken.None));
+        Assert.Equal("Shutki Vorta Dallas", business.CurrentValue.Name);
+        Assert.False(await reload.CheckAsync(CancellationToken.None));
     }
 
     [Fact]
@@ -304,23 +384,42 @@ public sealed partial class SettingsTests
             await using (var app = new AppFactory("Sqlite", directory: directory))
             {
                 await AddStandingOrderAsync(app);
-                await ExecuteAsync(app, "DELETE FROM AppSettings WHERE [Key] LIKE 'Business:%'");
-                await ExecuteAsync(app, "DELETE FROM AppSettingsSections WHERE Section = 'Business'");
+                await ExecuteAsync(app, "DELETE FROM AppSettings WHERE [Key] LIKE 'Business:%' OR [Key] LIKE 'Email:%'");
+                await ExecuteAsync(app, "DELETE FROM AppSettingsSections WHERE Section IN ('Business', 'Email')");
             }
 
-            await using (var app = new AppFactory("Sqlite", directory: directory))
+            // Only the SMTP password survived (as an environment variable): the Email page still needs checking.
+            var onlyPassword = new Dictionary<string, string?>
             {
+                ["Email:DeliveryMethod"] = null,
+                ["Email:AdminRecipients:0"] = null,
+                ["Email:Smtp:Password"] = "from-an-environment-variable",
+            };
+            await using (var app = new AppFactory("Sqlite", onlyPassword, directory))
+            {
+                Assert.Equal("from-an-environment-variable", app.Services.GetRequiredService<IOptionsMonitor<EmailOptions>>().CurrentValue.Smtp.Password);
+                var emailPage = WebUtility.HtmlDecode(await (await AdminClientAsync(app)).GetStringAsync("/admin/settings/email"));
+                Assert.Contains("Please check these settings.", emailPage);
+
                 var client = await AdminClientAsync(app);
-                var overview = WebUtility.HtmlDecode(await client.GetStringAsync("/admin/settings"));
-                Assert.Contains("Please check these settings", overview);
-                Assert.Contains("href=\"/admin/settings/business\">Business details</a>", overview);
+                var notice = ReviewNotice(await client.GetStringAsync("/admin/settings"));
+                Assert.Contains("Please check these settings", notice);
+                Assert.Contains("href=\"/admin/settings/business\">Business details</a>", notice);
+                Assert.Contains("href=\"/admin/settings/email\">Email</a>", notice);
 
                 var page = WebUtility.HtmlDecode(await client.GetStringAsync("/admin/settings/business"));
                 Assert.Contains("Please check these settings.", page);
                 Assert.DoesNotContain("Please check these settings.", WebUtility.HtmlDecode(await client.GetStringAsync("/admin/settings/ordering")));
 
                 await SaveAsync(client, "business", SettingsForm.Read(page));
-                Assert.DoesNotContain("Please check these settings", WebUtility.HtmlDecode(await client.GetStringAsync("/admin/settings")));
+                notice = ReviewNotice(await client.GetStringAsync("/admin/settings"));
+                Assert.DoesNotContain("/admin/settings/business", notice);
+                Assert.Contains("href=\"/admin/settings/email\">Email</a>", notice);
+
+                var email = SettingsForm.Read(await client.GetStringAsync("/admin/settings/email"));
+                email.Set("Email:AdminRecipients", "owner@shutki.test");
+                await SaveAsync(client, "email", email);
+                Assert.Empty(ReviewNotice(await client.GetStringAsync("/admin/settings")));
             }
         }
         finally
@@ -434,6 +533,12 @@ public sealed partial class SettingsTests
         await using var command = await CommandAsync(app, sql);
         return Convert.ToInt32(await command.ExecuteScalarAsync(), System.Globalization.CultureInfo.InvariantCulture);
     }
+
+    /// <summary>The "Please check these settings" notice on the overview, or "" when there is none.</summary>
+    private static string ReviewNotice(string html) => WebUtility.HtmlDecode(ReviewNoticeBlock().Match(html).Value);
+
+    [GeneratedRegex("<div[^>]*data-settings-review[^>]*>.*?</div>", RegexOptions.Singleline)]
+    private static partial Regex ReviewNoticeBlock();
 
     [GeneratedRegex("name=\"__RequestVerificationToken\" type=\"hidden\" value=\"([^\"]+)\"")]
     private static partial Regex AntiforgeryToken();

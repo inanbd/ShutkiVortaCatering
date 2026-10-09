@@ -131,9 +131,16 @@ public static class DependencyInjection
         // First run: copy settings from appsettings.json / environment variables into the database (later runs only report
         // configured values that differ). From then on business settings are read from the database alone.
         var repository = services.GetRequiredService<SettingsRepository>();
-        await services.GetRequiredService<SettingsImporter>().ImportAsync(services.GetRequiredService<IConfiguration>(), cancellationToken);
+        var importer = services.GetRequiredService<SettingsImporter>();
+        await importer.ImportAsync(services.GetRequiredService<IConfiguration>(), cancellationToken);
         settings.Provider.Connect(repository.LoadAllAsync, services.GetRequiredService<ILoggerFactory>().CreateLogger<SettingsConfiguration>());
-        await settings.Provider.ReloadAsync(cancellationToken);
+        if (!await settings.Provider.ReloadAsync(cancellationToken))
+        {
+            // Never serve customers with the built-in defaults instead of the saved settings (e.g. orders accepted while paused).
+            throw new InvalidOperationException("The settings could not be loaded from the database; see the error logged above.");
+        }
+
+        importer.ReportIgnoredConfiguration();
     }
 
     private static string ResolveConnectionString(IConfiguration configuration, DatabaseProvider provider, string contentRoot)

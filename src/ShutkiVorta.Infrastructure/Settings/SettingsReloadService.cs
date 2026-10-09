@@ -5,7 +5,7 @@ namespace ShutkiVorta.Infrastructure.Settings;
 
 /// <summary>
 /// When the site runs on several servers, settings saved on one of them reach the others within 30 seconds.
-/// (On the server where they were saved they apply immediately.)
+/// (On the server where they were saved they apply immediately.) A load that failed is tried again on the next check.
 /// </summary>
 internal sealed class SettingsReloadService(SettingsRepository repository, SettingsConfiguration settings, ILogger<SettingsReloadService> logger) : BackgroundService
 {
@@ -13,27 +13,14 @@ internal sealed class SettingsReloadService(SettingsRepository repository, Setti
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        long? seen = null;
         using var timer = new PeriodicTimer(Interval);
         try
         {
             do
             {
-                if (!settings.Provider.IsConnected)
-                {
-                    continue; // The database is still being prepared.
-                }
-
                 try
                 {
-                    var revision = await repository.GetGlobalRevisionAsync(stoppingToken);
-                    if (seen is not null && revision != seen)
-                    {
-                        logger.LogInformation("Settings were changed on another server; reloading");
-                        await settings.Provider.ReloadAsync(stoppingToken);
-                    }
-
-                    seen = revision;
+                    await CheckAsync(stoppingToken);
                 }
                 catch (Exception ex) when (ex is not OperationCanceledException)
                 {
@@ -46,5 +33,23 @@ internal sealed class SettingsReloadService(SettingsRepository repository, Setti
         {
             // Shutting down.
         }
+    }
+
+    /// <summary>Reloads when the saved settings are newer than the ones in use (or the last load failed).</summary>
+    internal async Task<bool> CheckAsync(CancellationToken cancellationToken)
+    {
+        if (!settings.Provider.IsConnected)
+        {
+            return false; // The database is still being prepared.
+        }
+
+        var revision = await repository.GetGlobalRevisionAsync(cancellationToken);
+        if (revision == settings.Provider.LoadedRevision)
+        {
+            return false;
+        }
+
+        logger.LogInformation("The saved settings changed (revision {Revision}, in use {Loaded}); reloading", revision, settings.Provider.LoadedRevision);
+        return await settings.Provider.ReloadAsync(cancellationToken);
     }
 }

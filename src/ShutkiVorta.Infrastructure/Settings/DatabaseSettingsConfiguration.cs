@@ -26,23 +26,34 @@ public sealed class SettingsConfiguration
     public static SettingsConfiguration Create() => new();
 }
 
+/// <summary>All saved settings (secrets still encrypted) and the settings revision they belong to.</summary>
+internal sealed record SettingsSnapshot(IReadOnlyDictionary<string, string?> Values, long Revision);
+
 /// <summary>
-/// Loads the AppSettings table. Until the database is ready it is empty (built-in defaults apply). Loading never throws:
-/// a value that cannot be used is dropped (and reported), and if the database cannot be read the last good values stay.
+/// Loads the AppSettings table. Until the database is ready it is empty (built-in defaults apply). A value that cannot be used
+/// is dropped (and reported). If the database cannot be read, the last good values stay and the reload reports the failure,
+/// so it is tried again.
 /// Secret values are passed through still encrypted; they are decrypted when email options are bound.
 /// </summary>
 internal sealed class DatabaseSettingsProvider : ConfigurationProvider
 {
     private readonly SemaphoreSlim _reloading = new(1, 1);
-    private Func<CancellationToken, Task<IReadOnlyDictionary<string, string?>>>? _load;
+    private Func<CancellationToken, Task<SettingsSnapshot>>? _load;
     private ILogger? _logger;
+    private IReadOnlyDictionary<string, string?> _current = new Dictionary<string, string?>();
 
     public bool IsConnected => _load is not null;
+
+    /// <summary>The settings revision of the values in use, or null until they were loaded successfully.</summary>
+    public long? LoadedRevision { get; private set; }
+
+    /// <summary>The saved settings in use (secrets encrypted).</summary>
+    public IReadOnlyDictionary<string, string?> Current => _current;
 
     /// <summary>Stored keys whose values could not be used at the last load.</summary>
     public IReadOnlyList<string> RejectedKeys { get; private set; } = [];
 
-    public void Connect(Func<CancellationToken, Task<IReadOnlyDictionary<string, string?>>> load, ILogger logger)
+    public void Connect(Func<CancellationToken, Task<SettingsSnapshot>> load, ILogger logger)
     {
         _logger = logger;
         _load = load;
@@ -53,21 +64,24 @@ internal sealed class DatabaseSettingsProvider : ConfigurationProvider
     {
     }
 
-    /// <summary>Reads the database and, if that worked, makes the values live (fires the reload token).</summary>
-    public async Task ReloadAsync(CancellationToken cancellationToken = default)
+    /// <summary>Reads the database and makes the values live (fires the reload token). False when the database could not be read.</summary>
+    public async Task<bool> ReloadAsync(CancellationToken cancellationToken = default)
     {
         if (_load is null)
         {
-            return;
+            return false;
         }
 
         // One load at a time, so an older read can never overwrite a newer one.
         await _reloading.WaitAsync(cancellationToken);
         try
         {
-            var (clean, rejected) = SettingsSanitizer.Sanitize(await _load(cancellationToken));
+            var snapshot = await _load(cancellationToken);
+            var (clean, rejected) = SettingsSanitizer.Sanitize(snapshot.Values);
             Data = clean;
+            _current = clean;
             RejectedKeys = rejected;
+            LoadedRevision = snapshot.Revision;
             if (rejected.Count > 0)
             {
                 _logger?.LogError(
@@ -77,8 +91,8 @@ internal sealed class DatabaseSettingsProvider : ConfigurationProvider
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            _logger?.LogError(ex, "Loading settings from the database failed; the previous values stay in use");
-            return;
+            _logger?.LogError(ex, "Loading settings from the database failed; the previous values stay in use until it works");
+            return false;
         }
         finally
         {
@@ -86,5 +100,6 @@ internal sealed class DatabaseSettingsProvider : ConfigurationProvider
         }
 
         OnReload();
+        return true;
     }
 }
