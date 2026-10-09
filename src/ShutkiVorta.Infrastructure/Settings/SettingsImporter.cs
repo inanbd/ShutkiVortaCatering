@@ -19,6 +19,12 @@ internal sealed class SettingsImporter(SettingsRepository repository, ILogger<Se
     public async Task ImportAsync(IConfiguration configuration, CancellationToken cancellationToken = default)
     {
         var reimport = configuration.GetValue(ReimportSwitch, false);
+        if (reimport)
+        {
+            logger.LogWarning(
+                "{Switch} is on: settings present in appsettings.json/environment variables overwrite the values saved in Admin → Settings on every start. Turn it off once the settings are fixed.",
+                ReimportSwitch);
+        }
         foreach (var section in ManagedSettings.Sections)
         {
             var exists = await repository.SectionExistsAsync(section.Name, cancellationToken);
