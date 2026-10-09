@@ -70,7 +70,6 @@ body.admin { background: #f5efe2; font-size: 1rem; }
 .table .thumb { width: 64px; height: 48px; object-fit: cover; border-radius: 6px; }
 .table-wrap { overflow-x: auto; }
 .preview { color: var(--ink-500); font-size: .85rem; max-width: 340px; }
-td .preview { min-width: 150px; }
 
 .filters { display: flex; gap: 10px; flex-wrap: wrap; align-items: end; }
 .filters .field { min-width: 150px; }

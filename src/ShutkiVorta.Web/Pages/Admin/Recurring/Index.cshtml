@@ -1,5 +1,6 @@
 @page
 @model ShutkiVorta.Web.Pages.Admin.Recurring.IndexModel
+@inject ShutkiVorta.Application.Common.Interfaces.IDateTimeProvider Clock
 @section Actions {
     <a class="btn btn-outline btn-sm" href="/admin/production">@Icons.Get("pot") Production plan</a>
 }
@@ -91,7 +92,7 @@
                                     <br /><span class="small muted nowrap">Tax exempt</span>
                                 }
                             </td>
-                            <td class="small">@so.CreatedAtUtc.ToString("MMM d, yyyy", Format.Culture)</td>
+                            <td class="small nowrap">@Clock.ToBusinessTime(so.CreatedAtUtc).ToString("MMM d, yyyy", Format.Culture)</td>
                         </tr>
                     }
                 </tbody>
