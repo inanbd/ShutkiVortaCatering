@@ -355,7 +355,8 @@ details.settings-history[open] > summary { border-bottom: 1px dashed var(--line)
 .settings-history-table td { overflow-wrap: anywhere; font-size: .92rem; }
 
 .email-tests { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-bottom: 1.5rem; }
-.email-test-send { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; flex: 1; min-width: 0; }
+.email-test-send { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; flex: 1 1 260px; min-width: 0; }
+.email-diagnostics li, .email-diagnostics p, .settings-table td { overflow-wrap: anywhere; } /* long server paths */
 .email-test-send .input { flex: 1 1 220px; min-width: 0; width: auto; }
 
 @media (max-width: 1100px) {

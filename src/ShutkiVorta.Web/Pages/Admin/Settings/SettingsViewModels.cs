@@ -28,7 +28,8 @@ public static class SettingsForm
             return "Not saved yet: the built-in defaults are in use.";
         }
 
-        if (by is not null && by.Contains("from server configuration", StringComparison.OrdinalIgnoreCase))
+        // Written by the importer: "Imported from server configuration", "Re-imported from server configuration".
+        if (by is not null && by.Contains("imported from", StringComparison.OrdinalIgnoreCase))
         {
             return $"{by} on {Format.DateTime(when)}.";
         }

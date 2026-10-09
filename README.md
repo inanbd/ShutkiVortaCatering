@@ -56,7 +56,8 @@ stitching, jamdani patterns, alpona motifs, Bengali typography)
 - **Production plan** (`/admin/production`): pounds of each vorta per day for online orders, generated
   restaurant orders and standing orders not generated yet
 - Catering and "join our kitchen" inquiries, customers (grant/revoke admin)
-- Settings overview with email diagnostics, **Test connection** and **Send test email**; **Email log** with retry
+- **Settings** (`/admin/settings`): every business setting editable in the browser, live without a restart,
+  with validation, change history and email diagnostics (**Test connection**, **Send test email**); **Email log** with retry
 
 **Email notifications** (branded HTML templates with a plain-text alternative)
 - To admins: new order, order cancelled by customer, new inquiry, new restaurant request, a restaurant
@@ -97,59 +98,86 @@ applies the schema, and seeds the roles, an administrator and the 9 starter menu
 
 ---
 
-## Configuration (`src/ShutkiVorta.Web/appsettings.json`)
+## Settings
 
-Any setting can also be supplied as an environment variable (e.g. `Email__Smtp__Password`) or with
-`dotnet user-secrets`. That is recommended for passwords.
+There are two kinds of settings:
 
-### Database: SQLite or SQL Server
+| Where | What | Who changes it |
+|---|---|---|
+| **Admin → Settings** (stored in the database) | Business details, online orders, restaurant orders, email (incl. the SMTP server and password), website & search engines, customer accounts, spam protection | Admins, in the browser. **Changes apply immediately**, with no restart, and survive updates. |
+| `src/ShutkiVorta.Web/appsettings.json` (or environment variables) | Database connection, data-protection keys, logging, allowed hosts, HTTPS redirection, the email pickup folder, the first admin account (`Seed`) | Whoever hosts the site. Read at startup. |
+
+### Admin → Settings
+
+Each page validates what you enter (with the error shown next to the field) and records every change in
+**Recent changes** (when, what, from, to, by whom). Notes on specific settings:
+
+- **Email → Password** is stored encrypted with ASP.NET Data Protection and is never shown again. Leave the box
+  blank to keep it. If you change the server, port, user name or encryption, you must type the password again,
+  so a saved password can't be sent to a different server.
+- **Online orders → Sales tax** is entered as a percentage (`8.25` for Dallas). **Delivery ZIP codes** take one
+  code or prefix per line (`752` = all of 752xx); leave the list empty to deliver anywhere.
+- **Website → Website address** should be your public `https://` domain in production (used for canonical URLs,
+  the sitemap and links in emails). Leave it empty to use the address the site is reached on.
+- **Customer accounts → Require email confirmation before sign-in** applies at the next sign-in. Administrators are never
+  blocked by it.
+- If two admins edit the same page at once, the second save is refused with a request to reload, so nobody
+  overwrites someone else's change without seeing it.
+- If several servers share one database, a change saved on one reaches the others within 30 seconds.
+
+### appsettings.json
 
 ```json
 "Database": { "Provider": "Sqlite", "AutoMigrate": true, "AutoCreateDatabase": true },
 "ConnectionStrings": {
   "Sqlite": "Data Source=App_Data/shutkivorta.db",
   "SqlServer": "Server=localhost;Database=ShutkiVorta;User Id=sa;Password=...;TrustServerCertificate=True;Encrypt=True"
-}
+},
+"DataProtection": { "KeysPath": "" },     // empty = App_Data/keys
+"Seed": { "SeedMenu": true, "AdminEmail": "admin@example.com", "AdminPassword": "ChangeMe!2026", "AdminName": "Site Administrator" },
+"Settings": { "ReimportFromConfiguration": false }
 ```
 
-To switch to SQL Server, set `"Provider": "SqlServer"` and fill in `ConnectionStrings:SqlServer`. The
-database is created if it doesn't exist and migrations run at startup. Migrations are plain SQL scripts in
-`src/ShutkiVorta.Infrastructure/Persistence/Migrations/{Sqlite|SqlServer}/`; add a new numbered script to
-change the schema.
+Any of these can also be set as an environment variable (e.g. `ConnectionStrings__SqlServer`). To switch to SQL
+Server, set `"Provider": "SqlServer"` and fill in `ConnectionStrings:SqlServer`. The database is created if it
+doesn't exist and migrations run at startup. Migrations are plain SQL scripts in
+`src/ShutkiVorta.Infrastructure/Persistence/Migrations/{Sqlite|SqlServer}/`; add a new numbered script to change
+the schema. `Email:PickupDirectory` (default `App_Data/mail`) is the folder for emails that are saved instead of sent.
+
+**Keep the data-protection keys.** They encrypt sign-in cookies and the saved SMTP password. Store `KeysPath` on
+persistent storage and back it up together with the database. If the keys are lost, everyone is signed out
+and the SMTP password has to be entered again. Until then, emails wait in the outbox and are retried; they are
+not lost.
+
+### First start and upgrading
+
+On the first start of a new database, the settings above are filled in from the built-in defaults, plus any
+values still present in `appsettings.json`, `appsettings.{Environment}.json`, user secrets or environment
+variables in the old layout (`Email:Smtp:Host`, `Email__Smtp__Password`, `Ordering:TaxRate`, …). After that,
+the database is the only source. Values left in those files are ignored, and Admin → Settings lists any that
+differ from what is saved.
+
+**Upgrading a live site from a version that kept these settings in `appsettings.json`:** start the new
+version once with your old `appsettings.json` (or the matching environment variables) still in place, so
+your values are copied in. If the new `appsettings.json` replaced the old one first, each page that got only
+defaults is flagged with **Please check these settings** in Admin → Settings (on sites that already have
+orders). Enter the correct values and save each page.
+
+**Recovery switch:** start with `Settings:ReimportFromConfiguration=true` (e.g. the environment variable
+`Settings__ReimportFromConfiguration=true`) to copy the configured values over the saved ones. This is useful
+when a wrong setting locks you out of the admin pages. It runs once for each set of configured values; turn it
+off again afterwards.
 
 ### Email
 
-Fill in the `Smtp` section with your mail provider's details. With `"DeliveryMethod": "Auto"` (the default), the
-site sends through SMTP as soon as `Smtp:Host` is filled in. While it is empty, emails are only saved as files
-in `App_Data/mail/` (handy for development).
+In **Admin → Settings → Email**, fill in the mail server (SMTP server, port, user name, password), the sender
+address and who should be notified about new orders. With the delivery method **Automatic** (the default), the
+site sends through SMTP as soon as an SMTP server is filled in. While it is empty, emails are only saved as files
+in `App_Data/mail/` (handy for development). The templates live in `src/ShutkiVorta.Infrastructure/Email/Templates/`.
 
-```json
-"Email": {
-  "Enabled": true,
-  "DeliveryMethod": "Auto",                 // Auto | Smtp | PickupDirectory
-  "FromName": "Shutki Vorta Catering",
-  "FromAddress": "orders@yourdomain.com",   // must be an address your SMTP account may send from
-  "ReplyToAddress": "hello@yourdomain.com",
-  "AdminRecipients": [ "owner@yourdomain.com", "kitchen@yourdomain.com" ],
-  "SendCustomerStatusUpdates": true,
-  "Smtp": {
-    "Host": "smtp.yourprovider.com",
-    "Port": 587,                            // 587 = STARTTLS, 465 = SSL/TLS
-    "Security": "Auto",                     // Auto = SSL/TLS on 465, required STARTTLS otherwise | StartTls | SslOnConnect | None
-    "UserName": "orders@yourdomain.com",
-    "Password": "app-password",
-    "TimeoutSeconds": 30,
-    "AcceptInvalidCertificates": false,     // only for a self-signed certificate on your own server
-    "CheckCertificateRevocation": true,
-    "LocalDomain": ""                       // HELO name, if your server insists on one
-  }
-}
-```
-
-The templates live in `src/ShutkiVorta.Infrastructure/Email/Templates/`.
-
-`Auto` never sends your password unencrypted over the network. If the server doesn't offer STARTTLS, sending
-fails with an explanation. Only a mail server on the same machine (`localhost`) may skip encryption.
+**Automatic** encryption never sends your password unencrypted over the network. If the server doesn't offer
+STARTTLS, sending fails with an explanation. Only a mail server on the same machine (`localhost`) may skip
+encryption.
 
 **How sending works.** Emails are written to an outbox table in the database, then a background service
 delivers them. Temporary problems (network, timeouts, "try again later" replies) are retried after 1 min,
@@ -158,8 +186,8 @@ straight away with an explanation. Nothing is lost if the mail server or the sit
 go out once it is back.
 
 **Checking your setup (Admin → Settings → Email):**
-- The panel shows whether real emails are being sent, plus warnings for common mistakes: SMTP host
-  empty, placeholder `example.com` addresses, no password, a port that doesn't match its `Security` setting.
+- The panel shows whether real emails are being sent, plus warnings for common mistakes: SMTP server
+  empty, placeholder `example.com` addresses, no password, a port that doesn't match its encryption setting.
 - **Test connection** connects and signs in step by step (connect → TLS → sign in) and shows where it fails.
 - **Send test email** sends a real message and shows the server's reply, or the exact error with a
   plain-English hint.
@@ -172,25 +200,13 @@ go out once it is back.
 
 | Symptom | Fix |
 |---|---|
-| Emails appear in `App_Data/mail` but never arrive | `Smtp:Host` is empty or `DeliveryMethod` is `PickupDirectory`. Fill in the Smtp section and keep `"Auto"`. |
+| Emails appear in `App_Data/mail` but never arrive | The SMTP server is empty, or the delivery method (Advanced) is "Never send; save to a folder". Fill in the mail server and keep "Automatic". |
 | "Authentication failed" / 535 | Wrong user name or password. Gmail and Outlook.com need an **app password** (2-step verification on). Microsoft 365 needs *Authenticated SMTP* enabled for the mailbox. |
-| "Sender address rejected" / 550 / 553 | `FromAddress` must be the account you sign in with (or a verified alias/domain at your provider). |
-| Timeout when connecting | Port 465 needs `SslOnConnect`, 587 needs `StartTls` (`Auto` picks the right one). Some hosts block outbound SMTP ports; ask them or use your provider's alternative port (e.g. 2525). |
-| Certificate error | Use the host name on the server's certificate (e.g. `mail.yourdomain.com`, not the IP). Only for your own server with a self-signed certificate, set `AcceptInvalidCertificates: true`. |
+| "Sender address rejected" / 550 / 553 | The sender address must be the account you sign in with (or a verified alias/domain at your provider). |
+| Timeout when connecting | Port 465 needs SSL/TLS, 587 needs STARTTLS ("Automatic" picks the right one). Some hosts block outbound SMTP ports; ask them or use your provider's alternative port (e.g. 2525). |
+| Certificate error | Use the host name on the server's certificate (e.g. `mail.yourdomain.com`, not the IP). Only for your own server with a self-signed certificate, tick "Accept untrusted certificates" (Advanced). |
 | Delivered but lands in spam | Add SPF, DKIM and DMARC records for your domain at your DNS provider (your mail provider documents the values). |
-| Works locally, not on the server | Settings stored with `dotnet user-secrets` only load in Development. On the server use environment variables, e.g. `Email__Smtp__Password`, `Email__AdminRecipients__0`. |
-
-### Business, ordering and website
-
-| Section | Highlights |
-|---|---|
-| `Business` | name, Bengali name, phone, email, address (leave `StreetAddress` empty to share it only after ordering), hours, time zone (`America/Chicago`) |
-| `Ordering` | `AcceptingOrders`, `MinimumLeadTimeHours`, `MaxDaysInAdvance`, slot times, `ClosedDays`, `BlackoutDates` (e.g. `"2027-03-20"` for Eid; applies to restaurant deliveries too), `DeliveryFee`, `FreeDeliveryThreshold`, `MinimumDeliverySubtotal`, `TaxRate` (8.25% Dallas), `DeliveryZipPrefixes`, payment instructions |
-| `Wholesale` | `AcceptingRequests`, `DiscountPercent` (default wholesale price = retail minus this, unless a menu item has its own wholesale price), `MinimumQuantityPerItem`, `QuantityStep`, `MinimumSubtotalPerDelivery`, `DeliveryFee`, `LeadTimeDays`, `GenerateDaysAhead`, `AutoGenerate`, `ChangeCutoffHours`, delivery time slots, `PaymentTerms` |
-| `Site` | `BaseUrl` (set your public domain in production, used for canonical URLs, sitemap and email links; empty = current host), `AllowSearchEngineIndexing` (set `false` on staging), search-console verification codes |
-| `Identity` | `RequireConfirmedEmail` (default `false`: customers can sign in before confirming) |
-| `RateLimiting` | `FormPostsPerWindow` / `WindowMinutes`: how often one IP address may submit each public form (contact, catering, join our kitchen, restaurant order, register, password reset); default 10 per 10 minutes |
-| `Seed` | first administrator account and whether to seed the starter menu |
+| "The saved SMTP password cannot be decrypted" | The data-protection keys changed (see above). Enter the password again; waiting emails then go out. |
 
 ---
 
@@ -229,7 +245,7 @@ tests/
 ```bash
 dotnet test                                        # unit + integration tests (SQLite)
 
-# also run the persistence tests against SQL Server (a temporary database is created and dropped):
+# also run the integration tests against SQL Server (temporary databases are created and dropped):
 SHUTKIVORTA_TEST_SQLSERVER="Server=localhost,1433;User Id=sa;Password=...;TrustServerCertificate=True" dotnet test
 ```
 
@@ -237,13 +253,14 @@ SHUTKIVORTA_TEST_SQLSERVER="Server=localhost,1433;User Id=sa;Password=...;TrustS
 
 ## Going live checklist
 
-1. Change `Seed:AdminPassword` (or sign in and change the password right away), and set real `Business` details.
-2. Fill in `Email:Smtp`, `Email:FromAddress` and `Email:AdminRecipients`; in Admin → Settings run
-   **Test connection** and **Send test email**, and check that no warnings remain.
-3. Set `Site:BaseUrl` to your domain (e.g. `https://www.yourdomain.com`).
+1. Change `Seed:AdminPassword` (or sign in and change the password right away). In Admin → Settings → Business
+   details, enter your real name, phone, email and address.
+2. In Admin → Settings → Email, fill in the mail server, sender address and who is notified about new orders;
+   then run **Test connection** and **Send test email**, and check that no warnings remain.
+3. In Admin → Settings → Website, set the website address to your domain (e.g. `https://www.yourdomain.com`).
 4. Run behind HTTPS. Behind a reverse proxy, set `ASPNETCORE_FORWARDEDHEADERS_ENABLED=true`.
-5. Persist `App_Data/` (SQLite database and data-protection keys) and `wwwroot/uploads/` (menu photos),
-   or use SQL Server and point `DataProtection:KeysPath` to persistent storage.
+5. Persist and back up `App_Data/` (SQLite database and data-protection keys) and `wwwroot/uploads/` (menu
+   photos), or use SQL Server and point `DataProtection:KeysPath` to persistent storage.
 6. Submit `https://yourdomain.com/sitemap.xml` in Google Search Console and Bing Webmaster Tools.
 
 ## Photos
