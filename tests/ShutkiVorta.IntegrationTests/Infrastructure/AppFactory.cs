@@ -48,6 +48,7 @@ public sealed class AppFactory : WebApplicationFactory<Program>
             ["Seed:AdminEmail"] = AdminEmail,
             ["Seed:AdminPassword"] = AdminPassword,
             ["Ordering:MinimumLeadTimeHours"] = "24",
+            ["Wholesale:AutoGenerate"] = "false", // tests drive the standing-order scheduler explicitly
         };
 
         foreach (var (key, value) in settings)
