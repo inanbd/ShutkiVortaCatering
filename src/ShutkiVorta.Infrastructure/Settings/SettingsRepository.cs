@@ -71,13 +71,14 @@ internal sealed class SettingsRepository(
     }
 
     /// <summary>Writes a section during import (no revision check). The provider is reloaded by the caller.</summary>
+    /// <param name="importHash">Fingerprint of re-imported configuration; null keeps the stored one.</param>
     public Task ImportSectionAsync(
         string section,
         IReadOnlyDictionary<string, string?> values,
         IReadOnlyDictionary<string, SecretChange> secrets,
         string changedBy,
         bool needsReview,
-        string importHash,
+        string? importHash,
         CancellationToken cancellationToken = default) =>
         WriteSectionAsync(section, values, secrets, expectedRevision: null, changedBy, needsReview, importHash, cancellationToken);
 

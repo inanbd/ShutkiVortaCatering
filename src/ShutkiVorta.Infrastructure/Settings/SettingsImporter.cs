@@ -38,6 +38,13 @@ internal sealed class SettingsImporter(SettingsRepository repository, SettingsSt
                     ignored.AddRange(await DifferencesAsync(section, configured, cancellationToken));
                 }
 
+                if (reimport && configured.Count > 0)
+                {
+                    logger.LogWarning(
+                        "{Switch} is on, but these {Section} values were already re-imported, so changes made since in Admin → Settings are kept. Turn the switch off.",
+                        ReimportSwitch, section.Name);
+                }
+
                 continue;
             }
 
@@ -57,13 +64,15 @@ internal sealed class SettingsImporter(SettingsRepository repository, SettingsSt
             // A live site whose settings were only in appsettings.json may have lost them in the upgrade (the file was replaced):
             // flag the section so admins are asked to check it.
             var needsReview = !exists && configured.Count == 0 && hasBusinessData;
+            // The fingerprint is only recorded for a re-import, so that the switch, if left on, applies a set of values once;
+            // the first import records none, so the switch can always restore the values the site was set up with.
             await repository.ImportSectionAsync(
                 section.Name,
                 values,
                 secrets,
                 exists ? "Re-imported from server configuration" : "Imported from server configuration",
                 needsReview,
-                hash,
+                exists ? hash : null,
                 cancellationToken);
 
             if (exists)
@@ -204,9 +213,12 @@ internal sealed class SettingsImporter(SettingsRepository repository, SettingsSt
         return section.CreateDefaults();
     }
 
+    /// <summary>Fingerprint of the configured values. Secret values are left out (only their presence counts), so it reveals nothing.</summary>
     private static string Hash(Dictionary<string, string?> configured)
     {
-        var text = string.Join("\n", configured.OrderBy(kv => kv.Key, StringComparer.OrdinalIgnoreCase).Select(kv => $"{kv.Key.ToUpperInvariant()}={kv.Value}"));
+        var text = string.Join("\n", configured
+            .OrderBy(kv => kv.Key, StringComparer.OrdinalIgnoreCase)
+            .Select(kv => $"{kv.Key.ToUpperInvariant()}={(ManagedSettings.IsSecret(kv.Key) ? "(set)" : kv.Value)}"));
         return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(text)));
     }
 }

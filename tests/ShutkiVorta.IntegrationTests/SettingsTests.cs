@@ -251,6 +251,48 @@ public sealed partial class SettingsTests
     }
 
     [Fact]
+    public async Task RecoverySwitch_RestoresTheValuesTheSiteWasSetUpWith_AndOnlyOnce()
+    {
+        var directory = AppFactory.NewDirectory();
+        try
+        {
+            await using (var app = new AppFactory("Sqlite", directory: directory))
+            {
+                var client = await AdminClientAsync(app);
+                var form = SettingsForm.Read(await client.GetStringAsync("/admin/settings/website"));
+                form.Set("Site:BaseUrl", "https://wrong.test");
+                await SaveAsync(client, "website", form);
+            }
+
+            // Same configuration as at set-up, with the switch on: the admin's change is undone.
+            var reimport = new Dictionary<string, string?> { ["Settings:ReimportFromConfiguration"] = "true" };
+            await using (var app = new AppFactory("Sqlite", reimport, directory))
+            {
+                Assert.Equal("https://shutki.test", Site(app).BaseUrl);
+                var page = WebUtility.HtmlDecode(await (await AdminClientAsync(app)).GetStringAsync("/admin/settings/website"));
+                Assert.Contains("Re-imported from server configuration", page);
+                Assert.Contains("https://wrong.test", page); // the history shows what was replaced
+
+                var client = await AdminClientAsync(app);
+                var form = SettingsForm.Read(await client.GetStringAsync("/admin/settings/website"));
+                form.Set("Site:BaseUrl", "https://www.shutkivorta.test");
+                await SaveAsync(client, "website", form);
+            }
+
+            // Switch left on: the same values are not applied again.
+            await using (var app = new AppFactory("Sqlite", reimport, directory))
+            {
+                Assert.Equal("https://www.shutkivorta.test", Site(app).BaseUrl);
+            }
+        }
+        finally
+        {
+            Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    [Fact]
     public async Task ASectionMissingOnALiveSite_IsFilledWithDefaults_AndFlaggedForReviewUntilSaved()
     {
         var directory = AppFactory.NewDirectory();
