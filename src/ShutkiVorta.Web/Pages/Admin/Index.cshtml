@@ -19,12 +19,30 @@
     <div class="kpi gold">
         <div class="label">Today</div>
         <div class="value">@Ui.Money(d.RevenueToday)</div>
-        <div class="sub">@d.OrdersToday order(s) placed today</div>
+        <div class="sub">@d.OrdersToday online order(s) placed today</div>
     </div>
     <div class="kpi maroon">
         <div class="label">This month</div>
         <div class="value">@Ui.Money(d.RevenueThisMonth)</div>
-        <div class="sub">@d.OrdersThisMonth order(s) &middot; <a href="/admin/inquiries">@d.OpenInquiries open inquiries</a></div>
+        <div class="sub">@d.OrdersThisMonth online order(s) &middot; <a href="/admin/inquiries">@d.OpenInquiries open inquiries</a></div>
+    </div>
+</div>
+
+<div class="kpis kpis-3">
+    <div class="kpi @(d.StandingOrdersAwaitingApproval > 0 ? "red attention" : null)"><a href="/admin/recurring?status=@StandingOrderStatus.PendingApproval">
+        <div class="label">Restaurant requests</div>
+        <div class="value">@d.StandingOrdersAwaitingApproval</div>
+        <div class="sub">awaiting approval</div></a>
+    </div>
+    <div class="kpi"><a href="/admin/recurring?status=@StandingOrderStatus.Active">
+        <div class="label">Standing orders</div>
+        <div class="value">@d.ActiveStandingOrders</div>
+        <div class="sub">active restaurant agreements</div></a>
+    </div>
+    <div class="kpi maroon"><a href="/admin/orders?source=@OrderSource.Restaurant&amp;from=@d.WeekStart.ToString("yyyy-MM-dd")&amp;to=@d.WeekEnd.ToString("yyyy-MM-dd")">
+        <div class="label">Restaurant deliveries this week</div>
+        <div class="value">@d.RestaurantDeliveriesThisWeek</div>
+        <div class="sub">@Ui.Money(d.RestaurantRevenueThisWeek) &middot; @d.WeekStart.ToString("MMM d", Format.Culture) – @d.WeekEnd.ToString("MMM d", Format.Culture)</div></a>
     </div>
 </div>
 
@@ -48,9 +66,19 @@
                             @foreach (var o in d.UpcomingOrders)
                             {
                                 <tr>
-                                    <td><strong>@o.ScheduledFor.ToString("ddd, MMM d", Format.Culture)</strong><br /><span class="small muted">@Format.Time(o.ScheduledFor)</span></td>
-                                    <td><a class="strong" href="/admin/orders/@o.OrderNumber">@o.OrderNumber</a><div class="preview">@o.ItemsPreview</div></td>
-                                    <td>@o.CustomerName<br /><span class="small muted">@o.Phone</span></td>
+                                    <td class="nowrap"><strong>@o.ScheduledFor.ToString("ddd, MMM d", Format.Culture)</strong><br /><span class="small muted">@Format.Time(o.ScheduledFor)</span></td>
+                                    <td><a class="strong nowrap" href="/admin/orders/@o.OrderNumber">@o.OrderNumber</a><div class="preview">@o.ItemsPreview</div></td>
+                                    <td>
+                                        @if (o.IsRestaurantOrder)
+                                        {
+                                            <span class="source-badge">@Icons.Get("repeat") Restaurant</span><br /><strong>@o.CompanyName</strong><br />
+                                        }
+                                        else
+                                        {
+                                            @o.CustomerName<br />
+                                        }
+                                        <span class="small muted nowrap">@o.Phone</span>
+                                    </td>
                                     <td>@o.FulfillmentName</td>
                                     <td><partial name="_StatusBadge" model="o.Status" /></td>
                                     <td class="num">@Ui.Money(o.Total)</td>
@@ -64,7 +92,7 @@
 
         <section class="panel">
             <div class="panel-head">
-                <h2>Recent orders</h2>
+                <h2>Recent online orders</h2>
                 <a class="btn btn-outline btn-sm" href="/admin/orders">All orders</a>
             </div>
             <div class="panel-body flush table-wrap">
@@ -96,7 +124,7 @@
 
     <div>
         <section class="panel">
-            <div class="panel-head"><h2>Sales &middot; last 14 days</h2></div>
+            <div class="panel-head"><h2>Online sales &middot; last 14 days</h2></div>
             <div class="panel-body">
                 <div class="chart" role="img" aria-label="Daily revenue for the last 14 days">
                     @foreach (var day in d.Last14Days)
@@ -112,7 +140,7 @@
         </section>
 
         <section class="panel">
-            <div class="panel-head"><h2>Most ordered this month</h2></div>
+            <div class="panel-head"><h2>Most ordered online this month</h2></div>
             <div class="panel-body">
                 @if (d.PopularItems.Count == 0)
                 {
@@ -134,6 +162,7 @@
             <div class="panel-head"><h2>Quick links</h2></div>
             <div class="panel-body flex wrap gap-1">
                 <a class="btn btn-green btn-sm" href="/admin/menu/edit">@Icons.Get("plus") New menu item</a>
+                <a class="btn btn-outline btn-sm" href="/admin/production">@Icons.Get("pot") Production plan</a>
                 <a class="btn btn-outline btn-sm" href="/sitemap.xml" target="_blank">Sitemap</a>
                 <a class="btn btn-outline btn-sm" href="/robots.txt" target="_blank">robots.txt</a>
             </div>

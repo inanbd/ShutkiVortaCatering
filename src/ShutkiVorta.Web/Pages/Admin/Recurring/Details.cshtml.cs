@@ -19,8 +19,11 @@ public sealed class DetailsModel(ISender sender) : AppPageModel(sender)
 
     public bool CanApprove => Order.Status is StandingOrderStatus.PendingApproval or StandingOrderStatus.Declined;
     public bool CanDecline => Order.Status == StandingOrderStatus.PendingApproval;
+
+    /// <summary>A request that was never approved is declined rather than cancelled.</summary>
+    public bool CanCancel => Order.Status is StandingOrderStatus.Active or StandingOrderStatus.Paused;
     public bool CanEditTerms => !Order.Status.IsFinal();
-    public bool HasActions => CanApprove || CanDecline || Order.CanPause || Order.CanResume || Order.CanCancel;
+    public bool HasActions => CanApprove || CanDecline || Order.CanPause || Order.CanResume || CanCancel;
 
     /// <summary>Catalog wholesale price per item, to compare agreed prices against.</summary>
     public decimal? CatalogPrice(int menuItemId) => Catalog.Items.FirstOrDefault(i => i.Id == menuItemId)?.WholesalePrice;
@@ -36,11 +39,17 @@ public sealed class DetailsModel(ISender sender) : AppPageModel(sender)
         return Page();
     }
 
-    public async Task<IActionResult> OnPostStatusAsync(int id, StandingOrderAction change, string? note, bool notifyRestaurant, CancellationToken cancellationToken)
+    public async Task<IActionResult> OnPostStatusAsync(int id, StandingOrderAction? change, string? note, bool notifyRestaurant, CancellationToken cancellationToken)
     {
+        if (change is not { } action || !Enum.IsDefined(action))
+        {
+            ErrorMessage = "Please choose an action.";
+            return Redirect($"/admin/recurring/{id}");
+        }
+
         var message = string.Empty;
         var ok = await TryExecuteAsync(async () =>
-            message = await Sender.Send(new ChangeStandingOrderStatusCommand(id, change, note, notifyRestaurant), cancellationToken));
+            message = await Sender.Send(new ChangeStandingOrderStatusCommand(id, action, note, notifyRestaurant), cancellationToken));
         if (ok)
         {
             StatusMessage = message + (notifyRestaurant ? " The restaurant will be notified by email." : string.Empty);

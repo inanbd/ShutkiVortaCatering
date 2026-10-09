@@ -29,6 +29,14 @@
                 </select>
             </div>
             <div class="field">
+                <label for="source">Source</label>
+                <select id="source" name="source">
+                    <option value="">Online &amp; restaurant</option>
+                    <option value="@OrderSource.Online" selected="@(Model.Source == OrderSource.Online ? "selected" : null)">Online</option>
+                    <option value="@OrderSource.Restaurant" selected="@(Model.Source == OrderSource.Restaurant ? "selected" : null)">Restaurant</option>
+                </select>
+            </div>
+            <div class="field">
                 <label for="from">Scheduled from</label>
                 <input id="from" name="from" type="date" value="@Model.From?.ToString("yyyy-MM-dd")" />
             </div>
@@ -57,7 +65,13 @@
                         <tr>
                             <td><a class="strong" href="/admin/orders/@o.OrderNumber">@o.OrderNumber</a><div class="preview">@o.ItemsPreview</div></td>
                             <td class="small">@o.CreatedAtUtc.ToString("MMM d, yyyy", Format.Culture)</td>
-                            <td>@o.CustomerName<br /><span class="small muted">@o.Email &middot; @o.Phone</span></td>
+                            <td>
+                                @if (o.IsRestaurantOrder)
+                                {
+                                    <span class="source-badge">@Icons.Get("repeat") Restaurant</span> <strong>@o.CompanyName</strong><br />
+                                }
+                                @o.CustomerName<br /><span class="small muted">@o.Email &middot; @o.Phone</span>
+                            </td>
                             <td><strong>@o.ScheduledFor.ToString("ddd, MMM d", Format.Culture)</strong><br /><span class="small muted">@Format.Time(o.ScheduledFor)</span></td>
                             <td>@o.FulfillmentName</td>
                             <td><partial name="_StatusBadge" model="o.Status" /></td>

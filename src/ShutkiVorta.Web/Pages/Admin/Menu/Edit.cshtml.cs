@@ -1,13 +1,16 @@
 using System.ComponentModel.DataAnnotations;
 using MediatR;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Options;
+using ShutkiVorta.Application.Common.Options;
 using ShutkiVorta.Application.Features.Menu;
+using ShutkiVorta.Domain.Common;
 using ShutkiVorta.Domain.Menu;
 using ShutkiVorta.Web.Infrastructure;
 
 namespace ShutkiVorta.Web.Pages.Admin.Menu;
 
-public sealed class EditModel(ISender sender) : AppPageModel(sender)
+public sealed class EditModel(ISender sender, IOptions<WholesaleOptions> wholesale) : AppPageModel(sender)
 {
     [BindProperty]
     public MenuItemInput Input { get; set; } = new();
@@ -16,6 +19,12 @@ public sealed class EditModel(ISender sender) : AppPageModel(sender)
     public IFormFile? ImageFile { get; set; }
 
     public bool IsNew => Input.Id is null;
+
+    /// <summary>Discount off the retail price used when no wholesale price is set (Wholesale:DiscountPercent).</summary>
+    public decimal WholesaleDiscountPercent => Math.Clamp(wholesale.Value.DiscountPercent, 0, 90);
+
+    /// <summary>The restaurant price that applies when the wholesale price is left blank (mirrors MenuItem.EffectiveWholesalePrice).</summary>
+    public decimal DefaultWholesalePrice => Money.Round(Input.PricePerUnit * (1 - WholesaleDiscountPercent / 100m));
 
     public async Task<IActionResult> OnGetAsync(int? id, CancellationToken cancellationToken)
     {
@@ -101,6 +110,10 @@ public sealed class EditModel(ISender sender) : AppPageModel(sender)
         [Display(Name = "Price per unit ($)")]
         public decimal PricePerUnit { get; set; } = 12.99m;
 
+        [Range(0.01, 9999)]
+        [Display(Name = "Wholesale price per unit ($)")]
+        public decimal? WholesalePricePerUnit { get; set; }
+
         [Required, StringLength(20)]
         public string Unit { get; set; } = MenuItem.DefaultUnit;
 
@@ -156,6 +169,7 @@ public sealed class EditModel(ISender sender) : AppPageModel(sender)
             Description = d.Description,
             Ingredients = d.Ingredients,
             PricePerUnit = d.PricePerUnit,
+            WholesalePricePerUnit = d.WholesalePricePerUnit,
             Unit = d.Unit,
             MinimumQuantity = d.MinimumQuantity,
             QuantityStep = d.QuantityStep,
@@ -181,6 +195,7 @@ public sealed class EditModel(ISender sender) : AppPageModel(sender)
             Description = Description,
             Ingredients = Ingredients,
             PricePerUnit = PricePerUnit,
+            WholesalePricePerUnit = WholesalePricePerUnit,
             Unit = Unit,
             MinimumQuantity = MinimumQuantity,
             QuantityStep = QuantityStep,

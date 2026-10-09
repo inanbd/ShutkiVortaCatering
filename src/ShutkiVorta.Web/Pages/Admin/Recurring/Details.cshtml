@@ -27,7 +27,7 @@
         <section class="panel">
             <div class="panel-head">
                 <h2>Standing order @so.Reference</h2>
-                <partial name="_StandingOrderStatus" model="so.Status" />
+                <partial name="_StandingOrderBadge" model="so.Status" />
             </div>
             <div class="panel-body">
                 @if (!string.IsNullOrWhiteSpace(so.StatusReason))
@@ -82,7 +82,7 @@
                         {
                             var catalogPrice = Model.CatalogPrice(line.MenuItemId);
                             <tr>
-                                <td><strong>@line.ItemName</strong> <span class="bn muted">@line.ItemBengaliName</span></td>
+                                <td><strong>@line.ItemName</strong><br /><span class="bn muted small">@line.ItemBengaliName</span></td>
                                 <td class="num"><strong>@line.QuantityText</strong></td>
                                 <td class="num">
                                     @Ui.Money(line.UnitPrice)/@line.Unit
@@ -112,18 +112,17 @@
                 else
                 {
                     <table class="table">
-                        <thead><tr><th>Date</th><th>Time</th><th>Delivery</th><th>Note</th><th class="no-print"></th></tr></thead>
+                        <thead><tr><th>Date &amp; time</th><th>Delivery</th><th>Note</th><th class="no-print"></th></tr></thead>
                         <tbody>
                             @foreach (var d in so.Upcoming)
                             {
                                 <tr class="@(d.State is DeliveryState.Skipped or DeliveryState.KitchenClosed or DeliveryState.Cancelled ? "row-muted" : null)">
-                                    <td><strong>@d.ScheduledFor.ToString("ddd, MMM d", Format.Culture)</strong></td>
-                                    <td>@Format.Time(d.ScheduledFor)</td>
+                                    <td class="nowrap"><strong>@d.ScheduledFor.ToString("ddd, MMM d", Format.Culture)</strong><br /><span class="small muted">@Format.Time(d.ScheduledFor)</span></td>
                                     <td>
                                         @switch (d.State)
                                         {
                                             case DeliveryState.OrderCreated:
-                                                <a class="strong" href="/admin/orders/@d.OrderNumber">@d.OrderNumber</a>
+                                                <a class="strong nowrap" href="/admin/orders/@d.OrderNumber">@d.OrderNumber</a>
                                                 if (d.OrderStatus is { } orderStatus)
                                                 {
                                                     <text> </text><partial name="_StatusBadge" model="orderStatus" />
@@ -148,13 +147,21 @@
                                     </td>
                                     <td class="small muted">@d.Reason</td>
                                     <td class="num no-print">
-                                        @if (d.CanSkip || d.CanUnskip)
+                                        @if (d.CanSkip)
                                         {
                                             <form method="post" asp-page-handler="Skip" class="toggle-form"
-                                                  data-confirm="@(d.CanSkip ? $"Skip the delivery on {d.ScheduledFor.ToString("dddd, MMM d", Format.Culture)}?{(d.OrderNumber is null ? string.Empty : $" Order {d.OrderNumber} will be cancelled.")}" : null)">
+                                                  data-confirm="Skip the delivery on @d.ScheduledFor.ToString("dddd, MMM d", Format.Culture)?@(d.OrderNumber is null ? string.Empty : $" Order {d.OrderNumber} will be cancelled.")">
                                                 <input type="hidden" name="date" value="@d.Date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)" />
-                                                <input type="hidden" name="skip" value="@(d.CanSkip ? "true" : "false")" />
-                                                <button class="btn btn-outline btn-sm" type="submit">@(d.CanSkip ? "Skip" : "Restore")</button>
+                                                <input type="hidden" name="skip" value="true" />
+                                                <button class="btn btn-outline btn-sm" type="submit">Skip</button>
+                                            </form>
+                                        }
+                                        else if (d.CanUnskip)
+                                        {
+                                            <form method="post" asp-page-handler="Skip" class="toggle-form">
+                                                <input type="hidden" name="date" value="@d.Date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)" />
+                                                <input type="hidden" name="skip" value="false" />
+                                                <button class="btn btn-green btn-sm" type="submit">Restore</button>
                                             </form>
                                         }
                                     </td>
@@ -226,7 +233,7 @@
                                                 </div>
                                                 <span asp-validation-for="Input.Lines[i].UnitPrice" class="field-validation-error"></span>
                                             </td>
-                                            <td class="num"><label class="check" style="justify-content:flex-end;"><input type="checkbox" name="Input.Lines[@i].Remove" value="true" checked="@(line.Remove ? "checked" : null)" aria-label="Remove @line.ItemName" /></label></td>
+                                            <td class="num"><label class="check remove-check"><input type="checkbox" name="Input.Lines[@i].Remove" value="true" checked="@(line.Remove ? "checked" : null)" aria-label="Remove @line.ItemName" /><span class="remove-label" aria-hidden="true">Remove</span></label></td>
                                         </tr>
                                     }
                                     <tr class="add-row">
@@ -335,7 +342,7 @@
         </section>
 
         <section class="panel">
-            <div class="panel-head"><h2>History</h2></div>
+            <div class="panel-head"><h2>Event history</h2></div>
             <div class="panel-body">
                 <ul class="history">
                     @foreach (var e in so.Events)
@@ -387,7 +394,7 @@
                                 <button class="btn btn-outline btn-block" type="submit" name="change" value="@StandingOrderAction.Decline"
                                         data-confirm="Decline the request from @so.BusinessName?">Decline request</button>
                             }
-                            @if (so.CanCancel)
+                            @if (Model.CanCancel)
                             {
                                 <button class="btn btn-danger btn-block" type="submit" name="change" value="@StandingOrderAction.Cancel"
                                         data-confirm="Cancel the standing order for @so.BusinessName? This cannot be undone. Orders not yet started are withdrawn.">@Icons.Get("trash") Cancel standing order</button>

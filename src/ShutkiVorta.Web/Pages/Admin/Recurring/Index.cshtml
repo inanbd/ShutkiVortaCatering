@@ -7,7 +7,10 @@
 <div class="generate-bar">
     <p class="mb-0">
         @Icons.Get("clock")
-        <span>Orders for active standing orders are created automatically every hour, <strong>@Model.GenerateDaysAhead days ahead</strong>, and then appear in <a href="/admin/orders?source=Restaurant">Orders</a> like any other order.</span>
+        <span>
+            Orders for active standing orders are created @(Model.AutoGenerate ? "automatically every hour" : "when you press the button (automatic generation is off)"),
+            <strong>@Model.GenerateDaysAhead days ahead</strong>, and then appear in <a href="/admin/orders?source=@OrderSource.Restaurant">Orders</a> like any other order.
+        </span>
     </p>
     <form method="post" asp-page-handler="Generate" asp-route-status="@Model.Tab" asp-route-q="@Model.Q">
         <button class="btn btn-green btn-sm" type="submit">@Icons.Get("check-circle") Generate upcoming deliveries now</button>
@@ -52,7 +55,7 @@
                 }
                 else if (Model.Tab == nameof(StandingOrderStatus.PendingApproval))
                 {
-                    <text>No requests are waiting for approval. 🎉</text>
+                    <text>No requests are waiting for approval.</text>
                 }
                 else
                 {
@@ -70,10 +73,10 @@
                     @foreach (var so in Model.StandingOrders.Items)
                     {
                         <tr>
-                            <td><a class="strong" href="/admin/recurring/@so.Id">@so.Reference</a><br /><span class="small muted">@so.Fulfillment.DisplayName()</span></td>
+                            <td class="nowrap"><a class="strong" href="/admin/recurring/@so.Id">@so.Reference</a><br /><span class="small muted">@so.Fulfillment.DisplayName()</span></td>
                             <td>
                                 <a class="strong" href="/admin/recurring/@so.Id">@so.BusinessName</a><br />
-                                <span class="small muted">@so.ContactName &middot; <a href="tel:@(new string(so.Phone.Where(c => char.IsDigit(c) || c == '+').ToArray()))">@so.Phone</a></span>
+                                <span class="small muted">@so.ContactName &middot; <a class="nowrap" href="tel:@(new string(so.Phone.Where(c => char.IsDigit(c) || c == '+').ToArray()))">@so.Phone</a></span>
                             </td>
                             <td>
                                 <strong>@so.DaysText</strong><br />
@@ -82,10 +85,10 @@
                             <td><div class="preview">@so.ItemsPreview</div></td>
                             <td class="num"><strong>@Ui.Money(so.SubtotalPerDelivery)</strong></td>
                             <td>
-                                <partial name="_StandingOrderStatus" model="so.Status" />
+                                <partial name="_StandingOrderBadge" model="so.Status" />
                                 @if (so.TaxExempt)
                                 {
-                                    <br /><span class="small muted">Tax exempt</span>
+                                    <br /><span class="small muted nowrap">Tax exempt</span>
                                 }
                             </td>
                             <td class="small">@so.CreatedAtUtc.ToString("MMM d, yyyy", Format.Culture)</td>

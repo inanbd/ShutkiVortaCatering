@@ -35,6 +35,7 @@ public sealed class IndexModel(ISender sender, IOptions<WholesaleOptions> wholes
     public string Tab { get; private set; } = AllTab;
 
     public int GenerateDaysAhead => wholesale.Value.GenerateDaysAhead;
+    public bool AutoGenerate => wholesale.Value.AutoGenerate;
 
     public async Task OnGetAsync(CancellationToken cancellationToken)
     {
