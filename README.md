@@ -20,6 +20,21 @@ stitching, jamdani patterns, alpona motifs, Bengali typography)
   slots are configurable), Dallas sales tax, delivery fee, free-delivery threshold, delivery-ZIP check
 - Thank-you page, private order-status page (emailed link, no account needed), guest "track my order"
 - Catering inquiry and contact forms (with honeypot spam protection), FAQ, About, Privacy
+- **Our Kitchen** (`/kitchen`): our vortas are made by Bangladeshi mothers and homemakers in an inspected
+  Dallas kitchen, with a "Join our kitchen" form for homemakers who want to cook with us. The same story
+  appears on **Our Story** (`/about`) and the home page.
+
+**Restaurants: wholesale standing orders** (`/restaurants`)
+- Landing page with the wholesale price list (per-item wholesale price, or retail minus a default discount),
+  how it works, FAQ and SEO metadata
+- Restaurants (signed in) request a **standing order**: vortas and pounds per delivery (wholesale minimum per
+  item and per delivery), **days of the week**, delivery time, first and optional last delivery date,
+  delivery or pickup, tax-permit number. A live estimate shows the cost per delivery and per week.
+- After an admin approves, **orders are generated automatically** a few days ahead (`Wholesale:GenerateDaysAhead`)
+  as normal kitchen orders marked "Restaurant". Generation is idempotent (one ledger row per date), skips
+  closed days and blackout dates, and runs at startup and every hour.
+- Restaurants manage everything from **My account → Restaurant orders**: upcoming deliveries, skip or restore a
+  date, pause, resume or cancel (up to `Wholesale:ChangeCutoffHours` before a delivery)
 
 **Customer accounts**
 - Register, sign in, confirm email, forgot/reset password, change password, profile and saved address
@@ -34,12 +49,21 @@ stitching, jamdani patterns, alpona motifs, Bengali typography)
   to the customer, internal kitchen notes, printable layout
 - Menu items: create, edit, upload photo, hide/show, delete (blocked once an item has been ordered),
   per-item SEO title and description
-- Catering inquiries, customers (grant/revoke admin), settings overview with a **send test email** button
+- **Restaurant orders** (`/admin/recurring`): approve or decline requests; edit items, agreed per-lb prices,
+  days, time, delivery fee and **tax exemption** (once a Texas resale certificate is on file); pause, resume,
+  cancel; skip or restore dates; generate deliveries now; monthly **statement** per restaurant
+- **Production plan** (`/admin/production`): pounds of each vorta per day for online orders, generated
+  restaurant orders and standing orders not generated yet
+- Catering and "join our kitchen" inquiries, customers (grant/revoke admin)
+- Settings overview with email diagnostics, **Test connection** and **Send test email**; **Email log** with retry
 
 **Email notifications** (branded HTML templates with a plain-text alternative)
-- To admins: new order, order cancelled by customer, new catering inquiry
+- To admins: new order, order cancelled by customer, new inquiry, new restaurant request, a restaurant
+  pausing/cancelling or skipping a delivery
 - To customers: order confirmation, status updates, inquiry received, confirm email, welcome, password reset
-- Emails are queued and sent in the background with retries, so checkout is never slowed down by SMTP
+- To restaurants: request received, approved/declined/paused/resumed/cancelled
+- Emails go through a durable outbox in the database and are sent in the background with retries, so
+  checkout is never slowed down by SMTP and nothing is lost when the mail server is down
 
 **SEO**
 - Unique titles and meta descriptions, canonical URLs, Open Graph and Twitter cards
@@ -155,7 +179,8 @@ go out once it is back.
 | Section | Highlights |
 |---|---|
 | `Business` | name, Bengali name, phone, email, address (leave `StreetAddress` empty to share it only after ordering), hours, time zone (`America/Chicago`) |
-| `Ordering` | `AcceptingOrders`, `MinimumLeadTimeHours`, `MaxDaysInAdvance`, slot times, `ClosedDays`, `DeliveryFee`, `FreeDeliveryThreshold`, `MinimumDeliverySubtotal`, `TaxRate` (8.25% Dallas), `DeliveryZipPrefixes`, payment instructions |
+| `Ordering` | `AcceptingOrders`, `MinimumLeadTimeHours`, `MaxDaysInAdvance`, slot times, `ClosedDays`, `BlackoutDates` (e.g. `"2027-03-20"` for Eid; applies to restaurant deliveries too), `DeliveryFee`, `FreeDeliveryThreshold`, `MinimumDeliverySubtotal`, `TaxRate` (8.25% Dallas), `DeliveryZipPrefixes`, payment instructions |
+| `Wholesale` | `AcceptingRequests`, `DiscountPercent` (default wholesale price = retail minus this, unless a menu item has its own wholesale price), `MinimumQuantityPerItem`, `QuantityStep`, `MinimumSubtotalPerDelivery`, `DeliveryFee`, `LeadTimeDays`, `GenerateDaysAhead`, `AutoGenerate`, `ChangeCutoffHours`, delivery time slots, `PaymentTerms` |
 | `Site` | `BaseUrl` (set your public domain in production, used for canonical URLs, sitemap and email links; empty = current host), `AllowSearchEngineIndexing` (set `false` on staging), search-console verification codes |
 | `Identity` | `RequireConfirmedEmail` (default `false`: customers can sign in before confirming) |
 | `Seed` | first administrator account and whether to seed the starter menu |
@@ -167,7 +192,8 @@ go out once it is back.
 ```
 src/
   ShutkiVorta.Domain           Entities and business rules, no dependencies
-                               MenuItem, Order (+ lines, status history, pricing), CateringInquiry
+                               MenuItem, Order (+ lines, status history, pricing), CateringInquiry,
+                               StandingOrder (restaurant recurring orders, WeekDays schedule)
   ShutkiVorta.Application      Use cases (CQRS): MediatR commands/queries/notifications, FluentValidation,
                                pipeline behaviors (logging, authorization, validation), interfaces, DTOs
   ShutkiVorta.Infrastructure   Dapper repositories, SQL dialects (SQLite/SQL Server), SQL migrations,
@@ -205,7 +231,8 @@ SHUTKIVORTA_TEST_SQLSERVER="Server=localhost,1433;User Id=sa;Password=...;TrustS
 ## Going live checklist
 
 1. Change `Seed:AdminPassword` (or sign in and change the password right away), and set real `Business` details.
-2. Configure SMTP (`Email:DeliveryMethod = "Smtp"`) and `Email:AdminRecipients`; send a test email.
+2. Fill in `Email:Smtp`, `Email:FromAddress` and `Email:AdminRecipients`; in Admin → Settings run
+   **Test connection** and **Send test email**, and check that no warnings remain.
 3. Set `Site:BaseUrl` to your domain (e.g. `https://www.yourdomain.com`).
 4. Run behind HTTPS. Behind a reverse proxy, set `ASPNETCORE_FORWARDEDHEADERS_ENABLED=true`.
 5. Persist `App_Data/` (SQLite database and data-protection keys) and `wwwroot/uploads/` (menu photos),
