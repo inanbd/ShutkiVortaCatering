@@ -16,7 +16,7 @@ public sealed class AboutModel(IAppUrls urls, IOptions<BusinessOptions> business
         var seo = ViewData.SetSeo(new SeoMetadata
         {
             Title = $"Our Story — Bangladeshi Home Cooking in {b.City}",
-            Description = $"How a love for shutki and handmade vortas became {b.Name}: traditional Bangladeshi recipes, shil-pata techniques and mustard oil, made fresh in {b.City}, Texas.",
+            Description = $"How a love for shutki and handmade vortas became {b.Name}: traditional recipes made by Bangladeshi mothers on the shil-pata with raw mustard oil, fresh in {b.City}, Texas.",
             CanonicalPath = "/about",
             ImageUrl = "/images/site/dried-fish.webp",
         });
