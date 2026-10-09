@@ -1,7 +1,9 @@
 using System.Xml.Linq;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Options;
+using Microsoft.Extensions.Primitives;
 using NSubstitute;
+using ShutkiVorta.Application.Common.Interfaces;
 using ShutkiVorta.Application.Common.Options;
 using ShutkiVorta.Application.Features.Menu;
 using ShutkiVorta.Application.Features.Seo;
@@ -14,12 +16,16 @@ public sealed class SeoQueryTests
     private readonly IMenuItemRepository _menu = Substitute.For<IMenuItemRepository>();
     private readonly MemoryCache _cache = new(new MemoryCacheOptions());
     private readonly SiteOptions _site = new();
+    private readonly ISettingsChangeSignal _settingsChanged = Substitute.For<ISettingsChangeSignal>();
 
-    public SeoQueryTests() =>
+    public SeoQueryTests()
+    {
         _menu.GetAllAsync(true, Arg.Any<CancellationToken>()).Returns([TestData.Item(1), TestData.Item(2, "Aloo Vorta", 11.99m)]);
+        _settingsChanged.GetChangeToken().Returns(_ => new CancellationChangeToken(CancellationToken.None));
+    }
 
     private SeoQueryHandlers CreateHandler() =>
-        new(_menu, new FakeUrls(), new FakeClock(TestData.Now), _cache, Options.Create(_site), Options.Create(new BusinessOptions()));
+        new(_menu, new FakeUrls(), new FakeClock(TestData.Now), _cache, _settingsChanged, Options.Create(_site), Options.Create(new BusinessOptions()));
 
     [Fact]
     public async Task Sitemap_ListsStaticPagesAndEveryMenuItem()

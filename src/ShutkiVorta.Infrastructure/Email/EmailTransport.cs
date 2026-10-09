@@ -17,6 +17,9 @@ internal sealed class EmailTransport(
     IHostEnvironment environment,
     ILogger<EmailTransport> logger) : IEmailTransport
 {
+    private const string UnreadablePasswordHint =
+        "The server's data-protection keys changed since the password was saved. Enter the password again in Admin → Settings → Email.";
+
     public async Task<EmailDeliveryResult> SendAsync(EmailMessage message, CancellationToken cancellationToken = default)
     {
         var settings = options.CurrentValue;
@@ -49,6 +52,12 @@ internal sealed class EmailTransport(
                 string.IsNullOrWhiteSpace(smtp.Host) || !smtp.IsConfigured
                     ? "Fill in the SMTP server, port, user name and password in Admin → Settings → Email."
                     : "Set the delivery method to \"Automatic\" in Admin → Settings → Email (Advanced).");
+        }
+
+        if (smtp.PasswordUnreadable)
+        {
+            steps.Add(new SmtpConnectionTestStep("Settings", false, "The saved SMTP password cannot be decrypted."));
+            return new SmtpConnectionTestResult(false, "The saved SMTP password cannot be decrypted.", steps, UnreadablePasswordHint);
         }
 
         var (security, correction) = SmtpSecurity.Resolve(smtp);
@@ -131,6 +140,12 @@ internal sealed class EmailTransport(
 
     private async Task<string> SendViaSmtpAsync(MimeMessage mime, SmtpSettings smtp, CancellationToken cancellationToken)
     {
+        if (smtp.PasswordUnreadable)
+        {
+            // Retried, so the queued emails go out once an admin re-enters the password.
+            throw new EmailDeliveryException("The saved SMTP password cannot be decrypted.", UnreadablePasswordHint) { Retryable = true };
+        }
+
         var (security, _) = SmtpSecurity.Resolve(smtp);
         using var client = CreateClient(smtp);
         try

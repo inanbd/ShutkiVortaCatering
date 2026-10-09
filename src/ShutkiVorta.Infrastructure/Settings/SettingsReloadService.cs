@@ -7,7 +7,7 @@ namespace ShutkiVorta.Infrastructure.Settings;
 /// When the site runs on several servers, settings saved on one of them reach the others within 30 seconds.
 /// (On the server where they were saved they apply immediately.)
 /// </summary>
-internal sealed class SettingsReloadService(SettingsRepository repository, DatabaseSettingsSource source, ILogger<SettingsReloadService> logger) : BackgroundService
+internal sealed class SettingsReloadService(SettingsRepository repository, SettingsConfiguration settings, ILogger<SettingsReloadService> logger) : BackgroundService
 {
     private static readonly TimeSpan Interval = TimeSpan.FromSeconds(30);
 
@@ -19,13 +19,18 @@ internal sealed class SettingsReloadService(SettingsRepository repository, Datab
         {
             do
             {
+                if (!settings.Provider.IsConnected)
+                {
+                    continue; // The database is still being prepared.
+                }
+
                 try
                 {
                     var revision = await repository.GetGlobalRevisionAsync(stoppingToken);
-                    if (seen is not null && revision != seen && source.IsAttached)
+                    if (seen is not null && revision != seen)
                     {
                         logger.LogInformation("Settings were changed on another server; reloading");
-                        source.Reload();
+                        await settings.Provider.ReloadAsync(stoppingToken);
                     }
 
                     seen = revision;

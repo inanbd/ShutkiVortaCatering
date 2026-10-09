@@ -96,7 +96,7 @@ public static class SettingsCatalog
             Field("Ordering:MaxDaysInAdvance", "Book up to (days ahead)", SettingKind.Integer, "Schedule") with { Min = 1, Max = 365 },
             Field("Ordering:FirstSlot", "First pickup/delivery time", SettingKind.Time, "Schedule"),
             Field("Ordering:LastSlot", "Last pickup/delivery time", SettingKind.Time, "Schedule"),
-            Field("Ordering:SlotIntervalMinutes", "Minutes between time slots", SettingKind.Integer, "Schedule") with { Min = 5, Max = 240 },
+            Field("Ordering:SlotIntervalMinutes", "Minutes between time slots", SettingKind.Integer, "Schedule") with { Min = 15, Max = 240, Step = 5 },
             Field("Ordering:ClosedDays", "Kitchen closed on", SettingKind.DaysOfWeek, "Schedule") with { Choices = Weekdays, Help = "Applies to online and restaurant orders." },
             Field("Ordering:BlackoutDates", "Holiday closures", SettingKind.List, "Schedule") with { Placeholder = "2027-03-20", Help = "One date per line (yyyy-mm-dd), e.g. Eid. Applies to online and restaurant orders." },
             Field("Ordering:DeliveryFee", "Delivery fee", SettingKind.Money, "Delivery") with { Min = 0, Max = 500 },
@@ -122,7 +122,7 @@ public static class SettingsCatalog
             Field("Wholesale:ChangeCutoffHours", "Changes allowed until (hours before)", SettingKind.Integer, "Schedule") with { Min = 0, Max = 168, Help = "Restaurants can skip or pause deliveries online until this many hours before." },
             Field("Wholesale:FirstSlot", "First delivery time", SettingKind.Time, "Schedule"),
             Field("Wholesale:LastSlot", "Last delivery time", SettingKind.Time, "Schedule"),
-            Field("Wholesale:SlotIntervalMinutes", "Minutes between delivery times", SettingKind.Integer, "Schedule") with { Min = 5, Max = 240 },
+            Field("Wholesale:SlotIntervalMinutes", "Minutes between delivery times", SettingKind.Integer, "Schedule") with { Min = 15, Max = 240, Step = 5 },
             Field("Wholesale:DeliveryAreaDescription", "Delivery area (shown to restaurants)", SettingKind.Text, "Schedule"),
             Field("Wholesale:AutoGenerate", "Create upcoming orders automatically", SettingKind.Bool, "Order generation") with { Help = "Runs every hour. When off, use \"Generate upcoming deliveries now\" on the Restaurant orders page." },
             Field("Wholesale:GenerateDaysAhead", "Create orders this many days ahead", SettingKind.Integer, "Order generation") with { Min = 1, Max = 60 },
@@ -130,7 +130,7 @@ public static class SettingsCatalog
 
         new("email", EmailOptions.SectionName, "Email", "Your mail server and who receives notifications. Use \"Test connection\" after saving.", "mail",
         [
-            Field("Email:Enabled", "Send emails", SettingKind.Bool, "Notifications") with { Help = "Master switch. When off, emails are logged but not sent." },
+            Field("Email:Enabled", "Send emails", SettingKind.Bool, "Notifications") with { Help = "Master switch. While off, emails are recorded in the email log but never sent (not even later)." },
             Field("Email:AdminRecipients", "Notify about new orders", SettingKind.List, "Notifications") with { Placeholder = "owner@yourdomain.com", Help = "One email address per line. They receive new orders, inquiries and restaurant requests." },
             Field("Email:SendCustomerStatusUpdates", "Email customers when their order status changes", SettingKind.Bool, "Notifications"),
             Field("Email:FromName", "Sender name", SettingKind.Text, "Sender"),
@@ -153,12 +153,11 @@ public static class SettingsCatalog
                 Choices = [new("Auto", "Automatic: send when an SMTP server is set"), new("Smtp", "Always send through SMTP"), new("PickupDirectory", "Never send; save to a folder (testing)")],
                 Advanced = true,
             },
-            Field("Email:PickupDirectory", "Folder for saved emails", SettingKind.Text, "Mail server (SMTP)") with { Help = "Used when emails are saved instead of sent. Relative to the site folder.", Advanced = true },
         ]),
 
         new("website", SiteOptions.SectionName, "Website & search engines", "Your web address and how search engines see the site.", "search",
         [
-            Field("Site:BaseUrl", "Website address", SettingKind.Url, "Website") with { Placeholder = "https://www.yourdomain.com", Help = "Used in emails, the sitemap and links shared on social media. Leave empty to use the address the site is opened with." },
+            Field("Site:BaseUrl", "Website address", SettingKind.Url, "Website") with { Placeholder = "https://www.yourdomain.com", Help = "Used in every email link (including password resets), the sitemap and social media. Set it to your real address once the site is live." },
             Field("Site:AllowSearchEngineIndexing", "Let search engines list the site", SettingKind.Bool, "Search engines") with { Help = "Turn off for a test copy of the site." },
             Field("Site:DefaultMetaDescription", "Default description for search results", SettingKind.Multiline, "Search engines"),
             Field("Site:DefaultSocialImage", "Default image for social media", SettingKind.Text, "Search engines") with { Placeholder = "/images/og-default.jpg" },
@@ -169,12 +168,12 @@ public static class SettingsCatalog
 
         new("accounts", AccountOptions.SectionName, "Customer accounts", "Rules for customer sign-up and sign-in.", "users",
         [
-            Field("Identity:RequireConfirmedEmail", "Require email confirmation before sign-in", SettingKind.Bool, "Sign-in") with { Help = "Customers must click the link in their welcome email before they can sign in." },
+            Field("Identity:RequireConfirmedEmail", "Require email confirmation before sign-in", SettingKind.Bool, "Sign-in") with { Help = "Customers must click the link in their welcome email before they can sign in. Administrators are never blocked." },
         ]),
 
         new("spam-protection", RateLimitingOptions.SectionName, "Spam protection", "How often one visitor can send the contact, catering, kitchen, restaurant and sign-up forms.", "check-circle",
         [
-            Field("RateLimiting:FormPostsPerWindow", "Submissions allowed per form", SettingKind.Integer, "Limits") with { Min = 1, Max = 1000 },
+            Field("RateLimiting:FormPostsPerWindow", "Submissions allowed per form", SettingKind.Integer, "Limits") with { Min = 3, Max = 1000, Help = "Per visitor. If the site runs behind a proxy, make sure forwarded headers are enabled so visitors are told apart." },
             Field("RateLimiting:WindowMinutes", "…within this many minutes", SettingKind.Integer, "Limits") with { Min = 1, Max = 1440 },
         ]),
     ];

@@ -12,16 +12,20 @@ namespace ShutkiVorta.Application;
 
 public static class DependencyInjection
 {
-    public static IServiceCollection AddApplication(this IServiceCollection services, IConfiguration configuration)
+    /// <param name="settings">
+    /// The database-backed settings (Admin → Settings) — not the application configuration, so that what admins save is
+    /// exactly what the site uses (see Infrastructure's SettingsConfiguration).
+    /// </param>
+    public static IServiceCollection AddApplication(this IServiceCollection services, IConfiguration settings)
     {
         // Business settings live in the database (Admin → Settings) and can change while the site runs.
-        services.AddLiveOptions<BusinessOptions>(configuration, BusinessOptions.SectionName);
-        services.AddLiveOptions<OrderingOptions>(configuration, OrderingOptions.SectionName);
-        services.AddLiveOptions<EmailOptions>(configuration, EmailOptions.SectionName);
-        services.AddLiveOptions<SiteOptions>(configuration, SiteOptions.SectionName);
-        services.AddLiveOptions<WholesaleOptions>(configuration, WholesaleOptions.SectionName);
-        services.AddLiveOptions<AccountOptions>(configuration, AccountOptions.SectionName);
-        services.AddLiveOptions<RateLimitingOptions>(configuration, RateLimitingOptions.SectionName);
+        services.AddLiveOptions<BusinessOptions>(settings, BusinessOptions.SectionName);
+        services.AddLiveOptions<OrderingOptions>(settings, OrderingOptions.SectionName);
+        services.AddLiveOptions<EmailOptions>(settings, EmailOptions.SectionName);
+        services.AddLiveOptions<SiteOptions>(settings, SiteOptions.SectionName);
+        services.AddLiveOptions<WholesaleOptions>(settings, WholesaleOptions.SectionName);
+        services.AddLiveOptions<AccountOptions>(settings, AccountOptions.SectionName);
+        services.AddLiveOptions<RateLimitingOptions>(settings, RateLimitingOptions.SectionName);
 
         services.AddMediatR(cfg =>
         {

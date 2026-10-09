@@ -14,6 +14,11 @@ public sealed class EmailOptions
     /// </summary>
     public string DeliveryMethod { get; set; } = EmailDeliveryMethods.Auto;
 
+    /// <summary>
+    /// Folder for emails that are saved instead of sent. A server path, so it is set in appsettings.json (Email:PickupDirectory),
+    /// never from the admin UI.
+    /// </summary>
+    [Settings.SettingIgnore]
     public string PickupDirectory { get; set; } = "App_Data/mail";
     public string FromName { get; set; } = "Shutki Vorta Catering";
     public string FromAddress { get; set; } = "no-reply@example.com";

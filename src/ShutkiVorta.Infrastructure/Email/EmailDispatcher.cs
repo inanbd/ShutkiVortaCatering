@@ -111,6 +111,11 @@ internal sealed class EmailDispatcher(
     /// <summary>Only network hiccups and temporary (4xx) refusals are worth retrying; wrong settings fail immediately.</summary>
     internal static bool IsTransient(Exception ex)
     {
+        if (ex is EmailDeliveryException { Retryable: true })
+        {
+            return true;
+        }
+
         var cause = ex is EmailDeliveryException { InnerException: { } inner } ? inner : ex;
         return cause is SocketException or TimeoutException or IOException or SmtpProtocolException
                    or ServiceNotConnectedException or OperationCanceledException

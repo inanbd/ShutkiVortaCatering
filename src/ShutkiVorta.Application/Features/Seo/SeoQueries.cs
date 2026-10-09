@@ -57,6 +57,7 @@ internal sealed class SeoQueryHandlers(
     IAppUrls urls,
     IDateTimeProvider clock,
     IMemoryCache cache,
+    ISettingsChangeSignal settingsChanged,
     IOptions<SiteOptions> site,
     IOptions<BusinessOptions> business) :
     IRequestHandler<GetSitemapQuery, string>,
@@ -73,6 +74,7 @@ internal sealed class SeoQueryHandlers(
         (await cache.GetOrCreateAsync(SeoCacheKeys.Sitemap, async entry =>
         {
             entry.AbsoluteExpirationRelativeToNow = SeoCacheKeys.Lifetime;
+            entry.AddExpirationToken(settingsChanged.GetChangeToken());
             return await BuildSitemapAsync(cancellationToken);
         }))!;
 
@@ -80,6 +82,7 @@ internal sealed class SeoQueryHandlers(
         (await cache.GetOrCreateAsync(SeoCacheKeys.Robots, async entry =>
         {
             entry.AbsoluteExpirationRelativeToNow = SeoCacheKeys.Lifetime;
+            entry.AddExpirationToken(settingsChanged.GetChangeToken());
             return await BuildRobotsAsync(cancellationToken);
         }))!;
 

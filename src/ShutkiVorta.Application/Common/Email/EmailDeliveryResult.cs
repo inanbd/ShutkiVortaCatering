@@ -11,4 +11,7 @@ public sealed record SmtpConnectionTestResult(bool Succeeded, string Summary, IR
 public sealed class EmailDeliveryException(string message, string? hint, Exception? inner = null) : Exception(message, inner)
 {
     public string? Hint { get; } = hint;
+
+    /// <summary>The problem may go away by itself (or once an admin fixes a setting), so the email is retried later.</summary>
+    public bool Retryable { get; init; }
 }

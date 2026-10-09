@@ -3,6 +3,7 @@ using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using ShutkiVorta.Application.Common.Interfaces;
 using ShutkiVorta.Application.Common.Options;
@@ -26,7 +27,10 @@ namespace ShutkiVorta.Infrastructure;
 
 public static class DependencyInjection
 {
-    public static IServiceCollection AddInfrastructure(this IServiceCollection services, IConfiguration configuration, IHostEnvironment environment)
+    /// <param name="configuration">The application configuration (appsettings.json, environment variables).</param>
+    /// <param name="settings">The database-backed business settings, also passed to AddApplication.</param>
+    public static IServiceCollection AddInfrastructure(
+        this IServiceCollection services, IConfiguration configuration, IHostEnvironment environment, SettingsConfiguration settings)
     {
         // ---- Database (SQLite or SQL Server, selected by Database:Provider) ----
         DapperConfiguration.Configure();
@@ -83,10 +87,13 @@ public static class DependencyInjection
         services.AddHostedService<EmailDispatcher>();
 
         // ---- Business settings stored in the database (Admin → Settings) ----
+        services.AddSingleton(settings);
         services.AddSingleton<SettingsSecretProtector>();
         services.AddSingleton<SettingsRepository>();
         services.AddSingleton<ISettingsStore>(sp => sp.GetRequiredService<SettingsRepository>());
-        services.AddSingleton(sp => new DatabaseSettingsSource(() => sp.GetRequiredService<SettingsRepository>().LoadAll()));
+        services.AddSingleton<SettingsStartupReport>();
+        services.AddSingleton<ISettingsDiagnostics>(sp => sp.GetRequiredService<SettingsStartupReport>());
+        services.AddSingleton<ISettingsChangeSignal, SettingsChangeSignal>();
         services.AddSingleton<SettingsImporter>();
         services.AddSingleton<IPostConfigureOptions<EmailOptions>, EmailSecretsPostConfigure>();
         services.AddHostedService<SettingsReloadService>();
@@ -115,22 +122,18 @@ public static class DependencyInjection
             await scope.ServiceProvider.GetRequiredService<DatabaseInitializer>().InitializeAsync(cancellationToken);
         }
 
-        var source = services.GetRequiredService<DatabaseSettingsSource>();
-        if (source.IsAttached)
+        var settings = services.GetRequiredService<SettingsConfiguration>();
+        if (settings.Provider.IsConnected)
         {
             return;
         }
 
-        // First run: copy settings from appsettings.json / environment variables into the database. Then add the database as
-        // the last (highest-priority) configuration source, so everything bound from it reflects what admins save.
-        var configuration = services.GetRequiredService<IConfiguration>();
-        await services.GetRequiredService<SettingsImporter>().ImportAsync(configuration, cancellationToken);
-        if (configuration is not IConfigurationBuilder builder)
-        {
-            throw new InvalidOperationException("The application's configuration cannot be extended with the database settings source.");
-        }
-
-        builder.Add(source);
+        // First run: copy settings from appsettings.json / environment variables into the database (later runs only report
+        // configured values that differ). From then on business settings are read from the database alone.
+        var repository = services.GetRequiredService<SettingsRepository>();
+        await services.GetRequiredService<SettingsImporter>().ImportAsync(services.GetRequiredService<IConfiguration>(), cancellationToken);
+        settings.Provider.Connect(repository.LoadAllAsync, services.GetRequiredService<ILoggerFactory>().CreateLogger<SettingsConfiguration>());
+        await settings.Provider.ReloadAsync(cancellationToken);
     }
 
     private static string ResolveConnectionString(IConfiguration configuration, DatabaseProvider provider, string contentRoot)

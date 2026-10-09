@@ -4,6 +4,7 @@ using Microsoft.Net.Http.Headers;
 using ShutkiVorta.Application;
 using ShutkiVorta.Application.Features.Seo;
 using ShutkiVorta.Infrastructure;
+using ShutkiVorta.Infrastructure.Settings;
 using ShutkiVorta.Web;
 using ShutkiVorta.Web.Infrastructure;
 
@@ -13,9 +14,19 @@ CultureInfo.DefaultThreadCurrentUICulture = culture;
 
 var builder = WebApplication.CreateBuilder(args);
 
-builder.Services.AddApplication(builder.Configuration);
-builder.Services.AddInfrastructure(builder.Configuration, builder.Environment);
+// Business settings (Admin → Settings) are stored in the database; appsettings.json only holds server settings.
+var settings = SettingsConfiguration.Create();
+
+builder.Services.AddApplication(settings.Root);
+builder.Services.AddInfrastructure(builder.Configuration, builder.Environment, settings);
 builder.Services.AddWebServices(builder.Configuration, builder.Environment);
+
+// Catch lifetime mistakes (e.g. a singleton holding per-request settings) in every environment, not just Development.
+builder.Host.UseDefaultServiceProvider(options =>
+{
+    options.ValidateScopes = true;
+    options.ValidateOnBuild = true;
+});
 
 var app = builder.Build();
 

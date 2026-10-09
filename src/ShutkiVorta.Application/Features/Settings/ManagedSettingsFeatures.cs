@@ -24,7 +24,27 @@ public sealed record StoredSection(
     IReadOnlyDictionary<string, SecretState> Secrets,
     int Revision,
     DateTime? LastChangedAtUtc,
-    string? LastChangedBy);
+    string? LastChangedBy)
+{
+    /// <summary>Set when an upgrade filled this section with defaults on a site that already had data; cleared on the next save.</summary>
+    public bool NeedsReview { get; init; }
+
+    /// <summary>Most recent changes first.</summary>
+    public IReadOnlyList<SettingChange> History { get; init; } = [];
+}
+
+/// <summary>One recorded change. Secret values are never recorded (shown as "changed"/"removed").</summary>
+public sealed record SettingChange(string Key, string? OldValue, string? NewValue, string ChangedBy, DateTime ChangedAtUtc);
+
+/// <summary>Problems found while loading settings, shown to admins on the settings pages.</summary>
+public interface ISettingsDiagnostics
+{
+    /// <summary>Stored values that could not be used (the built-in default applies instead).</summary>
+    IReadOnlyList<string> RejectedKeys { get; }
+
+    /// <summary>Settings present in appsettings.json or environment variables that differ from the database and are therefore ignored.</summary>
+    IReadOnlyList<string> IgnoredConfigurationKeys { get; }
+}
 
 /// <summary>How a secret setting changes when a section is saved.</summary>
 public sealed record SecretChange(bool Clear, string? NewValue);
@@ -54,16 +74,35 @@ public sealed record SettingsChangedNotification(string Section) : INotification
 
 // ---------------------------------------------------------------------------------------------------------------------
 
-public sealed record SettingsPageSummaryDto(SettingsPage Page, DateTime? LastChangedAtLocal, string? LastChangedBy);
+public sealed record SettingsPageSummaryDto(SettingsPage Page, DateTime? LastChangedAtLocal, string? LastChangedBy)
+{
+    public bool NeedsReview { get; init; }
+}
 
 public sealed record GetSettingsPagesQuery : IRequest<IReadOnlyList<SettingsPageSummaryDto>>, IRequireAdmin;
+
+/// <summary>Settings problems an admin should know about (bad stored values, ignored server configuration, pages to review).</summary>
+public sealed record SettingsNoticesDto(IReadOnlyList<string> RejectedKeys, IReadOnlyList<string> IgnoredConfigurationKeys, IReadOnlyList<SettingsPage> PagesNeedingReview)
+{
+    public bool Any => RejectedKeys.Count + IgnoredConfigurationKeys.Count + PagesNeedingReview.Count > 0;
+}
+
+public sealed record GetSettingsNoticesQuery : IRequest<SettingsNoticesDto>, IRequireAdmin;
 
 public sealed record SettingFieldValueDto(SettingField Field, string? Value, IReadOnlyList<string> Values, SecretState Secret)
 {
     public IReadOnlyList<SettingChoice> Choices => Field.Kind == SettingKind.TimeZone ? SettingsCatalog.TimeZones : Field.Choices;
 }
 
-public sealed record SettingsPageDto(SettingsPage Page, IReadOnlyList<SettingFieldValueDto> Fields, int Revision, DateTime? LastChangedAtLocal, string? LastChangedBy);
+public sealed record SettingsPageDto(SettingsPage Page, IReadOnlyList<SettingFieldValueDto> Fields, int Revision, DateTime? LastChangedAtLocal, string? LastChangedBy)
+{
+    public bool NeedsReview { get; init; }
+
+    /// <summary>Recent changes on this page, newest first, with labels and local times.</summary>
+    public IReadOnlyList<SettingChangeDto> History { get; init; } = [];
+}
+
+public sealed record SettingChangeDto(string Label, string? OldValue, string? NewValue, string ChangedBy, DateTime ChangedAtLocal);
 
 /// <summary>A settings page with its current values, ready to edit (percentages as 8.25, secrets never included).</summary>
 public sealed record GetSettingsPageQuery(string Slug) : IRequest<SettingsPageDto?>, IRequireAdmin;
@@ -84,11 +123,13 @@ public sealed record UpdateSettingsPageCommand : IRequest<int>, IRequireAdmin
 
 internal sealed class ManagedSettingsHandlers(
     ISettingsStore store,
+    ISettingsDiagnostics diagnostics,
     IServiceProvider services,
     ICurrentUser currentUser,
     IDateTimeProvider clock,
     IPublisher publisher) :
     IRequestHandler<GetSettingsPagesQuery, IReadOnlyList<SettingsPageSummaryDto>>,
+    IRequestHandler<GetSettingsNoticesQuery, SettingsNoticesDto>,
     IRequestHandler<GetSettingsPageQuery, SettingsPageDto?>,
     IRequestHandler<UpdateSettingsPageCommand, int>
 {
@@ -98,10 +139,24 @@ internal sealed class ManagedSettingsHandlers(
         foreach (var page in SettingsCatalog.Pages)
         {
             var stored = await store.GetSectionAsync(page.Section, cancellationToken);
-            result.Add(new SettingsPageSummaryDto(page, ToLocal(stored.LastChangedAtUtc), stored.LastChangedBy));
+            result.Add(new SettingsPageSummaryDto(page, ToLocal(stored.LastChangedAtUtc), stored.LastChangedBy) { NeedsReview = stored.NeedsReview });
         }
 
         return result;
+    }
+
+    public async Task<SettingsNoticesDto> Handle(GetSettingsNoticesQuery request, CancellationToken cancellationToken)
+    {
+        var review = new List<SettingsPage>();
+        foreach (var page in SettingsCatalog.Pages)
+        {
+            if ((await store.GetSectionAsync(page.Section, cancellationToken)).NeedsReview)
+            {
+                review.Add(page);
+            }
+        }
+
+        return new SettingsNoticesDto(diagnostics.RejectedKeys, diagnostics.IgnoredConfigurationKeys, review);
     }
 
     public async Task<SettingsPageDto?> Handle(GetSettingsPageQuery request, CancellationToken cancellationToken)
@@ -120,7 +175,28 @@ internal sealed class ManagedSettingsHandlers(
             _ => new SettingFieldValueDto(f, SettingValueFormat.ToDisplay(f, stored.Values.GetValueOrDefault(f.Key)), [], SecretState.Empty),
         }).ToList();
 
-        return new SettingsPageDto(page, fields, stored.Revision, ToLocal(stored.LastChangedAtUtc), stored.LastChangedBy);
+        var labels = page.Fields.ToDictionary(f => f.Key, f => f.Label, StringComparer.OrdinalIgnoreCase);
+        var history = stored.History
+            .Select(h => new SettingChangeDto(LabelFor(labels, h.Key), h.OldValue, h.NewValue, h.ChangedBy, clock.ToBusinessTime(h.ChangedAtUtc)))
+            .ToList();
+
+        return new SettingsPageDto(page, fields, stored.Revision, ToLocal(stored.LastChangedAtUtc), stored.LastChangedBy)
+        {
+            NeedsReview = stored.NeedsReview,
+            History = history,
+        };
+    }
+
+    /// <summary>"Ordering:ClosedDays:1" → "Kitchen closed on".</summary>
+    private static string LabelFor(Dictionary<string, string> labels, string key)
+    {
+        if (labels.TryGetValue(key, out var label))
+        {
+            return label;
+        }
+
+        var colon = key.LastIndexOf(':');
+        return colon > 0 && labels.TryGetValue(key[..colon], out var listLabel) ? listLabel : key;
     }
 
     public async Task<int> Handle(UpdateSettingsPageCommand request, CancellationToken cancellationToken)
@@ -197,6 +273,11 @@ internal sealed class ManagedSettingsHandlers(
             }
         }
 
+        if (errors.Count == 0)
+        {
+            await RequirePasswordWhenMailServerChangesAsync(section.Name, options, secrets, errors, cancellationToken);
+        }
+
         if (errors.Count > 0)
         {
             throw ToValidationException(errors);
@@ -219,6 +300,38 @@ internal sealed class ManagedSettingsHandlers(
 
         await publisher.Publish(new SettingsChangedNotification(section.Name), cancellationToken);
         return revision;
+    }
+
+    /// <summary>
+    /// The saved SMTP password may only be sent to the server it was entered for. Changing the server, port, user name or
+    /// security therefore requires typing the password again (otherwise anyone with admin access could redirect it).
+    /// </summary>
+    private async Task RequirePasswordWhenMailServerChangesAsync(
+        string sectionName, object options, Dictionary<string, SecretChange> secrets, Dictionary<string, List<string>> errors, CancellationToken cancellationToken)
+    {
+        if (options is not Common.Options.EmailOptions email || secrets.ContainsKey(ManagedSettings.SmtpPasswordKey))
+        {
+            return;
+        }
+
+        var stored = await store.GetSectionAsync(sectionName, cancellationToken);
+        if (stored.Secrets.GetValueOrDefault(ManagedSettings.SmtpPasswordKey, SecretState.Empty) == SecretState.Empty)
+        {
+            return;
+        }
+
+        string? Stored(string name) => stored.Values.GetValueOrDefault($"Email:Smtp:{name}");
+        var changed =
+            !string.Equals(Stored("Host")?.Trim(), email.Smtp.Host?.Trim(), StringComparison.OrdinalIgnoreCase)
+            || Stored("Port") != SettingsFlattener.Format(email.Smtp.Port)
+            || !string.Equals(Stored("UserName") ?? string.Empty, email.Smtp.UserName ?? string.Empty, StringComparison.Ordinal)
+            || !string.Equals(Stored("Security"), email.Smtp.Security, StringComparison.OrdinalIgnoreCase)
+            || Stored("AcceptInvalidCertificates") != SettingsFlattener.Format(email.Smtp.AcceptInvalidCertificates);
+        if (changed)
+        {
+            AddError(errors, ManagedSettings.SmtpPasswordKey,
+                "You changed the mail server details: please enter the SMTP password again (or tick \"Remove saved password\").");
+        }
     }
 
     private DateTime? ToLocal(DateTime? utc) => utc is { } value ? clock.ToBusinessTime(value) : null;
