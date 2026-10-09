@@ -10,6 +10,15 @@
     <button class="btn btn-outline btn-sm" type="button" onclick="window.print()">@Icons.Get("print") Print</button>
 }
 
+@if (o.StandingOrderId is { } standingOrderId)
+{
+    <a class="standing-banner" href="/admin/recurring/@standingOrderId">
+        @Icons.Get("repeat")
+        <span><strong>Restaurant standing order — @o.CompanyName</strong><span class="small">Generated automatically from the restaurant's recurring order. View the agreement, skip dates or change terms.</span></span>
+        @Icons.Get("arrow-right")
+    </a>
+}
+
 <div class="detail-grid">
     <div>
         <section class="panel">

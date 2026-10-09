@@ -28,7 +28,8 @@ public interface IOrderRepository
 
     Task<IReadOnlyDictionary<string, int>> CountByCustomerAsync(IReadOnlyCollection<string> customerIds, CancellationToken cancellationToken = default);
 
-    Task<IReadOnlyList<PopularItemDto>> GetPopularItemsSinceAsync(DateTime fromUtc, int take, CancellationToken cancellationToken = default);
+    /// <summary>Best-selling items of non-cancelled orders placed since <paramref name="fromUtc"/>, optionally from one source only.</summary>
+    Task<IReadOnlyList<PopularItemDto>> GetPopularItemsSinceAsync(DateTime fromUtc, int take, OrderSource? source = null, CancellationToken cancellationToken = default);
 
     /// <summary>Orders generated from one standing order, scheduled within the range (local time).</summary>
     Task<IReadOnlyList<OrderSummaryDto>> GetForStandingOrderAsync(int standingOrderId, DateTime fromLocal, DateTime toLocal, CancellationToken cancellationToken = default);

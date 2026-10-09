@@ -1,0 +1,118 @@
+@page
+@model ShutkiVorta.Web.Pages.Admin.Production.IndexModel
+@{
+    var plan = Model.Plan;
+}
+@section Actions {
+    <button class="btn btn-green btn-sm" type="button" onclick="window.print()">@Icons.Get("print") Print</button>
+}
+
+<form method="get" class="panel no-print mb-3">
+    <div class="panel-body filters">
+        <a class="btn btn-outline btn-sm" href="@Model.PeriodUrl(plan.From.AddDays(-Model.PeriodDays))">&larr; Previous</a>
+        <div class="field">
+            <label for="from">Starting</label>
+            <input id="from" name="from" type="date" value="@plan.From.ToString("yyyy-MM-dd")" />
+        </div>
+        <div class="field">
+            <label for="days">Days</label>
+            <select id="days" name="days">
+                @foreach (var n in IndexModel.PeriodOptions)
+                {
+                    <option value="@n" selected="@(n == Model.PeriodDays ? "selected" : null)">@(n == 1 ? "1 day" : $"{n} days")</option>
+                }
+            </select>
+        </div>
+        <button class="btn btn-green btn-sm" type="submit">Show</button>
+        <a class="btn btn-outline btn-sm" href="@Model.PeriodUrl(plan.To.AddDays(1))">Next &rarr;</a>
+        @if (plan.From != Model.Today)
+        {
+            <a class="btn btn-outline btn-sm" href="/admin/production?days=@Model.PeriodDays">Today</a>
+        }
+    </div>
+</form>
+
+<h2 class="print-only">Production plan &middot; @Format.ShortDate(plan.From.ToDateTime(TimeOnly.MinValue)) – @Format.ShortDate(plan.To.ToDateTime(TimeOnly.MinValue))</h2>
+
+<div class="kpis">
+    <div class="kpi"><a href="/admin/orders?source=Online&amp;from=@plan.From.ToString("yyyy-MM-dd")&amp;to=@plan.To.ToString("yyyy-MM-dd")">
+        <div class="label">Online orders</div>
+        <div class="value">@plan.Days.Sum(d => d.OnlineOrders)</div>
+        <div class="sub">pickups &amp; deliveries</div></a>
+    </div>
+    <div class="kpi maroon"><a href="/admin/orders?source=Restaurant&amp;from=@plan.From.ToString("yyyy-MM-dd")&amp;to=@plan.To.ToString("yyyy-MM-dd")">
+        <div class="label">Restaurant deliveries</div>
+        <div class="value">@plan.Days.Sum(d => d.RestaurantDeliveries)</div>
+        <div class="sub">orders already created</div></a>
+    </div>
+    <div class="kpi gold"><a href="/admin/recurring?status=Active">
+        <div class="label">Projected deliveries</div>
+        <div class="value">@plan.Days.Sum(d => d.ProjectedDeliveries)</div>
+        <div class="sub">standing orders not yet generated</div></a>
+    </div>
+    <div class="kpi red">
+        <div class="label">To prepare</div>
+        <div class="value">@IndexModel.TotalText(Model.PeriodItems)</div>
+        <div class="sub">@Format.ShortDate(plan.From.ToDateTime(TimeOnly.MinValue)) – @Format.ShortDate(plan.To.ToDateTime(TimeOnly.MinValue))</div>
+    </div>
+</div>
+
+<p class="small muted no-print">Restaurant orders are created @Model.GenerateDaysAhead days ahead. Further out, <em>projected</em> shows what active standing orders will need so you can plan shopping and batch cooking. Cancelled orders are not counted.</p>
+
+@if (Model.PeriodDays > 1 && Model.PeriodItems.Count > 0)
+{
+    <section class="panel mb-3">
+        <div class="panel-head">
+            <h2>Whole period</h2>
+            <span class="muted small">@Model.PeriodDays days</span>
+        </div>
+        <div class="panel-body flush table-wrap">
+            <partial name="_ProductionTable" model="Model.PeriodItems" />
+        </div>
+    </section>
+}
+
+<div class="production-days">
+    @foreach (var day in plan.Days)
+    {
+        var date = day.Date.ToDateTime(TimeOnly.MinValue);
+        <section class="panel production-day @(day.KitchenClosed ? "closed" : null) @(day.Date == Model.Today ? "today" : null)">
+            <div class="panel-head">
+                <h2>@date.ToString("dddd, MMM d", Format.Culture)</h2>
+                <span class="flex gap-1 items-center">
+                    @if (day.Date == Model.Today)
+                    {
+                        <span class="pill pill-on">Today</span>
+                    }
+                    @if (day.KitchenClosed)
+                    {
+                        <span class="pill pill-off">Kitchen closed</span>
+                    }
+                    else if (day.Items.Count > 0)
+                    {
+                        <strong>@IndexModel.TotalText(day.Items)</strong>
+                    }
+                </span>
+            </div>
+            @if (day.Items.Count == 0)
+            {
+                <div class="panel-body"><p class="muted mb-0">@(day.KitchenClosed ? "The kitchen is closed — no orders." : "Nothing scheduled yet.")</p></div>
+            }
+            else
+            {
+                <div class="production-counts small">
+                    <span><strong>@day.OnlineOrders</strong> online order@(day.OnlineOrders == 1 ? "" : "s")</span>
+                    <span><strong>@day.RestaurantDeliveries</strong> restaurant deliver@(day.RestaurantDeliveries == 1 ? "y" : "ies")</span>
+                    @if (day.ProjectedDeliveries > 0)
+                    {
+                        <span><strong>@day.ProjectedDeliveries</strong> projected</span>
+                    }
+                    <a class="no-print" href="/admin/orders?from=@day.Date.ToString("yyyy-MM-dd")&amp;to=@day.Date.ToString("yyyy-MM-dd")">View orders</a>
+                </div>
+                <div class="panel-body flush table-wrap">
+                    <partial name="_ProductionTable" model="day.Items" />
+                </div>
+            }
+        </section>
+    }
+</div>

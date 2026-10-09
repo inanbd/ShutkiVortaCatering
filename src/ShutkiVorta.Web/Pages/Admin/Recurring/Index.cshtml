@@ -1,0 +1,104 @@
+@page
+@model ShutkiVorta.Web.Pages.Admin.Recurring.IndexModel
+@inject ShutkiVorta.Application.Common.Interfaces.IDateTimeProvider Clock
+@section Actions {
+    <a class="btn btn-outline btn-sm" href="/admin/production">@Icons.Get("pot") Production plan</a>
+}
+
+<div class="generate-bar">
+    <p class="mb-0">
+        @Icons.Get("clock")
+        <span>
+            Orders for active standing orders are created @(Model.AutoGenerate ? "automatically every hour" : "when you press the button (automatic generation is off)"),
+            <strong>@Model.GenerateDaysAhead days ahead</strong>, and then appear in <a href="/admin/orders?source=@OrderSource.Restaurant">Orders</a> like any other order.
+        </span>
+    </p>
+    <form method="post" asp-page-handler="Generate" asp-route-status="@Model.Tab" asp-route-q="@Model.Q">
+        <button class="btn btn-green btn-sm" type="submit">@Icons.Get("check-circle") Generate upcoming deliveries now</button>
+    </form>
+</div>
+
+<nav class="tabs" aria-label="Filter by status">
+    @foreach (var s in IndexModel.StatusTabs)
+    {
+        var count = Model.CountFor(s.ToString());
+        <a class="@(Model.Tab == s.ToString() ? "active" : null)" href="@Model.TabUrl(s.ToString())" aria-current="@(Model.Tab == s.ToString() ? "page" : null)">
+            @s.DisplayName() <span class="count @(s == StandingOrderStatus.PendingApproval && count > 0 ? "attention" : null)">@count</span>
+        </a>
+    }
+    <a class="@(Model.Tab == IndexModel.AllTab ? "active" : null)" href="@Model.TabUrl(IndexModel.AllTab)" aria-current="@(Model.Tab == IndexModel.AllTab ? "page" : null)">
+        All <span class="count">@Model.CountFor(IndexModel.AllTab)</span>
+    </a>
+</nav>
+
+<section class="panel">
+    <div class="panel-head">
+        <form method="get" class="filters" style="width:100%;">
+            <input type="hidden" name="status" value="@Model.Tab" />
+            <div class="field grow">
+                <label for="q">Search</label>
+                <input id="q" name="q" value="@Model.Q" placeholder="Reference, restaurant, contact, email or phone" />
+            </div>
+            <button class="btn btn-green btn-sm" type="submit">@Icons.Get("search") Search</button>
+            @if (!string.IsNullOrWhiteSpace(Model.Q))
+            {
+                <a class="btn btn-outline btn-sm" href="@Model.TabUrl(Model.Tab, keepSearch: false)">Clear</a>
+            }
+        </form>
+    </div>
+    <div class="panel-body flush table-wrap">
+        @if (Model.StandingOrders.Items.Count == 0)
+        {
+            <p class="muted" style="padding:24px;">
+                @if (!string.IsNullOrWhiteSpace(Model.Q))
+                {
+                    <text>No restaurant orders match “@Model.Q”.</text>
+                }
+                else if (Model.Tab == nameof(StandingOrderStatus.PendingApproval))
+                {
+                    <text>No requests are waiting for approval.</text>
+                }
+                else
+                {
+                    <text>No restaurant standing orders here yet. Restaurants request them from the <a href="/restaurants" target="_blank" rel="noopener">restaurant ordering page</a>.</text>
+                }
+            </p>
+        }
+        else
+        {
+            <table class="table">
+                <thead>
+                    <tr><th>Reference</th><th>Restaurant</th><th>Days &amp; time</th><th>Items per delivery</th><th class="num">Per delivery</th><th>Status</th><th>Requested</th></tr>
+                </thead>
+                <tbody>
+                    @foreach (var so in Model.StandingOrders.Items)
+                    {
+                        <tr>
+                            <td class="nowrap"><a class="strong" href="/admin/recurring/@so.Id">@so.Reference</a><br /><span class="small muted">@so.Fulfillment.DisplayName()</span></td>
+                            <td>
+                                <a class="strong" href="/admin/recurring/@so.Id">@so.BusinessName</a><br />
+                                <span class="small muted">@so.ContactName &middot; <a class="nowrap" href="tel:@(new string(so.Phone.Where(c => char.IsDigit(c) || c == '+').ToArray()))">@so.Phone</a></span>
+                            </td>
+                            <td>
+                                <strong>@so.DaysText</strong><br />
+                                <span class="small muted">@Format.Time(so.PreferredTime) &middot; from @so.StartDate.ToString("MMM d", Format.Culture)@(so.EndDate is { } end ? " to " + end.ToString("MMM d", Format.Culture) : string.Empty)</span>
+                            </td>
+                            <td><div class="preview">@so.ItemsPreview</div></td>
+                            <td class="num"><strong>@Ui.Money(so.SubtotalPerDelivery)</strong></td>
+                            <td>
+                                <partial name="_StandingOrderBadge" model="so.Status" />
+                                @if (so.TaxExempt)
+                                {
+                                    <br /><span class="small muted nowrap">Tax exempt</span>
+                                }
+                            </td>
+                            <td class="small nowrap">@Clock.ToBusinessTime(so.CreatedAtUtc).ToString("MMM d, yyyy", Format.Culture)</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+    </div>
+</section>
+<p class="small muted mt-2">@Model.StandingOrders.TotalCount standing order(s)</p>
+<partial name="_Pager" model="(Model.StandingOrders.Page, Model.StandingOrders.TotalPages, (Func<int, string>)Model.PageUrl)" />

@@ -1,0 +1,460 @@
+@page "/admin/recurring/{id:int}"
+@model ShutkiVorta.Web.Pages.Admin.Recurring.DetailsModel
+@using System.Globalization
+@{
+    var so = Model.Order;
+    var phoneHref = "tel:" + new string(so.Phone.Where(c => char.IsDigit(c) || c == '+').ToArray());
+    var estimate = so.EstimatePerDelivery;
+
+    // Once cancelled or declined, only dates that actually had an order (or a recorded reason) are worth listing.
+    var upcoming = so.Status.IsFinal()
+        ? so.Upcoming.Where(d => d.OrderNumber is not null || d.Reason is not null).ToList()
+        : so.Upcoming;
+    var times = Model.Catalog.TimeSlots.Select(t => t.ToString("HH:mm", CultureInfo.InvariantCulture)).ToList();
+    if (!string.IsNullOrEmpty(Model.Input.PreferredTime) && !times.Contains(Model.Input.PreferredTime))
+    {
+        times.Add(Model.Input.PreferredTime);
+        times.Sort(StringComparer.Ordinal);
+    }
+}
+@section Actions {
+    <a class="btn btn-outline btn-sm" href="/admin/recurring">&larr; Restaurant orders</a>
+    <a class="btn btn-outline btn-sm" href="/admin/recurring/@so.Id/statement">@Icons.Get("receipt") Statement</a>
+}
+
+@if (ViewData["TermsError"] is true)
+{
+    <div class="alert alert-error" role="alert">The terms were not saved. Please check the highlighted fields in <a href="#terms">Terms</a>.</div>
+}
+
+<div class="detail-grid">
+    <div>
+        <section class="panel">
+            <div class="panel-head">
+                <h2>Standing order @so.Reference</h2>
+                <partial name="_StandingOrderBadge" model="so.Status" />
+            </div>
+            <div class="panel-body">
+                @if (!string.IsNullOrWhiteSpace(so.StatusReason))
+                {
+                    <div class="alert @(so.Status == StandingOrderStatus.Paused ? "alert-info" : "alert-error")"><strong>@so.StatusName:</strong> @so.StatusReason</div>
+                }
+                <dl class="kv">
+                    <dt>Restaurant</dt><dd><strong>@so.BusinessName</strong></dd>
+                    <dt>Contact</dt><dd>@so.ContactName</dd>
+                    <dt>Phone</dt><dd><a href="@phoneHref">@so.Phone</a></dd>
+                    <dt>Email</dt><dd><a href="mailto:@so.Email?subject=Your standing order @so.Reference">@so.Email</a></dd>
+                    <dt>Tax permit</dt><dd>@(string.IsNullOrWhiteSpace(so.TaxPermitNumber) ? "Not provided" : so.TaxPermitNumber)</dd>
+                    <dt>@so.FulfillmentName</dt>
+                    <dd>
+                        @if (so.IsDelivery)
+                        {
+                            @so.DeliveryAddress<br /><a class="small" target="_blank" rel="noopener" href="https://www.google.com/maps/search/?api=1&query=@Uri.EscapeDataString(so.DeliveryAddress ?? string.Empty)">Open in Google Maps</a>
+                        }
+                        else
+                        {
+                            <text>The restaurant picks up from our kitchen.</text>
+                        }
+                    </dd>
+                    <dt>Schedule</dt>
+                    <dd>
+                        <strong>@so.DaysText at @Format.Time(so.PreferredTime)</strong><br />
+                        <span class="small muted">From @Format.Date(so.StartDate.ToDateTime(TimeOnly.MinValue))@(so.EndDate is { } end ? " until " + Format.Date(end.ToDateTime(TimeOnly.MinValue)) : ", no end date")</span>
+                    </dd>
+                    <dt>Requested</dt><dd>@Format.DateTime(so.CreatedAtLocal)</dd>
+                    @if (so.ApprovedAtLocal is { } approved)
+                    {
+                        <dt>Approved</dt><dd>@Format.DateTime(approved)</dd>
+                    }
+                    @if (!string.IsNullOrWhiteSpace(so.Notes))
+                    {
+                        <dt>Restaurant notes</dt><dd><div class="alert alert-info mb-0" style="white-space:pre-line;">@so.Notes</div></dd>
+                    }
+                </dl>
+            </div>
+        </section>
+
+        <section class="panel">
+            <div class="panel-head">
+                <h2>Items per delivery</h2>
+                <span class="muted small">@so.Lines.Sum(l => l.Quantity).ToString("0.##", Format.Culture) lb in total</span>
+            </div>
+            <div class="panel-body flush table-wrap">
+                <table class="table">
+                    <thead><tr><th>Item</th><th class="num">Quantity</th><th class="num">Agreed price</th><th class="num">Amount</th></tr></thead>
+                    <tbody>
+                        @foreach (var line in so.Lines)
+                        {
+                            var catalogPrice = Model.CatalogPrice(line.MenuItemId);
+                            <tr>
+                                <td><strong>@line.ItemName</strong><br /><span class="bn muted small">@line.ItemBengaliName</span></td>
+                                <td class="num"><strong>@line.QuantityText</strong></td>
+                                <td class="num">
+                                    @Ui.Money(line.UnitPrice)/@line.Unit
+                                    @if (catalogPrice is { } price && price != line.UnitPrice)
+                                    {
+                                        <br /><span class="small muted">catalog @Ui.Money(price)</span>
+                                    }
+                                </td>
+                                <td class="num">@Ui.Money(line.LineTotal)</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <section class="panel" id="deliveries">
+            <div class="panel-head">
+                <h2>Upcoming deliveries</h2>
+                <span class="muted small">Next 4 weeks &middot; changes close @so.ChangeCutoffHours hours before</span>
+            </div>
+            <div class="panel-body flush table-wrap">
+                @if (upcoming.Count == 0)
+                {
+                    <p class="muted" style="padding:20px;">No deliveries in the next 4 weeks@(so.Status.IsFinal() ? " — this standing order is " + so.StatusName.ToLowerInvariant() : string.Empty).</p>
+                }
+                else
+                {
+                    <table class="table">
+                        <thead><tr><th>Date &amp; time</th><th>Delivery</th><th>Note</th><th class="no-print"></th></tr></thead>
+                        <tbody>
+                            @foreach (var d in upcoming)
+                            {
+                                <tr class="@(d.State is DeliveryState.Skipped or DeliveryState.KitchenClosed or DeliveryState.Cancelled ? "row-muted" : null)">
+                                    <td class="nowrap"><strong>@d.ScheduledFor.ToString("ddd, MMM d", Format.Culture)</strong><br /><span class="small muted">@Format.Time(d.ScheduledFor)</span></td>
+                                    <td>
+                                        @switch (d.State)
+                                        {
+                                            case DeliveryState.OrderCreated:
+                                                <a class="strong nowrap" href="/admin/orders/@d.OrderNumber">@d.OrderNumber</a>
+                                                if (d.OrderStatus is { } orderStatus)
+                                                {
+                                                    <text> </text><partial name="_StatusBadge" model="orderStatus" />
+                                                }
+                                                break;
+                                            case DeliveryState.Scheduled:
+                                                <span class="pill pill-on">Scheduled</span>
+                                                break;
+                                            case DeliveryState.Skipped:
+                                                <span class="pill pill-warn">Skipped</span>
+                                                break;
+                                            case DeliveryState.Paused:
+                                                <span class="pill pill-warn">Paused</span>
+                                                break;
+                                            case DeliveryState.KitchenClosed:
+                                                <span class="pill pill-off">Kitchen closed</span>
+                                                break;
+                                            default:
+                                                <span class="pill pill-bad">@d.StateName</span>
+                                                break;
+                                        }
+                                    </td>
+                                    <td class="small muted">@d.Reason</td>
+                                    <td class="num no-print">
+                                        @if (d.CanSkip)
+                                        {
+                                            <form method="post" asp-page-handler="Skip" class="toggle-form"
+                                                  data-confirm="Skip the delivery on @d.ScheduledFor.ToString("dddd, MMM d", Format.Culture)?@(d.OrderNumber is null ? string.Empty : $" Order {d.OrderNumber} will be cancelled.")">
+                                                <input type="hidden" name="date" value="@d.Date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)" />
+                                                <input type="hidden" name="skip" value="true" />
+                                                <button class="btn btn-outline btn-sm" type="submit">Skip</button>
+                                            </form>
+                                        }
+                                        else if (d.CanUnskip)
+                                        {
+                                            <form method="post" asp-page-handler="Skip" class="toggle-form">
+                                                <input type="hidden" name="date" value="@d.Date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)" />
+                                                <input type="hidden" name="skip" value="false" />
+                                                <button class="btn btn-green btn-sm" type="submit">Restore</button>
+                                            </form>
+                                        }
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                }
+            </div>
+        </section>
+
+        <section class="panel" id="terms">
+            <div class="panel-head">
+                <h2>Terms</h2>
+                @if (Model.CanEditTerms)
+                {
+                    <span class="muted small">Items, agreed prices, schedule and fees</span>
+                }
+                else
+                {
+                    <span class="pill pill-off">Read only</span>
+                }
+            </div>
+            <div class="panel-body">
+                @if (!Model.CanEditTerms)
+                {
+                    <p class="muted">A @so.StatusName.ToLowerInvariant() standing order can no longer be changed.</p>
+                    <dl class="kv mb-0">
+                        <dt>Delivery fee</dt><dd>@Ui.Money(so.DeliveryFee)</dd>
+                        <dt>Sales tax</dt><dd>@(so.TaxExempt ? "Tax exempt" : "Charged")</dd>
+                        <dt>Admin notes</dt><dd style="white-space:pre-line;">@(string.IsNullOrWhiteSpace(so.AdminNotes) ? "—" : so.AdminNotes)</dd>
+                    </dl>
+                }
+                else
+                {
+                    <form method="post" asp-page-handler="Terms" asp-fragment="terms" class="terms-form">
+                        <div asp-validation-summary="ModelOnly" class="validation-summary-errors"></div>
+
+                        <h3 class="form-section">Items per delivery</h3>
+                        <div class="table-wrap">
+                            <table class="table terms-lines">
+                                <thead><tr><th>Item</th><th>Quantity</th><th>Agreed price</th><th class="num">Remove</th></tr></thead>
+                                <tbody>
+                                    @for (var i = 0; i < Model.Input.Lines.Count; i++)
+                                    {
+                                        var line = Model.Input.Lines[i];
+                                        var catalogPrice = Model.CatalogPrice(line.MenuItemId);
+                                        <tr>
+                                            <td>
+                                                <strong>@(line.ItemName ?? $"Item #{line.MenuItemId}")</strong>
+                                                <input type="hidden" name="Input.Lines[@i].MenuItemId" value="@line.MenuItemId" />
+                                                <input type="hidden" name="Input.Lines[@i].ItemName" value="@line.ItemName" />
+                                                <input type="hidden" name="Input.Lines[@i].Unit" value="@line.Unit" />
+                                            </td>
+                                            <td>
+                                                <div class="input-unit">
+                                                    <input class="input" type="number" name="Input.Lines[@i].Quantity" value="@line.Quantity?.ToString("0.##", CultureInfo.InvariantCulture)"
+                                                           min="0" step="@Model.Catalog.QuantityStep.ToString(CultureInfo.InvariantCulture)" aria-label="Quantity of @line.ItemName" />
+                                                    <span>@line.Unit</span>
+                                                </div>
+                                                <span asp-validation-for="Input.Lines[i].Quantity" class="field-validation-error"></span>
+                                            </td>
+                                            <td>
+                                                <div class="input-unit">
+                                                    <span>$</span>
+                                                    <input class="input" type="number" name="Input.Lines[@i].UnitPrice" value="@line.UnitPrice?.ToString("0.00", CultureInfo.InvariantCulture)"
+                                                           min="0" step="0.01" placeholder="@catalogPrice?.ToString("0.00", CultureInfo.InvariantCulture)" aria-label="Agreed price per @line.Unit for @line.ItemName" />
+                                                    <span>/@line.Unit</span>
+                                                </div>
+                                                <span asp-validation-for="Input.Lines[i].UnitPrice" class="field-validation-error"></span>
+                                            </td>
+                                            <td class="num"><label class="check remove-check"><input type="checkbox" name="Input.Lines[@i].Remove" value="true" checked="@(line.Remove ? "checked" : null)" aria-label="Remove @line.ItemName" /><span class="remove-label" aria-hidden="true">Remove</span></label></td>
+                                        </tr>
+                                    }
+                                    <tr class="add-row">
+                                        <td>
+                                            <label for="Input_NewMenuItemId" class="small muted">Add a vorta</label>
+                                            <select class="input" asp-for="Input.NewMenuItemId" data-price-source>
+                                                <option value="">— Choose —</option>
+                                                @foreach (var item in Model.Catalog.Items)
+                                                {
+                                                    <option value="@item.Id" data-price="@item.WholesalePrice.ToString("0.00", CultureInfo.InvariantCulture)" selected="@(Model.Input.NewMenuItemId == item.Id ? "selected" : null)">@item.Name (@Ui.Money(item.WholesalePrice)/@item.Unit)</option>
+                                                }
+                                            </select>
+                                        </td>
+                                        <td>
+                                            <label for="Input_NewQuantity" class="small muted">Quantity</label>
+                                            <div class="input-unit">
+                                                <input class="input" asp-for="Input.NewQuantity" type="number" min="0" step="@Model.Catalog.QuantityStep.ToString(CultureInfo.InvariantCulture)"
+                                                       placeholder="@Model.Catalog.MinimumQuantityPerItem.ToString("0.##", CultureInfo.InvariantCulture)" />
+                                                <span>lb</span>
+                                            </div>
+                                            <span asp-validation-for="Input.NewQuantity" class="field-validation-error"></span>
+                                        </td>
+                                        <td>
+                                            <label for="Input_NewUnitPrice" class="small muted">Agreed price</label>
+                                            <div class="input-unit">
+                                                <span>$</span>
+                                                <input class="input" asp-for="Input.NewUnitPrice" type="number" min="0" step="0.01" placeholder="catalog" data-price-target />
+                                                <span>/lb</span>
+                                            </div>
+                                        </td>
+                                        <td></td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                        <p class="hint small muted mt-1">Minimum @Ui.Qty(Model.Catalog.MinimumQuantityPerItem, "lb") of each vorta in steps of @Ui.Qty(Model.Catalog.QuantityStep, "lb"), and @Ui.Money(Model.Catalog.MinimumSubtotalPerDelivery) per delivery. Leave a price blank to use the catalog wholesale price; set a quantity to 0 or tick Remove to drop an item.</p>
+
+                        <h3 class="form-section">Schedule</h3>
+                        <fieldset class="weekday-picker">
+                            <legend class="visually-hidden">Delivery days</legend>
+                            @foreach (var day in WeekDaysExtensions.WeekOrder)
+                            {
+                                var selected = Model.Input.Days.Contains(day);
+                                var closed = Model.Catalog.ClosedDays.Contains(day);
+                                <label class="weekday @(closed ? "closed" : null)" title="@(closed ? "Kitchen closed" : day.ToString())">
+                                    <input type="checkbox" name="Input.Days" value="@day" checked="@(selected ? "checked" : null)" disabled="@(closed && !selected ? "disabled" : null)" />
+                                    <span>@day.ToString()[..3]</span>
+                                </label>
+                            }
+                        </fieldset>
+                        <span asp-validation-for="Input.Days" class="field-validation-error"></span>
+                        @if (Model.Catalog.ClosedDays.Count > 0)
+                        {
+                            <p class="hint small muted mt-1">The kitchen is closed on @string.Join(" and ", Model.Catalog.ClosedDays.Select(d => d + "s")).</p>
+                        }
+
+                        <div class="form-grid mt-2">
+                            <div class="field">
+                                <label asp-for="Input.PreferredTime"></label>
+                                <select asp-for="Input.PreferredTime">
+                                    @foreach (var t in times)
+                                    {
+                                        <option value="@t" selected="@(t == Model.Input.PreferredTime ? "selected" : null)">@Format.Time(TimeOnly.ParseExact(t, "HH:mm", CultureInfo.InvariantCulture))</option>
+                                    }
+                                </select>
+                                <span asp-validation-for="Input.PreferredTime" class="field-validation-error"></span>
+                            </div>
+                            <div class="field">
+                                <label asp-for="Input.DeliveryFee"></label>
+                                <input asp-for="Input.DeliveryFee" type="number" min="0" step="0.01" />
+                                <span class="hint">Charged on every delivery (pickup is always free).</span>
+                                <span asp-validation-for="Input.DeliveryFee" class="field-validation-error"></span>
+                            </div>
+                            <div class="field">
+                                <label asp-for="Input.StartDate"></label>
+                                <input asp-for="Input.StartDate" type="date" />
+                                <span asp-validation-for="Input.StartDate" class="field-validation-error"></span>
+                            </div>
+                            <div class="field">
+                                <label asp-for="Input.EndDate"></label>
+                                <input asp-for="Input.EndDate" type="date" />
+                                <span class="hint">Leave empty to continue until cancelled.</span>
+                                <span asp-validation-for="Input.EndDate" class="field-validation-error"></span>
+                            </div>
+                            <div class="field full">
+                                <label class="check"><input asp-for="Input.TaxExempt" /> Tax exempt (resale)</label>
+                                <span class="hint">Only after a Texas resale certificate (Form 01-339) is on file. Tax permit given by the restaurant: @(string.IsNullOrWhiteSpace(so.TaxPermitNumber) ? "none" : so.TaxPermitNumber).</span>
+                            </div>
+                            <div class="field full">
+                                <label asp-for="Input.AdminNotes"></label>
+                                <textarea asp-for="Input.AdminNotes" rows="3" maxlength="2000" placeholder="Internal notes — never shown to the restaurant"></textarea>
+                                <span asp-validation-for="Input.AdminNotes" class="field-validation-error"></span>
+                            </div>
+                        </div>
+
+                        <div class="flex gap-1 wrap items-center mt-2">
+                            <button class="btn btn-green" type="submit">@Icons.Get("check") Save terms</button>
+                            @if (so.Status == StandingOrderStatus.Active)
+                            {
+                                <span class="small muted">Upcoming orders the kitchen hasn't started are re-issued with the new terms.</span>
+                            }
+                        </div>
+                    </form>
+                }
+            </div>
+        </section>
+
+        <section class="panel">
+            <div class="panel-head"><h2>Event history</h2></div>
+            <div class="panel-body">
+                <ul class="history">
+                    @foreach (var e in so.Events)
+                    {
+                        <li><time>@Format.DateTime(e.ChangedAtLocal)</time><span>@e.Description <span class="muted">— @e.ChangedBy</span></span></li>
+                    }
+                </ul>
+            </div>
+        </section>
+    </div>
+
+    <div>
+        <section class="panel no-print">
+            <div class="panel-head"><h2>@(so.Status == StandingOrderStatus.PendingApproval ? "Review request" : "Status")</h2></div>
+            <div class="panel-body">
+                @if (!Model.HasActions)
+                {
+                    <p class="muted mb-0">This standing order is @so.StatusName.ToLowerInvariant(). No further changes are possible.</p>
+                }
+                else
+                {
+                    @if (so.Status == StandingOrderStatus.PendingApproval)
+                    {
+                        <p class="small">Check the items, agreed prices, delivery fee and tax status under <a href="#terms">Terms</a> first. Approving creates the orders for the next few days straight away.</p>
+                    }
+                    <form method="post" asp-page-handler="Status">
+                        <div class="field mb-2">
+                            <label for="note">Note or reason</label>
+                            <textarea id="note" name="note" rows="3" maxlength="500" placeholder="@(Model.CanApprove ? "e.g. Welcome aboard! First delivery Tuesday at 10." : "e.g. Closed for renovation until March.")"></textarea>
+                            <span class="hint">Included in the email to the restaurant. For decline, pause and cancel it is saved as the reason.</span>
+                        </div>
+                        <label class="check mb-2"><input type="checkbox" name="notifyRestaurant" value="true" checked /> Email the restaurant</label>
+                        <div class="action-buttons">
+                            @if (Model.CanApprove)
+                            {
+                                <button class="btn btn-primary btn-block" type="submit" name="change" value="@StandingOrderAction.Approve">@Icons.Get("check-circle") Approve &amp; schedule deliveries</button>
+                            }
+                            @if (so.CanResume)
+                            {
+                                <button class="btn btn-primary btn-block" type="submit" name="change" value="@StandingOrderAction.Resume">Resume deliveries</button>
+                            }
+                            @if (so.CanPause)
+                            {
+                                <button class="btn btn-outline btn-block" type="submit" name="change" value="@StandingOrderAction.Pause"
+                                        data-confirm="Pause deliveries for @so.BusinessName? Orders not yet started are withdrawn.">Pause deliveries</button>
+                            }
+                            @if (Model.CanDecline)
+                            {
+                                <button class="btn btn-outline btn-block" type="submit" name="change" value="@StandingOrderAction.Decline"
+                                        data-confirm="Decline the request from @so.BusinessName?">Decline request</button>
+                            }
+                            @if (Model.CanCancel)
+                            {
+                                <button class="btn btn-danger btn-block" type="submit" name="change" value="@StandingOrderAction.Cancel"
+                                        data-confirm="Cancel the standing order for @so.BusinessName? This cannot be undone. Orders not yet started are withdrawn.">@Icons.Get("trash") Cancel standing order</button>
+                            }
+                        </div>
+                    </form>
+                    @if (so.Status is StandingOrderStatus.Active or StandingOrderStatus.Paused)
+                    {
+                        <p class="small muted mt-2 mb-0">Deliveries within the next @so.ChangeCutoffHours hours are already being prepared and still go ahead.</p>
+                    }
+                }
+            </div>
+        </section>
+
+        <section class="panel">
+            <div class="panel-head"><h2>Per delivery</h2></div>
+            <div class="panel-body">
+                <ul class="list-plain">
+                    <li><span>Subtotal</span><span>@Ui.Money(estimate.Subtotal)</span></li>
+                    @if (so.IsDelivery)
+                    {
+                        <li><span>Delivery fee</span><span>@(estimate.DeliveryFee == 0 ? "Free" : Ui.Money(estimate.DeliveryFee))</span></li>
+                    }
+                    <li><span>Sales tax</span><span>@(so.TaxExempt ? "Tax exempt" : Ui.Money(estimate.Tax))</span></li>
+                    <li><strong>Total</strong><strong>@Ui.Money(estimate.Total)</strong></li>
+                </ul>
+                @if (!so.Status.IsFinal())
+                {
+                    <div class="weekly-estimate">
+                        <span>@so.DeliveriesPerWeek deliver@(so.DeliveriesPerWeek == 1 ? "y" : "ies") a week</span>
+                        <strong>≈ @Ui.Money(so.EstimatedWeeklyTotal) / week</strong>
+                    </div>
+                }
+                @if (so.NextDelivery is { } next)
+                {
+                    <p class="small muted mt-2 mb-0">Next delivery: <strong>@Format.DateTime(next.ScheduledFor)</strong>@(next.OrderNumber is null ? string.Empty : $" (order {next.OrderNumber})")</p>
+                }
+            </div>
+        </section>
+
+        @if (!string.IsNullOrWhiteSpace(so.AdminNotes) && Model.CanEditTerms)
+        {
+            <section class="panel">
+                <div class="panel-head"><h2>Private notes</h2></div>
+                <div class="panel-body"><p class="mb-0" style="white-space:pre-line;">@so.AdminNotes</p></div>
+            </section>
+        }
+
+        <section class="panel no-print">
+            <div class="panel-head"><h2>Billing</h2></div>
+            <div class="panel-body small">
+                <p>Payment terms: @Model.Catalog.PaymentTerms</p>
+                <a class="btn btn-outline btn-sm" href="/admin/recurring/@so.Id/statement">@Icons.Get("receipt") Statement for this month</a>
+                <a class="btn btn-outline btn-sm" href="/admin/orders?source=Restaurant&amp;q=@Uri.EscapeDataString(so.BusinessName)">All orders</a>
+            </div>
+        </section>
+    </div>
+</div>

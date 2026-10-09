@@ -1,0 +1,114 @@
+@page "/admin/recurring/{id:int}/statement"
+@model ShutkiVorta.Web.Pages.Admin.Recurring.StatementModel
+@{
+    var st = Model.Statement;
+    var so = st.StandingOrder;
+    var b = Model.Business;
+}
+@section Actions {
+    <a class="btn btn-outline btn-sm" href="/admin/recurring/@so.Id">&larr; @so.Reference</a>
+    <button class="btn btn-green btn-sm" type="button" onclick="window.print()">@Icons.Get("print") Print</button>
+}
+
+<form method="get" class="panel no-print statement-filter">
+    <div class="panel-body filters">
+        <div class="field">
+            <label for="from">From</label>
+            <input id="from" name="from" type="date" value="@st.From.ToString("yyyy-MM-dd")" />
+        </div>
+        <div class="field">
+            <label for="to">To</label>
+            <input id="to" name="to" type="date" value="@st.To.ToString("yyyy-MM-dd")" />
+        </div>
+        <button class="btn btn-green btn-sm" type="submit">Show</button>
+        <a class="btn btn-outline btn-sm" href="@Model.MonthUrl(Model.PreviousMonth)">&larr; @Model.PreviousMonth.ToString("MMMM", Format.Culture)</a>
+        <a class="btn btn-outline btn-sm" href="@Model.MonthUrl(Model.NextMonth)">@Model.NextMonth.ToString("MMMM", Format.Culture) &rarr;</a>
+    </div>
+</form>
+
+<article class="panel statement">
+    <div class="panel-body">
+        <header class="statement-head">
+            <div class="statement-from">
+                <img src="~/images/logo-mark.svg" alt="" width="56" height="56" />
+                <div>
+                    <strong class="statement-business">@b.Name</strong>
+                    <span>@b.FullAddress</span>
+                    <span>@b.Phone &middot; @b.Email</span>
+                </div>
+            </div>
+            <div class="statement-title">
+                <h2>Statement</h2>
+                <span>@Format.ShortDate(st.From.ToDateTime(TimeOnly.MinValue)) – @Format.ShortDate(st.To.ToDateTime(TimeOnly.MinValue))</span>
+            </div>
+        </header>
+
+        <div class="statement-parties">
+            <div>
+                <span class="label">Bill to</span>
+                <strong>@so.BusinessName</strong>
+                <span>Attn: @so.ContactName</span>
+                @if (so.IsDelivery)
+                {
+                    <span>@so.DeliveryAddress</span>
+                }
+                <span>@so.Phone &middot; @so.Email</span>
+            </div>
+            <div>
+                <span class="label">Standing order</span>
+                <strong>@so.Reference</strong>
+                <span>@so.DaysText at @Format.Time(so.PreferredTime) &middot; @so.FulfillmentName</span>
+                <span>Sales tax: @(so.TaxExempt ? "exempt (resale certificate on file)" : "charged")@(string.IsNullOrWhiteSpace(so.TaxPermitNumber) ? string.Empty : " · Permit " + so.TaxPermitNumber)</span>
+            </div>
+        </div>
+
+        @if (st.Orders.Count == 0)
+        {
+            <p class="muted">No deliveries in this period.</p>
+        }
+        else
+        {
+            <div class="table-wrap">
+                <table class="table statement-table">
+                    <thead>
+                        <tr><th>Date</th><th>Order</th><th>Items</th><th>Status</th><th class="num">Subtotal</th><th class="num">Delivery</th><th class="num">Tax</th><th class="num">Total</th></tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var o in st.Orders)
+                        {
+                            <tr>
+                                <td class="nowrap"><strong>@o.ScheduledFor.ToString("ddd, MMM d", Format.Culture)</strong></td>
+                                <td class="nowrap"><a class="strong" href="/admin/orders/@o.OrderNumber">@o.OrderNumber</a></td>
+                                <td><div class="preview">@o.ItemsPreview</div></td>
+                                <td>@o.StatusName</td>
+                                <td class="num">@Ui.Money(o.Subtotal)</td>
+                                <td class="num">@Ui.Money(o.DeliveryFee)</td>
+                                <td class="num">@Ui.Money(o.Tax)</td>
+                                <td class="num"><strong>@Ui.Money(o.Total)</strong></td>
+                            </tr>
+                        }
+                    </tbody>
+                    <tfoot>
+                        <tr>
+                            <td colspan="4"><strong>@st.Orders.Count deliver@(st.Orders.Count == 1 ? "y" : "ies")</strong></td>
+                            <td class="num">@Ui.Money(st.Subtotal)</td>
+                            <td class="num">@Ui.Money(st.DeliveryFees)</td>
+                            <td class="num">@Ui.Money(st.Tax)</td>
+                            <td class="num"><strong>@Ui.Money(st.Total)</strong></td>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+        }
+
+        <div class="statement-total">
+            <span>Amount for this period</span>
+            <strong>@Ui.Money(st.Total)</strong>
+        </div>
+
+        <footer class="statement-foot small">
+            <p class="mb-0"><strong>Payment terms:</strong> @Model.PaymentTerms</p>
+            <p class="muted mb-0">Cancelled deliveries are not included. Prepared @Format.DateTime(Model.PreparedAt). ধন্যবাদ — thank you for serving our vortas!</p>
+        </footer>
+    </div>
+</article>

@@ -12,6 +12,7 @@ public sealed class IndexModel(ISender sender) : PageModel
     [BindProperty(SupportsGet = true)] public string? Q { get; set; }
     [BindProperty(SupportsGet = true)] public OrderStatus? Status { get; set; }
     [BindProperty(SupportsGet = true)] public FulfillmentMethod? Fulfillment { get; set; }
+    [BindProperty(SupportsGet = true)] public OrderSource? Source { get; set; }
     [BindProperty(SupportsGet = true)] public DateOnly? From { get; set; }
     [BindProperty(SupportsGet = true)] public DateOnly? To { get; set; }
     [BindProperty(SupportsGet = true, Name = "p")] public int PageNumber { get; set; } = 1;
@@ -26,6 +27,7 @@ public sealed class IndexModel(ISender sender) : PageModel
             Search = Q,
             Status = Status,
             Fulfillment = Fulfillment,
+            Source = Source,
             ScheduledFrom = From,
             ScheduledTo = To,
             Page = PageNumber,
@@ -40,6 +42,7 @@ public sealed class IndexModel(ISender sender) : PageModel
             ["q"] = Q,
             ["status"] = Status?.ToString(),
             ["fulfillment"] = Fulfillment?.ToString(),
+            ["source"] = Source?.ToString(),
             ["from"] = From?.ToString("yyyy-MM-dd"),
             ["to"] = To?.ToString("yyyy-MM-dd"),
             ["p"] = page.ToString(),
