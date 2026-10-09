@@ -12,6 +12,9 @@ public sealed record GetOrdersQuery : IRequest<PagedResult<OrderSummaryDto>>, IR
     public string? Search { get; init; }
     public OrderStatus? Status { get; init; }
     public FulfillmentMethod? Fulfillment { get; init; }
+
+    /// <summary>Online checkout orders or orders generated from restaurant standing orders; null for both.</summary>
+    public OrderSource? Source { get; init; }
     public DateOnly? ScheduledFrom { get; init; }
     public DateOnly? ScheduledTo { get; init; }
     public int Page { get; init; } = 1;
@@ -50,6 +53,7 @@ internal sealed class OrderQueryHandlers(
             Search = string.IsNullOrWhiteSpace(request.Search) ? null : request.Search.Trim(),
             Status = request.Status,
             Fulfillment = request.Fulfillment,
+            Source = request.Source,
             ScheduledFrom = request.ScheduledFrom?.ToDateTime(TimeOnly.MinValue),
             ScheduledTo = request.ScheduledTo?.ToDateTime(TimeOnly.MaxValue),
             Page = page,

@@ -16,6 +16,9 @@ public sealed record MenuItemDto
     public string? Ingredients { get; init; }
     public IReadOnlyList<string> IngredientList { get; init; } = [];
     public decimal PricePerUnit { get; init; }
+
+    /// <summary>Explicit restaurant price per unit, or null when the default wholesale discount applies.</summary>
+    public decimal? WholesalePricePerUnit { get; init; }
     public required string Unit { get; init; }
     public decimal MinimumQuantity { get; init; }
     public decimal QuantityStep { get; init; }
@@ -68,6 +71,7 @@ public static class MenuItemMapping
             ? []
             : item.Ingredients.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries),
         PricePerUnit = item.PricePerUnit,
+        WholesalePricePerUnit = item.WholesalePricePerUnit,
         Unit = item.Unit,
         MinimumQuantity = item.MinimumQuantity,
         QuantityStep = item.QuantityStep,

@@ -1,0 +1,21 @@
+@model IReadOnlyList<ProductionItemDto>
+<table class="table production-table">
+    <thead>
+        <tr><th>Item</th><th class="num">Online</th><th class="num">Restaurant</th><th class="num">Projected</th><th class="num">Total</th></tr>
+    </thead>
+    <tbody>
+        @foreach (var item in Model)
+        {
+            <tr>
+                <td><strong>@item.ItemName</strong></td>
+                <td class="num">@Qty(item.OnlineQuantity)</td>
+                <td class="num">@Qty(item.RestaurantQuantity)</td>
+                <td class="num">@Qty(item.ProjectedQuantity)</td>
+                <td class="num"><strong>@Ui.Qty(item.TotalQuantity, item.Unit)</strong></td>
+            </tr>
+        }
+    </tbody>
+</table>
+@functions {
+    private static string Qty(decimal quantity) => quantity == 0 ? "–" : Ui.Number(quantity);
+}

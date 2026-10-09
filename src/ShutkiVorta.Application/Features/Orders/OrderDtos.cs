@@ -86,8 +86,15 @@ public sealed record OrderDetailsDto
     public IReadOnlyList<OrderStatus> AllowedNextStatuses { get; init; } = [];
     public bool CanCustomerCancel { get; init; }
 
+    /// <summary>Set when the order was generated from a restaurant standing order.</summary>
+    public int? StandingOrderId { get; init; }
+
+    /// <summary>Restaurant name for orders generated from a standing order.</summary>
+    public string? CompanyName { get; init; }
+
     public bool IsDelivery => Fulfillment == FulfillmentMethod.Delivery;
     public bool IsFinal => Status.IsFinal();
+    public bool IsRestaurantOrder => StandingOrderId is not null;
 }
 
 public static class OrderMapping
@@ -129,5 +136,7 @@ public static class OrderMapping
             .ToList(),
         AllowedNextStatuses = order.AllowedNextStatuses(),
         CanCustomerCancel = order.CanBeCancelledByCustomer,
+        StandingOrderId = order.StandingOrderId,
+        CompanyName = order.CompanyName,
     };
 }

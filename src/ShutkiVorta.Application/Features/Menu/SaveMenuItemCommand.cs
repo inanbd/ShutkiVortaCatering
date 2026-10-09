@@ -21,6 +21,9 @@ public sealed record SaveMenuItemCommand : IRequest<int>, IRequireAdmin
     public string Description { get; init; } = string.Empty;
     public string? Ingredients { get; init; }
     public decimal PricePerUnit { get; init; }
+
+    /// <summary>Agreed price per unit for restaurant orders; null uses the retail price less Wholesale:DiscountPercent.</summary>
+    public decimal? WholesalePricePerUnit { get; init; }
     public string Unit { get; init; } = MenuItem.DefaultUnit;
     public decimal MinimumQuantity { get; init; } = 0.5m;
     public decimal QuantityStep { get; init; } = 0.5m;
@@ -44,6 +47,7 @@ public sealed record SaveMenuItemCommand : IRequest<int>, IRequireAdmin
         Description = Description,
         Ingredients = Ingredients,
         PricePerUnit = PricePerUnit,
+        WholesalePricePerUnit = WholesalePricePerUnit,
         Unit = Unit,
         MinimumQuantity = MinimumQuantity,
         QuantityStep = QuantityStep,
@@ -74,6 +78,7 @@ public sealed class SaveMenuItemCommandValidator : AbstractValidator<SaveMenuIte
         RuleFor(x => x.Description).NotEmpty().MaximumLength(4000);
         RuleFor(x => x.Ingredients).MaximumLength(1000);
         RuleFor(x => x.PricePerUnit).GreaterThan(0).LessThan(10000);
+        RuleFor(x => x.WholesalePricePerUnit).GreaterThan(0).LessThan(10000).When(x => x.WholesalePricePerUnit.HasValue);
         RuleFor(x => x.Unit).NotEmpty().MaximumLength(20);
         RuleFor(x => x.MinimumQuantity).GreaterThan(0).LessThanOrEqualTo(100);
         RuleFor(x => x.QuantityStep).GreaterThan(0).LessThanOrEqualTo(100);

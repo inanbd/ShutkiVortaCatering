@@ -221,13 +221,21 @@ internal sealed class OrderRepository(IDbConnectionFactory connections, ISqlDial
         return rows.ToDictionary(r => r.CustomerId, r => r.Total);
     }
 
-    public async Task<IReadOnlyList<PopularItemDto>> GetPopularItemsSinceAsync(DateTime fromUtc, int take, CancellationToken cancellationToken = default)
+    public async Task<IReadOnlyList<PopularItemDto>> GetPopularItemsSinceAsync(
+        DateTime fromUtc, int take, OrderSource? source = null, CancellationToken cancellationToken = default)
     {
-        var sql = dialect.Page("""
+        var sourceFilter = source switch
+        {
+            OrderSource.Online => "AND o.StandingOrderId IS NULL",
+            OrderSource.Restaurant => "AND o.StandingOrderId IS NOT NULL",
+            _ => string.Empty,
+        };
+
+        var sql = dialect.Page($"""
             SELECT l.ItemName AS ItemName, l.Unit AS Unit, SUM(l.Quantity) AS TotalQuantity, SUM(l.LineTotal) AS Revenue
             FROM OrderLines l
             INNER JOIN Orders o ON o.Id = l.OrderId
-            WHERE o.CreatedAtUtc >= @FromUtc AND o.Status <> @Cancelled
+            WHERE o.CreatedAtUtc >= @FromUtc AND o.Status <> @Cancelled {sourceFilter}
             GROUP BY l.ItemName, l.Unit
             ORDER BY SUM(l.Quantity) DESC, l.ItemName
             """);
