@@ -1,0 +1,85 @@
+@page "/admin/inventory/items"
+@model ShutkiVorta.Web.Pages.Admin.Inventory.ItemsModel
+@section Actions {
+    <a class="btn btn-primary btn-sm" href="/admin/inventory/edit">@Icons.Get("plus") Add to inventory</a>
+}
+
+<partial name="_InventoryTabs" model="@("items")" />
+
+<div asp-validation-summary="All" class="validation-summary-errors"></div>
+<section class="panel">
+    <div class="panel-head">
+        <form method="post" asp-page-handler="Add" class="filters" style="width:100%;">
+            <div class="field grow">
+                <label asp-for="NewItem.Name">Save a new item name</label>
+                <input asp-for="NewItem.Name" placeholder="e.g. Turmeric powder" autocomplete="off" />
+            </div>
+            <div class="field">
+                <label asp-for="NewItem.Unit"></label>
+                <input asp-for="NewItem.Unit" list="inventory-units" autocomplete="off" />
+            </div>
+            <button class="btn btn-green btn-sm" type="submit">@Icons.Get("plus") Save item</button>
+        </form>
+        <datalist id="inventory-units">
+            @foreach (var unit in Model.Units)
+            {
+                <option value="@unit"></option>
+            }
+        </datalist>
+    </div>
+    <div class="panel-body flush table-wrap">
+        @if (Model.Items.Count == 0)
+        {
+            <p class="muted" style="padding:24px;">No items saved yet. Names are saved automatically the first time you <a href="/admin/inventory/edit">add them to the inventory</a>.</p>
+        }
+        else
+        {
+            <table class="table">
+                <thead>
+                    <tr><th>Item</th><th>Usual unit</th><th>Bought</th><th>Total bought</th><th>Last bought</th><th class="num">Last price</th><th class="num">Total spent</th></tr>
+                </thead>
+                <tbody>
+                    @foreach (var item in Model.Items)
+                    {
+                        var last = item.LastPurchase;
+                        <tr class="@(item.TimesBought == 0 ? "row-muted" : null)">
+                            <td><a class="strong" href="/admin/inventory/items/@item.Id">@item.Name</a></td>
+                            <td>@item.Unit</td>
+                            <td class="nowrap">@(item.TimesBought == 0 ? "Not yet" : item.TimesBought == 1 ? "Once" : $"{item.TimesBought} times")</td>
+                            <td>@(item.TotalQuantities.Count == 0 ? "—" : string.Join(", ", item.TotalQuantities))</td>
+                            <td class="small">
+                                @if (last is not null)
+                                {
+                                    <a href="/admin/inventory/edit/@last.PurchaseId">@Format.ShortDate(last.PurchasedOn)</a>
+                                    @if (!string.IsNullOrWhiteSpace(last.Store))
+                                    {
+                                        <span class="muted">&middot; @last.Store</span>
+                                    }
+                                }
+                                else
+                                {
+                                    <span class="muted">—</span>
+                                }
+                            </td>
+                            <td class="num">
+                                @if (last is not null)
+                                {
+                                    <strong>@Ui.Money(last.PricePerUnit)</strong><span class="muted"> / @last.Unit</span>
+                                }
+                                else
+                                {
+                                    <span class="muted">—</span>
+                                }
+                            </td>
+                            <td class="num">@Ui.Money(item.TotalSpent)</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+    </div>
+</section>
+<p class="small muted mt-2">
+    Every item name you add is saved and suggested next time, matched regardless of upper/lower case. Open an item to see its
+    price history, fix a typo in its name (every purchase shows the new name) or delete a name you never used.
+</p>

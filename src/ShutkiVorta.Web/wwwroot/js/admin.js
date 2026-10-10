@@ -102,6 +102,99 @@
     });
   }
 
+  // Inventory: suggest saved items with their usual unit, add and remove rows, show the price per unit and the total.
+  const lines = document.querySelector('[data-inventory-lines]');
+  if (lines) {
+    const body = lines.querySelector('tbody');
+    const totalEl = lines.querySelector('[data-lines-total]');
+    const key = (name) => name.trim().replace(/\s+/g, ' ').toLowerCase();
+    const usualUnits = new Map();
+    const list = document.getElementById(lines.dataset.itemList);
+    if (list) list.querySelectorAll('option').forEach((o) => usualUnits.set(key(o.value), o.dataset.unit || ''));
+    const money = (n) => '$' + n.toFixed(2);
+
+    const refresh = () => {
+      let total = 0;
+      body.querySelectorAll('[data-line]').forEach((row) => {
+        const quantity = parseFloat(row.querySelector('[data-line-qty]').value);
+        const price = parseFloat(row.querySelector('[data-line-price]').value);
+        const unit = row.querySelector('[data-line-unit]').value.trim() || 'unit';
+        const each = row.querySelector('[data-line-each]');
+        if (price >= 0) total += price;
+        if (each) each.textContent = quantity > 0 && price >= 0 ? `${money(price / quantity)} per ${unit}` : '';
+      });
+      if (totalEl) totalEl.textContent = money(total);
+    };
+
+    // Picking a saved item fills in its usual unit, unless a unit was typed by hand.
+    const fillUnit = (row) => {
+      const unit = row.querySelector('[data-line-unit]');
+      const saved = usualUnits.get(key(row.querySelector('[data-line-item]').value));
+      if (saved && (!unit.value || unit.dataset.autofilled === 'true')) {
+        unit.value = saved;
+        unit.dataset.autofilled = 'true';
+      }
+    };
+
+    body.addEventListener('input', (event) => {
+      const row = event.target.closest('[data-line]');
+      if (!row) return;
+      if (event.target.matches('[data-line-item]')) fillUnit(row);
+      if (event.target.matches('[data-line-unit]')) event.target.dataset.autofilled = 'false';
+      refresh();
+    });
+
+    // Rows are emptied and hidden rather than removed, so the field numbering stays continuous; empty rows are ignored.
+    body.addEventListener('click', (event) => {
+      const button = event.target.closest('[data-line-remove]');
+      if (!button) return;
+      const row = button.closest('[data-line]');
+      row.querySelectorAll('input').forEach((input) => { input.value = ''; delete input.dataset.autofilled; });
+      if (body.querySelectorAll('[data-line]:not([hidden])').length > 1) row.hidden = true;
+      refresh();
+    });
+
+    const add = lines.querySelector('[data-line-add]');
+    if (add) {
+      add.addEventListener('click', () => {
+        const rows = body.querySelectorAll('[data-line]');
+        const index = rows.length;
+        const copy = rows[rows.length - 1].cloneNode(true);
+        copy.hidden = false;
+        copy.querySelectorAll('input').forEach((input) => {
+          input.value = '';
+          delete input.dataset.autofilled;
+          input.name = input.name.replace(/\[\d+\]/, `[${index}]`);
+        });
+        copy.querySelectorAll('[data-line-each]').forEach((each) => { each.textContent = ''; });
+        body.appendChild(copy);
+        copy.querySelector('[data-line-item]').focus();
+      });
+    }
+
+    refresh();
+  }
+
+  // Receipt photos: show the chosen photos before they are uploaded.
+  const receiptInput = document.querySelector('[data-receipt-input]');
+  const receiptPreviews = document.querySelector('[data-receipt-previews]');
+  if (receiptInput && receiptPreviews) {
+    receiptInput.addEventListener('change', () => {
+      receiptPreviews.replaceChildren();
+      Array.from(receiptInput.files || []).forEach((file) => {
+        const figure = document.createElement('figure');
+        figure.className = 'receipt-thumb';
+        const img = document.createElement('img');
+        img.alt = '';
+        img.src = URL.createObjectURL(file);
+        const caption = document.createElement('figcaption');
+        caption.textContent = `${file.name} (new)`;
+        figure.append(img, caption);
+        receiptPreviews.append(figure);
+      });
+    });
+  }
+
   // Image preview before upload.
   const fileInput = document.querySelector('[data-image-input]');
   const image = document.querySelector('[data-image-preview]');

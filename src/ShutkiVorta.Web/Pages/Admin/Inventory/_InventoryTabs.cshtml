@@ -1,0 +1,6 @@
+@* Purchases | Saved items. The model is the active tab: "purchases" or "items". *@
+@model string
+<nav class="tabs" aria-label="Inventory">
+    <a class="@(Model == "purchases" ? "active" : null)" href="/admin/inventory" aria-current="@(Model == "purchases" ? "page" : null)">Purchases</a>
+    <a class="@(Model == "items" ? "active" : null)" href="/admin/inventory/items" aria-current="@(Model == "items" ? "page" : null)">Saved items</a>
+</nav>

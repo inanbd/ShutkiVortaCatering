@@ -55,6 +55,12 @@ stitching, jamdani patterns, alpona motifs, Bengali typography)
   cancel; skip or restore dates; generate deliveries now; monthly **statement** per restaurant
 - **Production plan** (`/admin/production`): pounds of each vorta per day for online orders, generated
   restaurant orders and standing orders not generated yet
+- **Inventory** (`/admin/inventory`): record what the kitchen buys (ingredients and supplies): item, quantity, unit and
+  the price paid, several items per receipt, with **receipt photos** (taken on a phone or uploaded, JPG/PNG/WebP up to
+  10 MB, 10 per purchase). Item names are **saved and suggested next time**, matched regardless of case and spacing, and
+  the item's usual unit is filled in. Spending this month and last month, search by item, store or note and by date,
+  and a **price history** per item. Saved names can be renamed (fixing every purchase) or deleted while unused.
+  Receipt photos are private: they are kept outside `wwwroot` and shown to admins only.
 - Catering and "join our kitchen" inquiries, customers (grant/revoke admin)
 - **Settings** (`/admin/settings`): every business setting editable in the browser, live without a restart,
   with validation, change history and email diagnostics (**Test connection**, **Send test email**); **Email log** with retry
@@ -87,7 +93,9 @@ dotnet run --project src/ShutkiVorta.Web
 ```
 
 On first start the app creates the SQLite database (`src/ShutkiVorta.Web/App_Data/shutkivorta.db`),
-applies the schema, and seeds the roles, an administrator and the 9 starter menu items.
+applies the schema, and seeds the roles, an administrator, the 9 starter menu items and a starter inventory (23 common
+ingredient and supply names plus three sample purchases, marked "Sample entry" in their notes, to delete once you
+record real ones).
 
 | What | Value |
 |---|---|
@@ -105,7 +113,7 @@ There are two kinds of settings:
 | Where | What | Who changes it |
 |---|---|---|
 | **Admin → Settings** (stored in the database) | Business details, online orders, restaurant orders, email (incl. the SMTP server and password), website & search engines, customer accounts, spam protection | Admins, in the browser. **Changes apply immediately**, with no restart, and survive updates. |
-| `src/ShutkiVorta.Web/appsettings.json` (or environment variables) | Database connection, data-protection keys, logging, allowed hosts, HTTPS redirection, the email pickup folder, the first admin account (`Seed`) | Whoever hosts the site. Read at startup. |
+| `src/ShutkiVorta.Web/appsettings.json` (or environment variables) | Database connection, data-protection keys, logging, allowed hosts, HTTPS redirection, the email pickup folder, the receipt photo folder, the first admin account (`Seed`) | Whoever hosts the site. Read at startup. |
 
 ### Admin → Settings
 
@@ -134,7 +142,8 @@ Each page validates what you enter (with the error shown next to the field) and 
   "SqlServer": "Server=localhost;Database=ShutkiVorta;User Id=sa;Password=...;TrustServerCertificate=True;Encrypt=True"
 },
 "DataProtection": { "KeysPath": "" },     // empty = App_Data/keys
-"Seed": { "SeedMenu": true, "AdminEmail": "admin@example.com", "AdminPassword": "ChangeMe!2026", "AdminName": "Site Administrator" },
+"Inventory": { "ReceiptsPath": "" },      // empty = App_Data/receipts
+"Seed": { "SeedMenu": true, "SeedInventory": true, "AdminEmail": "admin@example.com", "AdminPassword": "ChangeMe!2026", "AdminName": "Site Administrator" },
 "Settings": { "ReimportFromConfiguration": false }
 ```
 
@@ -143,6 +152,9 @@ Server, set `"Provider": "SqlServer"` and fill in `ConnectionStrings:SqlServer`.
 doesn't exist and migrations run at startup. Migrations are plain SQL scripts in
 `src/ShutkiVorta.Infrastructure/Persistence/Migrations/{Sqlite|SqlServer}/`; add a new numbered script to change
 the schema. `Email:PickupDirectory` (default `App_Data/mail`) is the folder for emails that are saved instead of sent.
+`Inventory:ReceiptsPath` (default `App_Data/receipts`) is the private folder for receipt photos. `Seed:SeedInventory`
+adds the starter inventory once, when the inventory tables are created (so deleted sample entries never come back);
+set it to `false` before upgrading a live site if you don't want the samples.
 
 **Keep the data-protection keys.** They encrypt sign-in cookies and the saved SMTP password. Store `KeysPath` on
 persistent storage and back it up together with the database. If the keys are lost, everyone is signed out
@@ -218,7 +230,8 @@ go out once it is back.
 src/
   ShutkiVorta.Domain           Entities and business rules, no dependencies
                                MenuItem, Order (+ lines, status history, pricing), CateringInquiry,
-                               StandingOrder (restaurant recurring orders, WeekDays schedule)
+                               StandingOrder (restaurant recurring orders, WeekDays schedule),
+                               InventoryPurchase (+ lines, receipts), InventoryItem (saved item names)
   ShutkiVorta.Application      Use cases (CQRS): MediatR commands/queries/notifications, FluentValidation,
                                pipeline behaviors (logging, authorization, validation), interfaces, DTOs
   ShutkiVorta.Infrastructure   Dapper repositories, SQL dialects (SQLite/SQL Server), SQL migrations,
@@ -261,8 +274,9 @@ SHUTKIVORTA_TEST_SQLSERVER="Server=localhost,1433;User Id=sa;Password=...;TrustS
    then run **Test connection** and **Send test email**, and check that no warnings remain.
 3. In Admin → Settings → Website, set the website address to your domain (e.g. `https://www.yourdomain.com`).
 4. Run behind HTTPS. Behind a reverse proxy, set `ASPNETCORE_FORWARDEDHEADERS_ENABLED=true`.
-5. Persist and back up `App_Data/` (SQLite database and data-protection keys) and `wwwroot/uploads/` (menu
-   photos), or use SQL Server and point `DataProtection:KeysPath` to persistent storage.
+5. Persist and back up `App_Data/` (SQLite database, data-protection keys and receipt photos) and `wwwroot/uploads/`
+   (menu photos), or use SQL Server and point `DataProtection:KeysPath` and `Inventory:ReceiptsPath` to persistent
+   storage.
 6. Submit `https://yourdomain.com/sitemap.xml` in Google Search Console and Bing Webmaster Tools.
 
 ## Photos

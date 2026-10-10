@@ -7,7 +7,7 @@ using ShutkiVorta.Infrastructure.Persistence.Seed;
 
 namespace ShutkiVorta.Infrastructure.Persistence;
 
-/// <summary>Creates the database if needed, applies migrations and seeds roles, the admin user and the starter menu.</summary>
+/// <summary>Creates the database if needed, applies migrations and seeds roles, the admin user, the starter menu and inventory.</summary>
 public sealed class DatabaseInitializer
 {
     private readonly DatabaseOptions _options;
@@ -34,16 +34,17 @@ public sealed class DatabaseInitializer
             await EnsureSqlServerDatabaseAsync(cancellationToken);
         }
 
+        IReadOnlyList<string> applied = [];
         if (_options.AutoMigrate)
         {
-            var applied = await _services.GetRequiredService<MigrationRunner>().MigrateAsync(cancellationToken);
+            applied = await _services.GetRequiredService<MigrationRunner>().MigrateAsync(cancellationToken);
             if (applied.Count > 0)
             {
                 _logger.LogInformation("Applied {Count} migration(s): {Migrations}", applied.Count, string.Join(", ", applied));
             }
         }
 
-        await _services.GetRequiredService<DatabaseSeeder>().SeedAsync(cancellationToken);
+        await _services.GetRequiredService<DatabaseSeeder>().SeedAsync(applied, cancellationToken);
     }
 
     private async Task PrepareSqliteAsync(CancellationToken cancellationToken)

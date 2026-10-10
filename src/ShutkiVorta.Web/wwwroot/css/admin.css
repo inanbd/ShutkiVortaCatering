@@ -359,6 +359,36 @@ details.settings-history[open] > summary { border-bottom: 1px dashed var(--line)
 .email-diagnostics li, .email-diagnostics p, .settings-table td { overflow-wrap: anywhere; } /* long server paths */
 .email-test-send .input { flex: 1 1 220px; min-width: 0; width: auto; }
 
+/* ---------- Inventory ---------- */
+.purchase-items { list-style: none; padding: 0; margin: 0; display: grid; gap: 2px; }
+.purchase-items a { color: var(--green-900); font-weight: 600; text-decoration: none; }
+.purchase-items a:hover { color: var(--red-700); }
+.receipt-count { display: inline-flex; align-items: center; gap: 4px; color: var(--green-800); font-weight: 700; text-decoration: none; }
+.receipt-count svg.icon { width: 18px; height: 18px; }
+.inventory-grid { grid-template-columns: minmax(0, 2.2fr) minmax(260px, 1fr); }
+.inventory-lines th, .inventory-lines td { padding: 10px 6px; }
+.inventory-lines td { vertical-align: top; }
+.inventory-lines tr[hidden] { display: none !important; }
+.inventory-lines td:first-child { width: 100%; min-width: 120px; } /* the item name takes the room the fixed-width columns leave */
+.inventory-lines .input { width: 100%; padding: .5em .6em; }
+.inventory-lines input[data-line-qty] { width: 80px; text-align: right; }
+.inventory-lines input[data-line-unit] { width: 84px; }
+.inventory-lines .input-unit .input { width: 92px; }
+.inventory-lines .line-label { display: none; }
+.inventory-lines .line-each { display: block; min-height: 1.2em; margin-top: 4px; font-size: .8rem; color: var(--ink-400); }
+.inventory-lines tfoot td { background: var(--cream-50); border-bottom: 0; vertical-align: middle; }
+.inventory-lines .lines-total strong { font-family: var(--font-display); font-size: 1.3rem; color: var(--green-900); }
+.remove-line { background: none; border: 0; padding: 8px 4px; color: var(--ink-400); cursor: pointer; }
+.remove-line:hover { color: var(--maroon-800); }
+.remove-line svg.icon { width: 18px; height: 18px; }
+.receipt-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 12px; }
+.receipt-grid:empty { display: none; }
+.receipt-thumb { margin: 0; display: grid; gap: 6px; min-width: 0; }
+.receipt-thumb img { display: block; width: 100%; aspect-ratio: 3 / 4; object-fit: cover; border-radius: 8px; border: 1px solid var(--line); background: var(--cream-100); }
+.receipt-thumb figcaption { display: grid; gap: 4px; font-size: .8rem; color: var(--ink-500); overflow-wrap: anywhere; }
+.receipt-thumb .check { gap: 6px; font-size: .85rem; }
+.delete-purchase { display: flex; justify-content: flex-end; }
+
 @media (max-width: 1100px) {
   .kpis { grid-template-columns: repeat(2, 1fr); }
   .kpis-3 { grid-template-columns: repeat(3, 1fr); }
@@ -409,6 +439,23 @@ details.settings-history[open] > summary { border-bottom: 1px dashed var(--line)
   .terms-lines .add-row td:last-child { display: none; }
   .terms-lines select.input { min-width: 0; }
   .terms-lines tr:hover td { background: none; }
+
+  /* Inventory form: each item becomes a small card, with quantity, unit and price side by side. */
+  .inventory-lines thead { display: none; }
+  .inventory-lines, .inventory-lines tbody, .inventory-lines tfoot { display: block; }
+  .inventory-lines tr { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px 10px; padding: 12px 4px; border-bottom: 1px solid #efe4cc; }
+  .inventory-lines td { display: block; padding: 0; border: 0; min-width: 0; }
+  .inventory-lines td:first-child { grid-column: 1 / -1; min-width: 0; }
+  .inventory-lines td.num { grid-column: 1 / -1; text-align: left; }
+  .inventory-lines .line-label { display: block; margin-bottom: 4px; font-size: .78rem; font-weight: 600; color: var(--ink-500); }
+  .inventory-lines input[data-line-qty], .inventory-lines input[data-line-unit], .inventory-lines .input-unit, .inventory-lines .input-unit .input { width: 100%; }
+  .inventory-lines .remove-line::after { content: "Remove"; margin-left: 6px; font-size: .85rem; }
+  .inventory-lines .remove-line { display: inline-flex; align-items: center; padding: 0; }
+  .inventory-lines tfoot tr { grid-template-columns: 1fr auto; align-items: end; border-bottom: 0; }
+  .inventory-lines tfoot td:first-child { grid-column: auto; }
+  .inventory-lines tfoot td { background: none; }
+  .inventory-lines tfoot td:last-child { display: none; }
+  .inventory-lines tr:hover td { background: none; }
 
   /* Settings editor: one column, full-width inputs, save bar across the screen. */
   .settings-fields { grid-template-columns: minmax(0, 1fr); gap: 18px; padding: 16px; }

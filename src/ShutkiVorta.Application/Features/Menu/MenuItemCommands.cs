@@ -1,5 +1,6 @@
 using MediatR;
 using ShutkiVorta.Application.Common.Exceptions;
+using ShutkiVorta.Application.Common.Files;
 using ShutkiVorta.Application.Common.Interfaces;
 using ShutkiVorta.Application.Common.Security;
 
@@ -60,33 +61,11 @@ internal sealed class MenuItemCommandHandlers(
             throw new ValidationException("ImageFile", "Images must be smaller than 5 MB.");
         }
 
-        if (!await LooksLikeImageAsync(request.Content, cancellationToken))
+        if (await ImageFormat.DetectAsync(request.Content, cancellationToken) is null)
         {
             throw new ValidationException("ImageFile", "The uploaded file is not a valid image.");
         }
 
         return await imageStorage.SaveMenuImageAsync(request.Content, extension, cancellationToken);
-    }
-
-    /// <summary>Checks the file signature (magic bytes) so renamed non-image files are rejected.</summary>
-    private static async Task<bool> LooksLikeImageAsync(Stream stream, CancellationToken cancellationToken)
-    {
-        var header = new byte[12];
-        var read = await stream.ReadAtLeastAsync(header, header.Length, throwOnEndOfStream: false, cancellationToken);
-        if (stream.CanSeek)
-        {
-            stream.Seek(0, SeekOrigin.Begin);
-        }
-
-        if (read < 12)
-        {
-            return false;
-        }
-
-        var isJpeg = header[0] == 0xFF && header[1] == 0xD8 && header[2] == 0xFF;
-        var isPng = header[0] == 0x89 && header[1] == 0x50 && header[2] == 0x4E && header[3] == 0x47;
-        var isWebp = header[0] == 'R' && header[1] == 'I' && header[2] == 'F' && header[3] == 'F'
-                     && header[8] == 'W' && header[9] == 'E' && header[10] == 'B' && header[11] == 'P';
-        return isJpeg || isPng || isWebp;
     }
 }

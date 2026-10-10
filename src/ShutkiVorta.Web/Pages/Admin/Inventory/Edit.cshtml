@@ -1,0 +1,164 @@
+@page "/admin/inventory/edit/{id:int?}"
+@using System.Globalization
+@model ShutkiVorta.Web.Pages.Admin.Inventory.EditModel
+@{
+    var receipts = Model.Purchase?.Receipts ?? [];
+}
+@section Actions {
+    <a class="btn btn-outline btn-sm" href="/admin/inventory">&larr; Inventory</a>
+}
+
+<form method="post" enctype="multipart/form-data" class="inventory-form">
+    <div asp-validation-summary="All" class="validation-summary-errors"></div>
+    <div class="detail-grid inventory-grid">
+        <div>
+            <section class="panel">
+                <div class="panel-head"><h2>What did you buy?</h2></div>
+                <div class="panel-body">
+                    <div class="form-grid mb-3">
+                        <div class="field">
+                            <label asp-for="Input.PurchasedOn"></label>
+                            <input asp-for="Input.PurchasedOn" type="date" max="@Model.Today.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)" />
+                        </div>
+                        <div class="field">
+                            <label asp-for="Input.Store"></label>
+                            <input asp-for="Input.Store" placeholder="Where it was bought (optional)" />
+                        </div>
+                    </div>
+
+                    <datalist id="inventory-item-names">
+                        @foreach (var item in Model.Options.Items)
+                        {
+                            <option value="@item.Name" data-unit="@item.Unit"></option>
+                        }
+                    </datalist>
+                    <datalist id="inventory-units">
+                        @foreach (var unit in Model.Options.Units)
+                        {
+                            <option value="@unit"></option>
+                        }
+                    </datalist>
+
+                    <div class="table-wrap">
+                        <table class="table inventory-lines" data-inventory-lines data-item-list="inventory-item-names">
+                            <thead>
+                                <tr><th>Item</th><th>Quantity</th><th>Unit</th><th>Price paid</th><th><span class="visually-hidden">Remove</span></th></tr>
+                            </thead>
+                            <tbody>
+                                @for (var i = 0; i < Model.Input.Lines.Count; i++)
+                                {
+                                    var line = Model.Input.Lines[i];
+                                    <tr data-line>
+                                        <td>
+                                            <span class="line-label" aria-hidden="true">Item</span>
+                                            <input class="input" name="Input.Lines[@i].ItemName" value="@line.ItemName" list="inventory-item-names"
+                                                   autocomplete="off" maxlength="@InventoryItem.MaxNameLength" placeholder="Start typing, e.g. Mustard oil"
+                                                   aria-label="Item name" data-line-item />
+                                        </td>
+                                        <td>
+                                            <span class="line-label" aria-hidden="true">Quantity</span>
+                                            <input class="input" type="number" name="Input.Lines[@i].Quantity" value="@line.Quantity?.ToString("0.###", CultureInfo.InvariantCulture)"
+                                                   min="0" step="any" inputmode="decimal" aria-label="Quantity" data-line-qty />
+                                        </td>
+                                        <td>
+                                            <span class="line-label" aria-hidden="true">Unit</span>
+                                            <input class="input" name="Input.Lines[@i].Unit" value="@line.Unit" list="inventory-units" autocomplete="off"
+                                                   maxlength="@InventoryItem.MaxUnitLength" placeholder="lb" aria-label="Unit" data-line-unit />
+                                        </td>
+                                        <td>
+                                            <span class="line-label" aria-hidden="true">Price paid</span>
+                                            <div class="input-unit">
+                                                <span>$</span>
+                                                <input class="input" type="number" name="Input.Lines[@i].Price" value="@line.Price?.ToString("0.00", CultureInfo.InvariantCulture)"
+                                                       min="0" step="0.01" inputmode="decimal" aria-label="Price paid (total for this quantity)" data-line-price />
+                                            </div>
+                                            <span class="line-each" data-line-each></span>
+                                        </td>
+                                        <td class="num">
+                                            <button class="remove-line" type="button" title="Remove this item" aria-label="Remove this item" data-line-remove>@Icons.Get("trash")</button>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                            <tfoot>
+                                <tr>
+                                    <td colspan="3"><button class="btn btn-outline btn-sm" type="button" data-line-add>@Icons.Get("plus") Add another item</button></td>
+                                    <td class="lines-total"><span class="line-label">Total</span><strong data-lines-total></strong></td>
+                                    <td></td>
+                                </tr>
+                            </tfoot>
+                        </table>
+                    </div>
+                    <p class="hint small muted mt-1">
+                        Items you have added before are suggested as you type, with their usual unit. Enter the <strong>price paid for the whole quantity</strong>
+                        as printed on the receipt; the price per unit is worked out for you. Empty rows are ignored.
+                    </p>
+
+                    <div class="field mt-3">
+                        <label asp-for="Input.Notes"></label>
+                        <textarea asp-for="Input.Notes" rows="2" maxlength="1000" placeholder="Anything worth remembering, e.g. paid in cash, brand, who picked it up"></textarea>
+                    </div>
+                </div>
+            </section>
+        </div>
+
+        <div>
+            <section class="panel" id="receipts">
+                <div class="panel-head"><h2>Receipt photos</h2></div>
+                <div class="panel-body">
+                    @if (Model.ReceiptsNeedChoosingAgain)
+                    {
+                        <div class="alert alert-warn" role="alert">The photos you chose were not uploaded because something above needs fixing. Please choose them again.</div>
+                    }
+                    @if (receipts.Count > 0)
+                    {
+                        <div class="receipt-grid mb-2">
+                            @foreach (var r in receipts)
+                            {
+                                <figure class="receipt-thumb">
+                                    <a href="/admin/inventory/receipts/@r.Id" target="_blank" rel="noopener" title="Open full size">
+                                        <img src="/admin/inventory/receipts/@r.Id" alt="Receipt photo: @r.DisplayName" loading="lazy" />
+                                    </a>
+                                    <figcaption>
+                                        <span>@r.DisplayName</span>
+                                        <label class="check"><input type="checkbox" name="Input.RemoveReceiptIds" value="@r.Id" checked="@(Model.Input.RemoveReceiptIds.Contains(r.Id) ? "checked" : null)" /> Remove</label>
+                                    </figcaption>
+                                </figure>
+                            }
+                        </div>
+                    }
+                    <div class="field">
+                        <label for="ReceiptFiles">@(receipts.Count > 0 ? "Add more photos" : "Add photos of the receipt")</label>
+                        <input id="ReceiptFiles" name="ReceiptFiles" type="file" accept="image/jpeg,image/png,image/webp" multiple data-receipt-input />
+                        <span class="hint">On a phone you can take the photo right away. JPG, PNG or WebP, up to 10 MB each and @InventoryPurchase.MaxReceipts per purchase.</span>
+                    </div>
+                    <div class="receipt-grid mt-1" data-receipt-previews></div>
+                </div>
+            </section>
+
+            <section class="panel">
+                <div class="panel-body">
+                    <button class="btn btn-primary btn-block btn-lg" type="submit">@(Model.IsNew ? "Add to inventory" : "Save changes")</button>
+                    @if (Model.Purchase is { } purchase)
+                    {
+                        <p class="small muted mt-2 mb-0">
+                            Added by @purchase.CreatedBy on @Format.ShortDate(purchase.CreatedAtUtc).
+                            @if (purchase.UpdatedAtUtc > purchase.CreatedAtUtc.AddMinutes(1))
+                            {
+                                <text>Last changed @Format.ShortDate(purchase.UpdatedAtUtc).</text>
+                            }
+                        </p>
+                    }
+                </div>
+            </section>
+        </div>
+    </div>
+</form>
+
+@if (!Model.IsNew)
+{
+    <form method="post" asp-page-handler="Delete" asp-route-id="@Model.Input.Id" class="mt-3 delete-purchase"
+          data-confirm="Delete this purchase and its receipt photos? This cannot be undone.">
+        <button class="btn btn-danger btn-sm" type="submit">@Icons.Get("trash") Delete purchase</button>
+    </form>
+}

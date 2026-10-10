@@ -1,0 +1,118 @@
+@page
+@model ShutkiVorta.Web.Pages.Admin.Inventory.IndexModel
+@{
+    const int PreviewLines = 4;
+    var o = Model.Overview;
+    var purchases = o.Purchases.Purchases;
+}
+@section Actions {
+    <a class="btn btn-primary btn-sm" href="/admin/inventory/edit">@Icons.Get("plus") Add to inventory</a>
+}
+
+<partial name="_InventoryTabs" model="@("purchases")" />
+
+<div class="kpis kpis-3">
+    <div class="kpi gold">
+        <div class="label">Spent this month</div>
+        <div class="value">@Ui.Money(o.SpentThisMonth)</div>
+        <div class="sub">on ingredients and supplies</div>
+    </div>
+    <div class="kpi">
+        <div class="label">Last month</div>
+        <div class="value">@Ui.Money(o.SpentLastMonth)</div>
+        <div class="sub">for comparison</div>
+    </div>
+    <div class="kpi maroon"><a href="/admin/inventory/items">
+        <div class="label">Saved items</div>
+        <div class="value">@o.SavedItemCount</div>
+        <div class="sub">suggested as you type</div></a>
+    </div>
+</div>
+
+<section class="panel">
+    <div class="panel-head">
+        <form method="get" class="filters" style="width:100%;">
+            <div class="field grow">
+                <label for="q">Search</label>
+                <input id="q" name="q" value="@Model.Q" placeholder="Item, store or note" />
+            </div>
+            <div class="field">
+                <label for="from">Bought from</label>
+                <input id="from" name="from" type="date" value="@Model.From?.ToString("yyyy-MM-dd")" />
+            </div>
+            <div class="field">
+                <label for="to">to</label>
+                <input id="to" name="to" type="date" value="@Model.To?.ToString("yyyy-MM-dd")" />
+            </div>
+            <button class="btn btn-green btn-sm" type="submit">@Icons.Get("search") Filter</button>
+            <a class="btn btn-outline btn-sm" href="/admin/inventory">Reset</a>
+        </form>
+    </div>
+    <div class="panel-body flush table-wrap">
+        @if (purchases.Items.Count == 0)
+        {
+            <p class="muted" style="padding:24px;">
+                @if (Model.IsFiltered)
+                {
+                    @:No purchases match your filters.
+                }
+                else
+                {
+                    @:Nothing has been added yet. <a href="/admin/inventory/edit">Add your first purchase</a> with its receipt photo.
+                }
+            </p>
+        }
+        else
+        {
+            <table class="table inventory-table">
+                <thead>
+                    <tr><th>Bought</th><th>Items</th><th>Store</th><th>Receipt</th><th class="num">Total</th><th></th></tr>
+                </thead>
+                <tbody>
+                    @foreach (var p in purchases.Items)
+                    {
+                        <tr id="purchase-@p.Id">
+                            <td class="nowrap">
+                                <a class="strong" href="/admin/inventory/edit/@p.Id">@Format.ShortDate(p.PurchasedOn)</a><br />
+                                <span class="small muted">@p.PurchasedOn.ToString("dddd", Format.Culture)</span>
+                            </td>
+                            <td>
+                                <ul class="purchase-items">
+                                    @foreach (var line in p.Lines.Take(PreviewLines))
+                                    {
+                                        <li><a href="/admin/inventory/items/@line.InventoryItemId">@line.ItemName</a> <span class="muted">@line.QuantityText &middot; @Ui.Money(line.Price)</span></li>
+                                    }
+                                    @if (p.Lines.Count > PreviewLines)
+                                    {
+                                        <li class="muted">and @(p.Lines.Count - PreviewLines) more</li>
+                                    }
+                                </ul>
+                                @if (!string.IsNullOrWhiteSpace(p.Notes))
+                                {
+                                    <div class="preview">@p.Notes</div>
+                                }
+                            </td>
+                            <td>@(p.Store ?? "—")</td>
+                            <td class="nowrap">
+                                @if (p.ReceiptCount > 0)
+                                {
+                                    <a class="receipt-count" href="/admin/inventory/edit/@p.Id#receipts" title="View receipt photos">@Icons.Get("image") @p.ReceiptCount</a>
+                                }
+                                else
+                                {
+                                    <span class="muted small">None</span>
+                                }
+                            </td>
+                            <td class="num"><strong>@Ui.Money(p.Total)</strong></td>
+                            <td class="num"><a class="btn btn-outline btn-sm" href="/admin/inventory/edit/@p.Id">@Icons.Get("edit") Open</a></td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+    </div>
+</section>
+<p class="small muted mt-2">
+    @purchases.TotalCount purchase(s), @Ui.Money(o.Purchases.Total) in total@(Model.IsFiltered ? " for these filters" : string.Empty).
+</p>
+<partial name="_Pager" model="(purchases.Page, purchases.TotalPages, (Func<int, string>)Model.PageUrl)" />

@@ -1,0 +1,94 @@
+@page "/admin/inventory/items/{id:int}"
+@model ShutkiVorta.Web.Pages.Admin.Inventory.ItemModel
+@{
+    var summary = Model.Details!.Summary;
+    var history = Model.Details.History;
+}
+@section Actions {
+    <a class="btn btn-outline btn-sm" href="/admin/inventory/items">&larr; Saved items</a>
+}
+
+<div class="detail-grid">
+    <section class="panel">
+        <div class="panel-head">
+            <h2>Purchase history</h2>
+            @if (history.Count > 0)
+            {
+                <span class="small muted">newest first</span>
+            }
+        </div>
+        <div class="panel-body flush table-wrap">
+            @if (history.Count == 0)
+            {
+                <p class="muted" style="padding:24px;">Not bought yet. It is suggested when you <a href="/admin/inventory/edit">add to the inventory</a>.</p>
+            }
+            else
+            {
+                <table class="table">
+                    <thead><tr><th>Bought</th><th>Store</th><th>Quantity</th><th class="num">Price paid</th><th class="num">Per unit</th></tr></thead>
+                    <tbody>
+                        @foreach (var h in history)
+                        {
+                            <tr>
+                                <td class="nowrap"><a class="strong" href="/admin/inventory/edit/@h.PurchaseId">@Format.ShortDate(h.PurchasedOn)</a></td>
+                                <td>@(h.Store ?? "—")</td>
+                                <td class="nowrap">@h.QuantityText</td>
+                                <td class="num">@Ui.Money(h.Price)</td>
+                                <td class="num"><strong>@Ui.Money(h.PricePerUnit)</strong><span class="muted"> / @h.Unit</span></td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            }
+        </div>
+    </section>
+
+    <div>
+        <section class="panel">
+            <div class="panel-head"><h2>Totals</h2></div>
+            <div class="panel-body">
+                <dl class="kv">
+                    <dt>Bought</dt><dd>@(summary.TimesBought == 0 ? "Not yet" : summary.TimesBought == 1 ? "Once" : $"{summary.TimesBought} times")</dd>
+                    <dt>Total bought</dt><dd>@(summary.TotalQuantities.Count == 0 ? "—" : string.Join(", ", summary.TotalQuantities))</dd>
+                    <dt>Total spent</dt><dd>@Ui.Money(summary.TotalSpent)</dd>
+                    @if (summary.LastPurchase is { } last)
+                    {
+                        <dt>Last price</dt><dd><strong>@Ui.Money(last.PricePerUnit)</strong> / @last.Unit <span class="muted small">on @Format.ShortDate(last.PurchasedOn)</span></dd>
+                    }
+                </dl>
+            </div>
+        </section>
+
+        <section class="panel">
+            <div class="panel-head"><h2>Name &amp; unit</h2></div>
+            <div class="panel-body">
+                <form method="post">
+                    <div asp-validation-summary="All" class="validation-summary-errors"></div>
+                    <div class="field mb-2">
+                        <label asp-for="Input.Name"></label>
+                        <input asp-for="Input.Name" autocomplete="off" />
+                        <span class="hint">Fix a typo here and every purchase shows the new name.</span>
+                    </div>
+                    <div class="field mb-3">
+                        <label asp-for="Input.Unit"></label>
+                        <input asp-for="Input.Unit" list="inventory-units" autocomplete="off" />
+                        <span class="hint">Filled in when the item is picked again.</span>
+                        <datalist id="inventory-units">
+                            @foreach (var unit in Model.Units)
+                            {
+                                <option value="@unit"></option>
+                            }
+                        </datalist>
+                    </div>
+                    <button class="btn btn-green btn-block" type="submit">Save</button>
+                </form>
+                @if (summary.TimesBought == 0)
+                {
+                    <form method="post" asp-page-handler="Delete" class="mt-2" data-confirm="Delete @summary.Name? It will no longer be suggested.">
+                        <button class="btn btn-danger btn-block btn-sm" type="submit">@Icons.Get("trash") Delete this item</button>
+                    </form>
+                }
+            </div>
+        </section>
+    </div>
+</div>

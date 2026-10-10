@@ -10,6 +10,7 @@ using ShutkiVorta.Application.Common.Options;
 using ShutkiVorta.Application.Features.Accounts;
 using ShutkiVorta.Application.Features.Emails;
 using ShutkiVorta.Application.Features.Inquiries;
+using ShutkiVorta.Application.Features.Inventory;
 using ShutkiVorta.Application.Features.Menu;
 using ShutkiVorta.Application.Features.Orders;
 using ShutkiVorta.Application.Features.Settings;
@@ -47,6 +48,7 @@ public static class DependencyInjection
         services.AddScoped<IOrderRepository, OrderRepository>();
         services.AddScoped<ICateringInquiryRepository, CateringInquiryRepository>();
         services.AddScoped<IStandingOrderRepository, StandingOrderRepository>();
+        services.AddScoped<IInventoryRepository, InventoryRepository>();
 
         services.Configure<SeedOptions>(configuration.GetSection(SeedOptions.SectionName));
         services.AddScoped<MigrationRunner>();
@@ -104,6 +106,7 @@ public static class DependencyInjection
         services.AddSingleton<IDateTimeProvider, DateTimeProvider>();
         services.AddSingleton<IOrderNumberGenerator, OrderNumberGenerator>();
         services.AddScoped<IImageStorage, LocalImageStorage>();
+        services.AddSingleton<IReceiptStorage>(new LocalReceiptStorage(ResolveReceiptsPath(configuration, environment.ContentRootPath)));
 
         // ---- Restaurant standing orders: generate upcoming deliveries in the background ----
         services.AddHostedService<StandingOrderGenerator>();
@@ -141,6 +144,15 @@ public static class DependencyInjection
         }
 
         importer.ReportIgnoredConfiguration();
+    }
+
+    /// <summary>Inventory:ReceiptsPath, a server path like DataProtection:KeysPath; empty means App_Data/receipts.</summary>
+    private static string ResolveReceiptsPath(IConfiguration configuration, string contentRoot)
+    {
+        var path = configuration["Inventory:ReceiptsPath"];
+        return string.IsNullOrWhiteSpace(path)
+            ? Path.Combine(contentRoot, "App_Data", "receipts")
+            : Path.GetFullPath(path, contentRoot);
     }
 
     private static string ResolveConnectionString(IConfiguration configuration, DatabaseProvider provider, string contentRoot)

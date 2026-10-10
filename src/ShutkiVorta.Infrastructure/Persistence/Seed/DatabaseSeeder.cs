@@ -3,7 +3,9 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using ShutkiVorta.Application.Common.Interfaces;
 using ShutkiVorta.Application.Common.Security;
+using ShutkiVorta.Application.Features.Inventory;
 using ShutkiVorta.Application.Features.Menu;
+using ShutkiVorta.Domain.Inventory;
 using ShutkiVorta.Domain.Menu;
 using ShutkiVorta.Infrastructure.Identity;
 
@@ -13,17 +15,25 @@ internal sealed class DatabaseSeeder(
     RoleManager<ApplicationRole> roles,
     UserManager<ApplicationUser> users,
     IMenuItemRepository menu,
+    IInventoryRepository inventory,
     IDateTimeProvider clock,
     IOptions<SeedOptions> options,
     ILogger<DatabaseSeeder> logger)
 {
-    public async Task SeedAsync(CancellationToken cancellationToken = default)
+    /// <param name="appliedMigrations">The migrations applied during this start, so one-time data is added exactly once.</param>
+    public async Task SeedAsync(IReadOnlyCollection<string> appliedMigrations, CancellationToken cancellationToken = default)
     {
         await SeedRolesAsync();
         await SeedAdministratorAsync();
         if (options.Value.SeedMenu)
         {
             await SeedMenuAsync(cancellationToken);
+        }
+
+        // Only when the inventory tables were just created: sample entries an admin deleted must not come back on restart.
+        if (options.Value.SeedInventory && appliedMigrations.Contains(InventorySeedData.MigrationId, StringComparer.OrdinalIgnoreCase))
+        {
+            await SeedInventoryAsync(cancellationToken);
         }
     }
 
@@ -90,5 +100,29 @@ internal sealed class DatabaseSeeder(
         }
 
         logger.LogInformation("Seeded {Count} menu items", MenuSeedData.Items.Count);
+    }
+
+    private async Task SeedInventoryAsync(CancellationToken cancellationToken)
+    {
+        if (await inventory.CountItemsAsync(cancellationToken) > 0)
+        {
+            return;
+        }
+
+        var now = clock.UtcNow;
+        foreach (var (name, unit) in InventorySeedData.Items)
+        {
+            await inventory.AddItemAsync(InventoryItem.Create(name, unit, now), cancellationToken);
+        }
+
+        var today = DateOnly.FromDateTime(clock.BusinessNow);
+        foreach (var sample in InventorySeedData.Purchases)
+        {
+            var purchase = InventoryPurchase.Record(
+                today.AddDays(-sample.DaysAgo), sample.Store, InventorySeedData.SampleNote, sample.Lines, InventorySeedData.SampleCreatedBy, today, now);
+            await inventory.AddPurchaseAsync(purchase, cancellationToken);
+        }
+
+        logger.LogInformation("Seeded {Items} inventory items and {Purchases} sample purchases", InventorySeedData.Items.Count, InventorySeedData.Purchases.Count);
     }
 }

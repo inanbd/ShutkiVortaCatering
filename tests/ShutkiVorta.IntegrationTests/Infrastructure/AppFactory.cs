@@ -38,6 +38,7 @@ public sealed class AppFactory : WebApplicationFactory<Program>
     public string Provider { get; }
     public string TempDirectory { get; }
     public string MailDirectory => Path.Combine(TempDirectory, "mail");
+    public string ReceiptsDirectory => Path.Combine(TempDirectory, "receipts");
 
     public static string? SqlServerBaseConnection => Environment.GetEnvironmentVariable(SqlServerEnvironmentVariable);
 
@@ -61,6 +62,7 @@ public sealed class AppFactory : WebApplicationFactory<Program>
             ["Email:PickupDirectory"] = MailDirectory,
             ["Email:AdminRecipients:0"] = "kitchen@test.local",
             ["DataProtection:KeysPath"] = Path.Combine(TempDirectory, "keys"),
+            ["Inventory:ReceiptsPath"] = ReceiptsDirectory,
             ["UseHttpsRedirection"] = "false",
             ["Site:BaseUrl"] = "https://shutki.test",
             ["Seed:AdminEmail"] = AdminEmail,
