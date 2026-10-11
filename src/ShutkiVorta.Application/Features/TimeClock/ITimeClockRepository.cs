@@ -1,4 +1,5 @@
 using ShutkiVorta.Application.Common.Models;
+using ShutkiVorta.Application.Features.Staff;
 using ShutkiVorta.Domain.TimeClock;
 
 namespace ShutkiVorta.Application.Features.TimeClock;
@@ -64,6 +65,12 @@ public interface ITimeClockRepository
 
     /// <summary>Shifts changed after the punch (corrected, entered later or added by hand) since <paramref name="sinceUtc"/>.</summary>
     Task<int> CountEditedSinceAsync(DateTime sinceUtc, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// The newest of the person's staff audit entries whose details start with <paramref name="detailsPrefix"/> (a shift's
+    /// "Shift #12 ("): one shift's history, however many other entries the person has.
+    /// </summary>
+    Task<IReadOnlyList<StaffAuditEntryDto>> ListAuditEntriesAsync(string userId, string detailsPrefix, int take, CancellationToken cancellationToken = default);
 }
 
 /// <param name="NeedsReview">Flag the shift (the punch is doubtful or the shift is very long); never clears an earlier flag.</param>

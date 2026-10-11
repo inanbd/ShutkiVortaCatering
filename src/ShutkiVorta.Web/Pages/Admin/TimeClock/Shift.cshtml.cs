@@ -38,7 +38,7 @@ public sealed class ShiftModel(ISender sender) : AppPageModel(sender)
         }
 
         Version = Shift.Version;
-        Times = new TimesInput { ClockIn = Shift.ClockInLocal, ClockOut = Shift.IsMissedClockOut ? null : Shift.ClockOutLocal };
+        Times = SavedTimes();
         return Page();
     }
 
@@ -91,9 +91,27 @@ public sealed class ShiftModel(ISender sender) : AppPageModel(sender)
         return await ShowAsync(id, cancellationToken);
     }
 
-    /// <summary>The page again, with the errors and what was typed.</summary>
-    private async Task<IActionResult> ShowAsync(int id, CancellationToken cancellationToken) =>
-        await LoadAsync(id, cancellationToken) ? Page() : NotFound();
+    /// <summary>
+    /// The page again, with the errors and what was typed. After another action (close, void, mark reviewed) the "Correct times"
+    /// form was not sent, so it shows the shift's times again instead of empty required fields.
+    /// </summary>
+    private async Task<IActionResult> ShowAsync(int id, CancellationToken cancellationToken)
+    {
+        if (!await LoadAsync(id, cancellationToken))
+        {
+            return NotFound();
+        }
+
+        if (Times is { ClockIn: null, ClockOut: null, Reason: null })
+        {
+            Times = SavedTimes();
+        }
+
+        return Page();
+    }
+
+    /// <summary>The shift's times as the "Correct times" form shows them (an unknown clock-out stays empty).</summary>
+    private TimesInput SavedTimes() => new() { ClockIn = Shift.ClockInLocal, ClockOut = Shift.IsMissedClockOut ? null : Shift.ClockOutLocal };
 
     private async Task<bool> LoadAsync(int id, CancellationToken cancellationToken)
     {

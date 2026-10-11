@@ -92,7 +92,7 @@ public sealed class TeamModel(ISender sender, ICurrentStaff currentStaff) : AppP
         var precision = Number(accuracy);
         if (lat is not (>= -90 and <= 90) || lon is not (>= -180 and <= 180))
         {
-            ErrorMessage = "Your location could not be read. Allow location for this site (see \"How to turn location on\") and try again.";
+            ErrorMessage = "Your location could not be read. Allow location for this site (see \"How to turn location on\" below the kitchen button) and try again.";
             return Redirect(TimeClockUi.TeamPath);
         }
 

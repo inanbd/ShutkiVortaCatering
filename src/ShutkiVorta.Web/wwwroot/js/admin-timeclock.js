@@ -137,9 +137,11 @@
       locate().then((result) => {
         if (result.status !== 'Captured') {
           button.disabled = false;
-          say(result.status === 'PermissionDenied'
-            ? 'Location is blocked for this site. Allow it in the browser settings and try again.'
+          const blocked = result.status === 'PermissionDenied';
+          say(blocked
+            ? 'Location is blocked for this site. See "How to turn location on" below, then try again.'
             : 'Your location could not be found. Try again (outside or near a window helps).');
+          if (blocked && help) help.open = true;
           return;
         }
 

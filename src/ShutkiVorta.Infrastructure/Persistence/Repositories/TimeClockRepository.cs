@@ -1,6 +1,7 @@
 using System.Data.Common;
 using Dapper;
 using ShutkiVorta.Application.Common.Models;
+using ShutkiVorta.Application.Features.Staff;
 using ShutkiVorta.Application.Features.TimeClock;
 using ShutkiVorta.Domain.TimeClock;
 
@@ -332,6 +333,22 @@ internal sealed class TimeClockRepository(IDbConnectionFactory connections, ISql
             "SELECT COUNT(*) FROM TimeClockShifts WHERE EditedAtUtc >= @SinceUtc", new { SinceUtc = sinceUtc }, cancellationToken: cancellationToken));
     }
 
+    public async Task<IReadOnlyList<StaffAuditEntryDto>> ListAuditEntriesAsync(
+        string userId, string detailsPrefix, int take, CancellationToken cancellationToken = default)
+    {
+        // Prefixes are like "Shift #12 (": no LIKE wildcards. The index on (TargetUserId, ChangedAtUtc) finds the person's entries.
+        await using var connection = await connections.OpenAsync(cancellationToken);
+        var rows = await connection.QueryAsync<AuditRow>(new CommandDefinition(
+            dialect.Page("""
+                SELECT Id, TargetUserId, TargetName, Action, Details, ChangedBy, ChangedAtUtc FROM StaffAuditLog
+                WHERE TargetUserId = @UserId AND Details LIKE @Pattern
+                ORDER BY ChangedAtUtc DESC, Id DESC
+                """),
+            new { UserId = userId, Pattern = detailsPrefix + "%", Skip = 0, Take = Math.Clamp(take, 1, 500) },
+            cancellationToken: cancellationToken));
+        return [.. rows.Select(r => r.ToDto())];
+    }
+
     /// <summary>
     /// Adds and corrections of one person's shifts happen one at a time: a no-op update takes the person's Users row lock
     /// until the transaction ends, so the overlap check of the next one sees this one's result.
@@ -344,5 +361,27 @@ internal sealed class TimeClockRepository(IDbConnectionFactory connections, ISql
     {
         public int Version { get; init; }
         public int Voided { get; init; }
+    }
+
+    private sealed class AuditRow
+    {
+        public long Id { get; init; }
+        public string? TargetUserId { get; init; }
+        public string? TargetName { get; init; }
+        public string Action { get; init; } = string.Empty;
+        public string? Details { get; init; }
+        public string ChangedBy { get; init; } = string.Empty;
+        public DateTime ChangedAtUtc { get; init; }
+
+        public StaffAuditEntryDto ToDto() => new()
+        {
+            Id = Id,
+            TargetUserId = TargetUserId,
+            TargetName = TargetName,
+            Action = Action,
+            Details = Details,
+            ChangedBy = ChangedBy,
+            ChangedAtUtc = DateTime.SpecifyKind(ChangedAtUtc, DateTimeKind.Utc),
+        };
     }
 }

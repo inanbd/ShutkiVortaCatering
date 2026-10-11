@@ -55,7 +55,7 @@ public sealed class TimeClockHandlerTests
     private ShiftManagementHandlers Manage() =>
         new(_repository, _directory, _audit, _staff, new FakeCurrentUser { UserId = Me, Email = "me@test.local" }, _clock);
 
-    private TimeClockQueryHandlers Queries() => new(_repository, _directory, _audit, _staff, _clock, Options.Create(_options));
+    private TimeClockQueryHandlers Queries() => new(_repository, _directory, _staff, _clock, Options.Create(_options));
 
     private static PunchLocationInput AtTheKitchen => new(LocationStatus.Captured, 32.7768, -96.7971, 12);
 
@@ -392,7 +392,11 @@ public sealed class TimeClockHandlerTests
     {
         _repository.GetAsync(5, Arg.Any<CancellationToken>()).Returns(Punched(5, Colleague, Utc(2026, 10, 5, 9, 0), Utc(2026, 10, 5, 17, 0)));
         _repository.GetAsync(6, Arg.Any<CancellationToken>()).Returns(Punched(6, Me, Utc(2026, 10, 5, 9, 0), Utc(2026, 10, 5, 17, 0)));
-        _audit.ListAsync(default, default, default).ReturnsForAnyArgs([]);
+        _repository.ListAuditEntriesAsync(default!, default!, default, default).ReturnsForAnyArgs([]);
+        _repository.ListAuditEntriesAsync(Me, "Shift #6 (", Arg.Any<int>(), Arg.Any<CancellationToken>()).Returns(
+        [
+            new StaffAuditEntryDto { Id = 9, TargetUserId = Me, Action = StaffAuditActions.ShiftCorrected, Details = "Shift #6 (Mon, Oct 5): earlier", ChangedBy = "boss@test.local" },
+        ]);
 
         Assert.Null(await Queries().Handle(new GetShiftQuery(5), CancellationToken.None));
         Assert.Null(await Queries().Handle(new GetShiftQuery(404), CancellationToken.None));
@@ -401,6 +405,7 @@ public sealed class TimeClockHandlerTests
         Assert.True(own.IsOwnShift);
         Assert.False(own.CanManage);
         Assert.Null(own.ManageRefusal);
+        Assert.Equal(("Shift corrected", "boss@test.local"), (Assert.Single(own.History).Action, own.History[0].ChangedBy)); // its own entries, found by the database
 
         _staff.Access = StaffAccessFor.Custom(StaffRole.Manager, [Permissions.TimeClockManage], Me);
         var others = await Queries().Handle(new GetShiftQuery(5), CancellationToken.None);

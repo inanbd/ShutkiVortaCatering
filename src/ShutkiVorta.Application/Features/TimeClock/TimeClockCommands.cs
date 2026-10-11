@@ -291,5 +291,6 @@ internal static class ShiftAudit
 
     public static string ActionName(string action) => action == ShiftReviewed ? "Marked as reviewed" : StaffAuditActions.DisplayName(action);
 
-    private static string Prefix(int shiftId) => $"Shift #{shiftId} (";
+    /// <summary>"Shift #12 (": how every entry about the shift starts.</summary>
+    public static string Prefix(int shiftId) => $"Shift #{shiftId} (";
 }

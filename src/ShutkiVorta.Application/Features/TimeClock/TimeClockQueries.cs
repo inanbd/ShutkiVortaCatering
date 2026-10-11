@@ -70,7 +70,6 @@ public sealed record ExportWeeklyHoursCsvQuery : IRequest<TimeClockCsvFile>
 internal sealed class TimeClockQueryHandlers(
     ITimeClockRepository repository,
     IStaffDirectory directory,
-    IStaffAuditLog audit,
     ICurrentStaff currentStaff,
     IDateTimeProvider clock,
     IOptions<TimeClockOptions> options) :
@@ -143,7 +142,7 @@ internal sealed class TimeClockQueryHandlers(
         }
 
         var manages = access.Can(Permissions.TimeClockManage);
-        var history = (await audit.ListAsync(shift.UserId, HistorySize, cancellationToken))
+        var history = (await repository.ListAuditEntriesAsync(shift.UserId, ShiftAudit.Prefix(shift.Id), HistorySize, cancellationToken))
             .Where(e => ShiftAudit.IsAbout(e, shift.Id))
             .Select(e => new ShiftHistoryEntryDto(ShiftAudit.ActionName(e.Action), e.Details, e.ChangedBy, clock.ToBusinessTime(e.ChangedAtUtc)))
             .ToList();

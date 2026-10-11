@@ -368,6 +368,57 @@ public sealed partial class TimeClockTests(TestServers servers)
 
     [Theory]
     [MemberData(nameof(TestServers.Providers), MemberType = typeof(TestServers))]
+    public async Task TheShiftPage_KeepsTheShiftsTimesAfterAFailedAction_AndEveryShiftKeepsItsHistory(string provider)
+    {
+        var app = servers.Get(provider);
+        var clock = app.Services.GetRequiredService<IDateTimeProvider>();
+        var employee = await CreateStaffAsync(app, StaffRole.Employee, []);
+        var admin = await SignInAsync(app, AppFactory.AdminEmail);
+
+        // Closing an open shift at an impossible time: the error shows, and "Correct times" still holds the shift's times.
+        var open = await AddOpenShiftAsync(app, employee, Now().AddHours(-3));
+        var openPage = await admin.GetStringAsync($"{Page}/shifts/{open.Id}");
+        var refused = await PostFormAsync(admin, $"{Page}/shifts/{open.Id}?handler=Close", openPage, new Dictionary<string, string>
+        {
+            ["Version"] = VersionOn(openPage),
+            ["Closing.ClockOut"] = LocalInput(clock.ToBusinessTime(open.ClockInUtc).AddHours(-1)),
+            ["Closing.Reason"] = "forgot to clock out",
+        });
+        Assert.Equal(HttpStatusCode.OK, refused.StatusCode);
+        var html = WebUtility.HtmlDecode(await refused.Content.ReadAsStringAsync());
+        Assert.Contains("must be after the clock-in", html);
+        Assert.Contains($"name=\"Times.ClockIn\" value=\"{LocalInput(clock.ToBusinessTime(open.ClockInUtc))}\"", html);
+
+        // The same after a void without a reason, on a closed shift (both times).
+        var closed = await AddClosedShiftAsync(app, employee, DaysAgo(app, 3, 9), DaysAgo(app, 3, 17));
+        var closedPage = await admin.GetStringAsync($"{Page}/shifts/{closed.Id}");
+        refused = await PostFormAsync(admin, $"{Page}/shifts/{closed.Id}?handler=Void", closedPage, new Dictionary<string, string>
+        {
+            ["Version"] = VersionOn(closedPage), ["Voiding.Reason"] = "",
+        });
+        Assert.Equal(HttpStatusCode.OK, refused.StatusCode);
+        html = WebUtility.HtmlDecode(await refused.Content.ReadAsStringAsync());
+        Assert.Contains($"name=\"Times.ClockIn\" value=\"{LocalInput(DaysAgoLocal(app, 3, 9))}\"", html);
+        Assert.Contains($"name=\"Times.ClockOut\" value=\"{LocalInput(DaysAgoLocal(app, 3, 17))}\"", html);
+        Assert.False((await ShiftsOfAsync(app, employee.UserId)).Single(s => s.Id == closed.Id).IsVoided);
+
+        // A correction, then many newer entries about the same person: the shift's page still lists its own.
+        AssertRedirectedTo(await CorrectAsync(admin, closed.Id, DaysAgoLocal(app, 3, 8), DaysAgoLocal(app, 3, 17), "came in early"), $"{Page}/shifts/{closed.Id}");
+        await using (var connection = await app.Services.GetRequiredService<IDbConnectionFactory>().OpenAsync())
+        {
+            await connection.ExecuteAsync(
+                "INSERT INTO StaffAuditLog (TargetUserId, TargetName, Action, Details, ChangedBy, ChangedAtUtc) VALUES (@UserId, 'Busy', 'ShiftReviewed', @Details, 'tests', @At)",
+                Enumerable.Range(0, 250).Select(i => new { employee.UserId, Details = $"Shift #{closed.Id}0 (Mon): unrelated entry {i}", At = DateTime.UtcNow.AddSeconds(1) }));
+        }
+
+        html = WebUtility.HtmlDecode(await admin.GetStringAsync($"{Page}/shifts/{closed.Id}"));
+        Assert.Contains("<strong>Shift corrected</strong>", html);
+        Assert.Contains("Reason: came in early", html);
+        Assert.DoesNotContain("unrelated entry", html);
+    }
+
+    [Theory]
+    [MemberData(nameof(TestServers.Providers), MemberType = typeof(TestServers))]
     public async Task OverlappingSkippedAndFutureTimes_AreRefused(string provider)
     {
         var app = servers.Get(provider);
@@ -508,6 +559,16 @@ public sealed partial class TimeClockTests(TestServers servers)
         Assert.Equal((450, DayOfWeek.Sunday, true), (options.NearKitchenRadiusMeters, options.WorkweekStartsOn, options.RequireLocation));
         Assert.Contains("The kitchen location is now where you are", WebUtility.HtmlDecode(await admin.GetStringAsync($"{Page}/team")));
         Assert.Contains("Recent changes", await admin.GetStringAsync("/admin/settings/time-clock"));
+
+        // A location that can't be read (blocked on the device): the help for turning it on is on this page too.
+        AssertRedirectedTo(await PostFormAsync(admin, $"{Page}/team?handler=KitchenLocation", team, new Dictionary<string, string>
+        {
+            ["latitude"] = "", ["longitude"] = "", ["accuracy"] = "",
+        }), $"{Page}/team");
+        var unreadable = WebUtility.HtmlDecode(await admin.GetStringAsync($"{Page}/team"));
+        Assert.Contains("see \"How to turn location on\" below the kitchen button", unreadable);
+        Assert.Contains("id=\"location-help\"", unreadable);
+        Assert.Contains("<summary>How to turn location on</summary>", unreadable);
 
         // A rough location is not good enough for the kitchen.
         var rough = await PostFormAsync(admin, $"{Page}/team?handler=KitchenLocation", team, new Dictionary<string, string>

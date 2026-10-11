@@ -50,6 +50,7 @@
 .kitchen-banner > span { display: flex; align-items: flex-start; gap: 8px; }
 .kitchen-banner svg.icon { width: 20px; height: 20px; flex: none; }
 .kitchen-form { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+.kitchen-banner .location-help { flex: 1 1 100%; }
 
 /* One shift. */
 .punch-grid { margin-top: 24px; gap: 24px; }
