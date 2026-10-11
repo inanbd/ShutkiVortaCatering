@@ -237,7 +237,7 @@
                                 <td data-label="Location">
                                     <span class="small">@TimeClockText.Location(s.ClockIn.Status)@(s.ClockIn.DistanceMeters is { } meters ? $" · {TimeClockText.Distance(meters)}" : null)</span>
                                 </td>
-                                <td class="shift-flags"><partial name="_ShiftFlags" model="s" /></td>
+                                <td><div class="shift-flags"><partial name="_ShiftFlags" model="s" /></div></td>
                             </tr>
                         }
                     </tbody>

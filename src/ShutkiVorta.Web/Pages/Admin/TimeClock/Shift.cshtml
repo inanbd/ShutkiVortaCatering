@@ -42,15 +42,11 @@ else if (s.IsMissedClockOut)
                         {
                             <strong>Still on the clock</strong>
                         }
-                        else if (s.IsMissedClockOut)
-                        {
-                            <span>Unknown</span>
-                        }
                         else
                         {
-                            @Format.DateTime(s.ClockOutLocal!.Value)
+                            @(s.IsMissedClockOut ? "Unknown" : Format.DateTime(s.ClockOutLocal!.Value))
+                            <span class="small muted">(@TimeClockText.ClockOutSource(s.ClockOutSource))</span>
                         }
-                        <span class="small muted">(@TimeClockText.ClockOutSource(s.ClockOutSource))</span>
                     </dd>
                     <dt>Hours</dt>
                     <dd>
@@ -201,7 +197,7 @@ else if (s.IsMissedClockOut)
                                 <input class="input" id="correct-reason" name="Times.Reason" value="@Model.Times.Reason" maxlength="@TimeClockShift.MaxReasonLength"
                                        placeholder="e.g. forgot to clock in" required />
                             </div>
-                            <p class="hint mb-0">Business time. Out after in, nothing in the future, at most 24 hours, not overlapping their other shifts.</p>
+                            <p class="small muted mb-0">Business time. Out after in, nothing in the future, at most 24 hours, not overlapping their other shifts.</p>
                             <button class="btn btn-green btn-sm" type="submit">Save times</button>
                         </form>
                     </div>

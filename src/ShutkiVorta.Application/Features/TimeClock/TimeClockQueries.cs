@@ -194,7 +194,7 @@ internal sealed class TimeClockQueryHandlers(
     {
         var (page, pageSize) = Paging.Normalize(request.Page, request.PageSize);
         var (from, to) = Ordered(request.From, request.To);
-        var found = await repository.SearchAsync(Search(request.UserId, from, to, request.Filter, page, pageSize), cancellationToken);
+        var found = await repository.SearchAsync(Search(Person(request.UserId), from, to, request.Filter, page, pageSize), cancellationToken);
         var shifts = new PagedResult<ShiftDto>([.. found.Items.Select(s => s.ToDto(clock, Settings))], found.TotalCount, found.Page, found.PageSize);
 
         // Hours inside the dates: shifts crossing the first or last midnight count only their part inside.
@@ -204,21 +204,21 @@ internal sealed class TimeClockQueryHandlers(
         }
 
         var (startUtc, endUtc) = (DayStart(first), DayStart(last.AddDays(1)));
-        var overlapping = await repository.ListOverlappingAsync(startUtc, endUtc, request.UserId, cancellationToken);
+        var overlapping = await repository.ListOverlappingAsync(startUtc, endUtc, Person(request.UserId), cancellationToken);
         var now = clock.UtcNow;
         return new ShiftListDto(shifts, Sum(overlapping, s => s.HoursWithin(startUtc, endUtc)), Sum(overlapping, s => s.InProgressWithin(startUtc, endUtc, now)));
     }
 
     public async Task<WeeklyHoursDto> Handle(GetWeeklyHoursQuery request, CancellationToken cancellationToken)
     {
-        var (from, to, weeks) = await WeeklyHoursAsync(request.UserId, request.From, request.To, cancellationToken);
+        var (from, to, weeks) = await WeeklyHoursAsync(Person(request.UserId), request.From, request.To, cancellationToken);
         return new WeeklyHoursDto(Settings.WorkweekStartsOn, from, to, weeks);
     }
 
     public async Task<TimeClockCsvFile> Handle(ExportShiftsCsvQuery request, CancellationToken cancellationToken)
     {
         var (from, to) = Ordered(request.From, request.To);
-        var found = await repository.SearchAsync(Search(request.UserId, from, to, request.Filter, 1, MaxExportRows), cancellationToken);
+        var found = await repository.SearchAsync(Search(Person(request.UserId), from, to, request.Filter, 1, MaxExportRows), cancellationToken);
         if (found.TotalCount > MaxExportRows)
         {
             throw new ValidationException($"That is more than {MaxExportRows:N0} shifts. Please export fewer dates at a time.");
@@ -236,7 +236,7 @@ internal sealed class TimeClockQueryHandlers(
 
     public async Task<TimeClockCsvFile> Handle(ExportWeeklyHoursCsvQuery request, CancellationToken cancellationToken)
     {
-        var (from, to, weeks) = await WeeklyHoursAsync(request.UserId, request.From, request.To, cancellationToken);
+        var (from, to, weeks) = await WeeklyHoursAsync(Person(request.UserId), request.From, request.To, cancellationToken);
         var rows = weeks
             .OrderBy(w => w.Start)
             .SelectMany(w => w.People.Select(p => (IReadOnlyList<string?>)
@@ -320,7 +320,7 @@ internal sealed class TimeClockQueryHandlers(
 
     private ShiftSearch Search(string? userId, DateOnly? from, DateOnly? to, ShiftFilter filter, int page, int pageSize) => new()
     {
-        UserId = string.IsNullOrWhiteSpace(userId) ? null : userId,
+        UserId = userId,
         FromUtc = from is { } first ? DayStart(first) : null,
         ToUtc = to is { } last ? DayStart(last.AddDays(1)) : null,
         Filter = filter,
@@ -334,6 +334,9 @@ internal sealed class TimeClockQueryHandlers(
         .ToDictionary(g => g.Key, g => g.First().Email, StringComparer.Ordinal);
 
     private DateTime DayStart(DateOnly date) => BusinessTime.StartOfDayUtc(date, Zone);
+
+    /// <summary>One person's id, or null (an empty filter) for everyone.</summary>
+    private static string? Person(string? userId) => string.IsNullOrWhiteSpace(userId) ? null : userId;
 
     private static (DateOnly? From, DateOnly? To) Ordered(DateOnly? from, DateOnly? to) =>
         from > to ? (to, from) : (from, to);

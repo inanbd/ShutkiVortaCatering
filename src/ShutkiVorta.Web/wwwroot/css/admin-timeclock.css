@@ -55,6 +55,7 @@
 .punch-grid { margin-top: 24px; gap: 24px; }
 .punch-grid .panel + .panel { margin-top: 0; }
 .punch-grid + .panel { margin-top: 24px; }
+.punch-grid .kv { grid-template-columns: 110px 1fr; }
 .coordinates { font-variant-numeric: tabular-nums; }
 .shift-history { list-style: none; margin: 16px 0 0; padding: 0; display: grid; gap: 10px; border-top: 1px dashed var(--line); padding-top: 14px; }
 .shift-form { display: grid; gap: 12px; }
