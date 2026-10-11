@@ -331,6 +331,40 @@ public sealed partial class TimeClockTests(TestServers servers)
         Assert.Single(await ShiftsOfAsync(app, employee.UserId));
     }
 
+    [Theory]
+    [MemberData(nameof(TestServers.Providers), MemberType = typeof(TestServers))]
+    public async Task ShiftsAddedAndCorrectedAtTheSameTime_AreSavedOneAfterTheOther_WithoutOverlaps(string provider)
+    {
+        var app = servers.Get(provider);
+        var first = await CreateStaffAsync(app, StaffRole.Employee, []);
+        var second = await CreateStaffAsync(app, StaffRole.Employee, []);
+
+        for (var round = 0; round < 8; round++)
+        {
+            var day = 20 + (round * 3);
+            var corrected = await AddClosedShiftAsync(app, second, DaysAgo(app, day + 2, 9), DaysAgo(app, day + 2, 12));
+
+            // Two managers adding one person's shifts on different days, two adding another person's over the same hours,
+            // and a correction racing an added shift into the same hours: nothing fails, and no overlap is ever saved.
+            var outcomes = await Task.WhenAll(
+                TryAddShiftAsync(app, first, DaysAgo(app, day, 9), DaysAgo(app, day, 17)),
+                TryAddShiftAsync(app, first, DaysAgo(app, day + 1, 9), DaysAgo(app, day + 1, 17)),
+                TryAddShiftAsync(app, second, DaysAgo(app, day, 10), DaysAgo(app, day, 18)),
+                TryAddShiftAsync(app, second, DaysAgo(app, day, 12), DaysAgo(app, day, 20)),
+                ChangeTimesAsync(app, corrected, DaysAgo(app, day + 2, 9), DaysAgo(app, day + 2, 17)),
+                TryAddShiftAsync(app, second, DaysAgo(app, day + 2, 13), DaysAgo(app, day + 2, 15)));
+
+            Assert.Equal([ShiftChangeOutcome.Saved, ShiftChangeOutcome.Saved], outcomes[..2]);
+            Assert.Single(outcomes[2..4], o => o == ShiftChangeOutcome.Saved);
+            Assert.Single(outcomes[4..], o => o == ShiftChangeOutcome.Saved);
+            Assert.DoesNotContain(ShiftChangeOutcome.Changed, outcomes);
+        }
+
+        Assert.Equal(16, (await ShiftsOfAsync(app, first.UserId)).Count);
+        var shifts = (await ShiftsOfAsync(app, second.UserId)).OrderBy(s => s.ClockInUtc).ToList();
+        Assert.All(shifts.Zip(shifts.Skip(1)), pair => Assert.True(pair.First.ClockOutUtc <= pair.Second.ClockInUtc));
+    }
+
     // ---- Hours ----
 
     [Theory]
@@ -643,6 +677,20 @@ public sealed partial class TimeClockTests(TestServers servers)
         using var scope = app.Services.CreateScope();
         Assert.Equal(ShiftChangeOutcome.Saved, await scope.ServiceProvider.GetRequiredService<ITimeClockRepository>().AddClosedShiftAsync(shift));
         return shift;
+    }
+
+    private static async Task<ShiftChangeOutcome> TryAddShiftAsync(AppFactory app, TestStaff person, DateTime clockInUtc, DateTime clockOutUtc)
+    {
+        var shift = TimeClockShift.AddByHand(person.UserId, person.FullName, clockInUtc, clockOutUtc, "tests", "test data", DateTime.UtcNow);
+        using var scope = app.Services.CreateScope();
+        return await scope.ServiceProvider.GetRequiredService<ITimeClockRepository>().AddClosedShiftAsync(shift);
+    }
+
+    private static async Task<ShiftChangeOutcome> ChangeTimesAsync(AppFactory app, TimeClockShift shift, DateTime clockInUtc, DateTime clockOutUtc)
+    {
+        using var scope = app.Services.CreateScope();
+        return await scope.ServiceProvider.GetRequiredService<ITimeClockRepository>().ChangeTimesAsync(new ShiftTimesChange(
+            shift.Id, shift.UserId, shift.Version, clockInUtc, clockOutUtc, ClockOutSource.Manager, "tests", "test data", DateTime.UtcNow));
     }
 
     private static async Task<IReadOnlyList<TimeClockShift>> ShiftsOfAsync(AppFactory app, string userId)

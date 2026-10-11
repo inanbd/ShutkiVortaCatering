@@ -1,3 +1,4 @@
+using System.Data.Common;
 using Dapper;
 using ShutkiVorta.Application.Common.Models;
 using ShutkiVorta.Application.Features.TimeClock;
@@ -7,7 +8,8 @@ namespace ShutkiVorta.Infrastructure.Persistence.Repositories;
 
 /// <summary>
 /// Shifts. Each change is a single statement guarded by the shift's state (still open, same version, no overlap), so racing
-/// requests are told that nothing changed instead of overwriting each other.
+/// requests are told that nothing changed instead of overwriting each other. Adds and corrections, which must not overlap the
+/// person's other shifts, also lock the person first.
 /// </summary>
 internal sealed class TimeClockRepository(IDbConnectionFactory connections, ISqlDialect dialect) : ITimeClockRepository
 {
@@ -153,6 +155,9 @@ internal sealed class TimeClockRepository(IDbConnectionFactory connections, ISql
             """;
 
         await using var connection = await connections.OpenAsync(cancellationToken);
+        await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
+        await LockPersonAsync(connection, transaction, change.UserId, cancellationToken);
+
         var updated = await connection.ExecuteAsync(new CommandDefinition(sql, new
         {
             change.ShiftId,
@@ -165,9 +170,10 @@ internal sealed class TimeClockRepository(IDbConnectionFactory connections, ISql
             change.EditedBy,
             change.Reason,
             change.NowUtc,
-        }, cancellationToken: cancellationToken));
+        }, transaction, cancellationToken: cancellationToken));
         if (updated == 1)
         {
+            await transaction.CommitAsync(cancellationToken);
             return ShiftChangeOutcome.Saved;
         }
 
@@ -175,6 +181,7 @@ internal sealed class TimeClockRepository(IDbConnectionFactory connections, ISql
         var current = await connection.QuerySingleOrDefaultAsync<VersionRow>(new CommandDefinition(
             "SELECT Version, CASE WHEN VoidedAtUtc IS NULL THEN 0 ELSE 1 END AS Voided FROM TimeClockShifts WHERE Id = @ShiftId",
             new { change.ShiftId },
+            transaction,
             cancellationToken: cancellationToken));
         return current is null || current.Version != change.ExpectedVersion || current.Voided != 0
             ? ShiftChangeOutcome.Changed
@@ -183,23 +190,23 @@ internal sealed class TimeClockRepository(IDbConnectionFactory connections, ISql
 
     public async Task<ShiftChangeOutcome> AddClosedShiftAsync(TimeClockShift shift, CancellationToken cancellationToken = default)
     {
-        // Insert, then look for an overlap in the same transaction: a concurrent insert for the same person waits for this one
-        // (SQL Server row locks; SQLite has a single writer), so two overlapping shifts can never both be committed.
+        // With the person locked, nobody else adds or corrects their shifts until this commits, so the overlap check
+        // can come first and the insert is this transaction's last step (it never waits for anyone while holding the new row).
         await using var connection = await connections.OpenAsync(cancellationToken);
         await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
+        await LockPersonAsync(connection, transaction, shift.UserId, cancellationToken);
 
-        var id = await connection.ExecuteScalarAsync<int>(new CommandDefinition(dialect.InsertReturningId(Insert), shift, transaction, cancellationToken: cancellationToken));
         var overlaps = await connection.ExecuteScalarAsync<int>(new CommandDefinition(
             $"SELECT COUNT(*) FROM TimeClockShifts o WHERE {OverlapCondition}",
-            new { shift.UserId, ShiftId = id, shift.ClockInUtc, shift.ClockOutUtc },
+            new { shift.UserId, ShiftId = 0, shift.ClockInUtc, shift.ClockOutUtc },
             transaction,
             cancellationToken: cancellationToken));
         if (overlaps > 0)
         {
-            await transaction.RollbackAsync(cancellationToken);
             return ShiftChangeOutcome.Overlaps;
         }
 
+        var id = await connection.ExecuteScalarAsync<int>(new CommandDefinition(dialect.InsertReturningId(Insert), shift, transaction, cancellationToken: cancellationToken));
         await transaction.CommitAsync(cancellationToken);
         shift.AssignId(id);
         return ShiftChangeOutcome.Saved;
@@ -323,6 +330,14 @@ internal sealed class TimeClockRepository(IDbConnectionFactory connections, ISql
         return await connection.ExecuteScalarAsync<int>(new CommandDefinition(
             "SELECT COUNT(*) FROM TimeClockShifts WHERE EditedAtUtc >= @SinceUtc", new { SinceUtc = sinceUtc }, cancellationToken: cancellationToken));
     }
+
+    /// <summary>
+    /// Adds and corrections of one person's shifts happen one at a time: a no-op update takes the person's Users row lock
+    /// until the transaction ends, so the overlap check of the next one sees this one's result.
+    /// </summary>
+    private static Task LockPersonAsync(DbConnection connection, DbTransaction transaction, string userId, CancellationToken cancellationToken) =>
+        connection.ExecuteAsync(new CommandDefinition(
+            "UPDATE Users SET ConcurrencyStamp = ConcurrencyStamp WHERE Id = @UserId", new { UserId = userId }, transaction, cancellationToken: cancellationToken));
 
     private sealed class VersionRow
     {
