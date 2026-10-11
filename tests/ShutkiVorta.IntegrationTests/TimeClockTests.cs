@@ -164,7 +164,7 @@ public sealed partial class TimeClockTests(TestServers servers)
         var app = servers.Get(provider);
         var employee = await CreateStaffAsync(app, StaffRole.Employee, []);
         var client = await SignInAsync(app, employee.Email);
-        await AddOpenShiftAsync(app, employee, Now().AddDays(-2));
+        await AddOpenShiftAsync(app, employee, DaysAgo(app, 2, 9));
 
         var html = await client.GetStringAsync(Page);
         AssertRedirectedTo(await PostFormAsync(client, $"{Page}?handler=FixForgotten", html, new Dictionary<string, string> { ["Forgotten.DontRemember"] = "true" }), Page);
@@ -175,6 +175,14 @@ public sealed partial class TimeClockTests(TestServers servers)
         Assert.True(shift.NeedsReview);
         Assert.False(shift.CountsTowardsHours);
         Assert.Contains("A manager will fill in when you left.", WebUtility.HtmlDecode(await client.GetStringAsync(Page)));
+
+        // The manager learns they worked 7:00 to 9:00, so the clock-out typed is the stored placeholder: the shift now counts.
+        var admin = await SignInAsync(app, AppFactory.AdminEmail);
+        AssertRedirectedTo(await CorrectAsync(admin, shift.Id, DaysAgoLocal(app, 2, 7), DaysAgoLocal(app, 2, 9), "asked them"), $"{Page}/shifts/{shift.Id}");
+        var fixedShift = Assert.Single(await ShiftsOfAsync(app, employee.UserId));
+        Assert.Equal((DaysAgo(app, 2, 7), DaysAgo(app, 2, 9)), (fixedShift.ClockInUtc, fixedShift.ClockOutUtc!.Value));
+        Assert.Equal(ClockOutSource.Manager, fixedShift.ClockOutSource);
+        Assert.True(fixedShift.CountsTowardsHours);
     }
 
     // ---- Who sees and fixes what ----

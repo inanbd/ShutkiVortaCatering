@@ -304,6 +304,22 @@ public sealed class TimeClockHandlerTests
     }
 
     [Fact]
+    public async Task CorrectingAMissedClockOut_MakesItCount_EvenWhenTheClockOutStaysAtThePlaceholder()
+    {
+        _staff.Access = StaffAccessFor.Custom(StaffRole.Manager, [Permissions.TimeClockManage], Me);
+        var missed = Punched(5, Colleague, Utc(2026, 10, 5, 9, 0), Utc(2026, 10, 5, 9, 0)).With(nameof(TimeClockShift.ClockOutSource), ClockOutSource.Missed);
+        _repository.GetAsync(5, Arg.Any<CancellationToken>()).Returns(missed);
+        ShiftTimesChange? change = null;
+        await _repository.ChangeTimesAsync(Arg.Do<ShiftTimesChange>(c => change = c), Arg.Any<CancellationToken>());
+
+        // They worked 7:00 to 9:00: the clock-out typed is the placeholder (the old clock-in).
+        await Manage().Handle(new CorrectShiftCommand(5, 2, new DateTime(2026, 10, 5, 7, 0, 0), new DateTime(2026, 10, 5, 9, 0, 0), "asked them"), CancellationToken.None);
+
+        Assert.Equal((Utc(2026, 10, 5, 7, 0), Utc(2026, 10, 5, 9, 0)), (change!.ClockInUtc, change.ClockOutUtc));
+        Assert.Equal(ClockOutSource.Manager, change.ClockOutSource);
+    }
+
+    [Fact]
     public async Task AnAdmin_MayFixTheirOwnShifts()
     {
         _staff.Access = StaffAccessFor.Admin(Me);

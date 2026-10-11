@@ -107,7 +107,9 @@ internal sealed class ShiftManagementHandlers(
             throw new ValidationException("Those are the times already saved.");
         }
 
-        var source = clockOut == shift.ClockOutUtc ? shift.ClockOutSource : ClockOutSource.Manager;
+        // A missed clock-out's stored time is only a placeholder: once a manager has entered times, they are the real ones
+        // (and count), even when the clock-out typed is that same placeholder.
+        var source = clockOut == shift.ClockOutUtc && !shift.IsMissedClockOut ? shift.ClockOutSource : ClockOutSource.Manager;
         await SaveTimesAsync(new ShiftTimesChange(shift.Id, shift.UserId, request.Version, clockIn, clockOut, source, By, request.Reason.Trim(), now), cancellationToken);
 
         var before = TimeClockText.Times(clock.ToBusinessTime(shift.ClockInUtc), Local(shift.ClockOutUtc));
