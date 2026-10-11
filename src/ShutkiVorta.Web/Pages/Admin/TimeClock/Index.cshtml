@@ -127,30 +127,32 @@ else
             }
             else
             {
-                <table class="table tc-cards shift-days">
-                    <thead><tr><th>Day</th><th>Shifts</th><th class="num">Hours</th></tr></thead>
-                    <tbody>
-                        @foreach (var day in week.Days)
-                        {
-                            <tr>
-                                <td class="nowrap"><strong>@day.Date.ToString("dddd", Format.Culture)</strong> <span class="muted">@day.Date.ToString("MMM d", Format.Culture)</span></td>
-                                <td>
-                                    <ul class="shift-lines">
-                                        @foreach (var shift in day.Shifts)
-                                        {
-                                            <li class="@(shift.IsVoided ? "voided" : null)">
-                                                <a href="@TimeClockUi.ShiftPath(shift.Id)">@TimeClockUi.Span(shift)</a>
-                                                <span class="muted">@Format.Hours(shift.Duration)@(shift.IsOpen ? " so far" : null)</span>
-                                                <partial name="_ShiftFlags" model="shift" />
-                                            </li>
-                                        }
-                                    </ul>
-                                </td>
-                                <td class="num" data-label="Day total"><strong>@Format.Hours(day.Total)</strong></td>
-                            </tr>
-                        }
-                    </tbody>
-                </table>
+                <div class="table-wrap">
+                    <table class="table tc-cards shift-days">
+                        <thead><tr><th>Day</th><th>Shifts</th><th class="num">Hours</th></tr></thead>
+                        <tbody>
+                            @foreach (var day in week.Days)
+                            {
+                                <tr>
+                                    <td class="nowrap"><strong>@day.Date.ToString("dddd", Format.Culture)</strong> <span class="muted">@day.Date.ToString("MMM d", Format.Culture)</span></td>
+                                    <td>
+                                        <ul class="shift-lines">
+                                            @foreach (var shift in day.Shifts)
+                                            {
+                                                <li class="@(shift.IsVoided ? "voided" : null)">
+                                                    <a href="@TimeClockUi.ShiftPath(shift.Id)">@TimeClockUi.Span(shift)</a>
+                                                    <span class="muted">@Format.Hours(shift.Duration)@(shift.IsOpen ? " so far" : null)</span>
+                                                    <partial name="_ShiftFlags" model="shift" />
+                                                </li>
+                                            }
+                                        </ul>
+                                    </td>
+                                    <td class="num" data-label="Day total"><strong>@Format.Hours(day.Total)</strong></td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
             }
         </div>
     </section>

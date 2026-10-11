@@ -76,34 +76,36 @@
             }
             else
             {
-                <table class="table tc-cards">
-                    <thead><tr><th>Person</th><th>Since</th><th>Clock-in location</th><th></th></tr></thead>
-                    <tbody>
-                        @foreach (var on in t.OnTheClock)
-                        {
-                            var s = on.Shift;
-                            <tr>
-                                <td><strong>@s.EmployeeName</strong></td>
-                                <td data-label="Since">
-                                    @TimeClockText.When(s.ClockInLocal, t.NowLocal)
-                                    <span class="muted">· @Format.Hours(s.Duration)</span>
-                                    @if (on.IsStale)
-                                    {
-                                        <span class="pill pill-bad">Probably forgot to clock out</span>
-                                    }
-                                </td>
-                                <td data-label="Location">
-                                    @TimeClockText.Location(s.ClockIn.Status)
-                                    @if (s.ClockIn.DistanceMeters is { } meters)
-                                    {
-                                        <span class="muted">· @TimeClockText.Distance(meters) from the kitchen</span>
-                                    }
-                                </td>
-                                <td class="num"><a class="btn btn-outline btn-sm" href="@TimeClockUi.ShiftPath(s.Id)">Open</a></td>
-                            </tr>
-                        }
-                    </tbody>
-                </table>
+                <div class="table-wrap">
+                    <table class="table tc-cards">
+                        <thead><tr><th>Person</th><th>Since</th><th>Clock-in location</th><th></th></tr></thead>
+                        <tbody>
+                            @foreach (var on in t.OnTheClock)
+                            {
+                                var s = on.Shift;
+                                <tr>
+                                    <td><strong>@s.EmployeeName</strong></td>
+                                    <td data-label="Since">
+                                        @TimeClockText.When(s.ClockInLocal, t.NowLocal)
+                                        <span class="muted">· @Format.Hours(s.Duration)</span>
+                                        @if (on.IsStale)
+                                        {
+                                            <span class="pill pill-bad">Probably forgot to clock out</span>
+                                        }
+                                    </td>
+                                    <td data-label="Location">
+                                        @TimeClockText.Location(s.ClockIn.Status)
+                                        @if (s.ClockIn.DistanceMeters is { } meters)
+                                        {
+                                            <span class="muted">· @TimeClockText.Distance(meters) from the kitchen</span>
+                                        }
+                                    </td>
+                                    <td class="num"><a class="btn btn-outline btn-sm" href="@TimeClockUi.ShiftPath(s.Id)">Open</a></td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
             }
         </div>
     </section>
@@ -174,40 +176,42 @@
                 }
                 else
                 {
-                    <table class="table tc-cards weekly-hours">
-                        <thead><tr><th>Person</th><th class="num">Hours</th><th class="num">h:mm</th><th class="num">Shifts</th><th class="num">To review</th></tr></thead>
-                        <tbody>
-                            @foreach (var p in week.People)
-                            {
-                                <tr class="@(p.IsOvertime ? "overtime" : null)">
-                                    <td>
-                                        <a class="strong" href="@($"{TimeClockUi.TeamPath}?user={Uri.EscapeDataString(p.UserId)}&from={week.Start:yyyy-MM-dd}&to={week.End:yyyy-MM-dd}")">@p.Name</a>
-                                        @if (p.IsOvertime)
-                                        {
-                                            <span class="pill pill-warn">Over 40 h: +@Format.DecimalHours(p.Overtime) h</span>
-                                        }
-                                        @if (p.InProgress > TimeSpan.Zero)
-                                        {
-                                            <span class="small muted">+ @Format.Hours(p.InProgress) on the clock now</span>
-                                        }
-                                    </td>
-                                    <td class="num" data-label="Hours"><strong>@Format.DecimalHours(p.Total)</strong></td>
-                                    <td class="num" data-label="h:mm">@TimeClockText.HoursMinutes(p.Total)</td>
-                                    <td class="num" data-label="Shifts">@p.ShiftCount</td>
-                                    <td class="num" data-label="To review">
-                                        @if (p.FlaggedCount > 0)
-                                        {
-                                            <span class="pill pill-bad">@p.FlaggedCount</span>
-                                        }
-                                        else
-                                        {
-                                            <span class="muted">0</span>
-                                        }
-                                    </td>
-                                </tr>
-                            }
-                        </tbody>
-                    </table>
+                    <div class="table-wrap">
+                        <table class="table tc-cards weekly-hours">
+                            <thead><tr><th>Person</th><th class="num">Hours</th><th class="num">h:mm</th><th class="num">Shifts</th><th class="num">To review</th></tr></thead>
+                            <tbody>
+                                @foreach (var p in week.People)
+                                {
+                                    <tr class="@(p.IsOvertime ? "overtime" : null)">
+                                        <td>
+                                            <a class="strong" href="@($"{TimeClockUi.TeamPath}?user={Uri.EscapeDataString(p.UserId)}&from={week.Start:yyyy-MM-dd}&to={week.End:yyyy-MM-dd}")">@p.Name</a>
+                                            @if (p.IsOvertime)
+                                            {
+                                                <span class="pill pill-warn">Over 40 h: +@Format.DecimalHours(p.Overtime) h</span>
+                                            }
+                                            @if (p.InProgress > TimeSpan.Zero)
+                                            {
+                                                <span class="small muted">+ @Format.Hours(p.InProgress) on the clock now</span>
+                                            }
+                                        </td>
+                                        <td class="num" data-label="Hours"><strong>@Format.DecimalHours(p.Total)</strong></td>
+                                        <td class="num" data-label="h:mm">@TimeClockText.HoursMinutes(p.Total)</td>
+                                        <td class="num" data-label="Shifts">@p.ShiftCount</td>
+                                        <td class="num" data-label="To review">
+                                            @if (p.FlaggedCount > 0)
+                                            {
+                                                <span class="pill pill-bad">@p.FlaggedCount</span>
+                                            }
+                                            else
+                                            {
+                                                <span class="muted">0</span>
+                                            }
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
                 }
             }
         </div>
@@ -222,26 +226,28 @@
             }
             else
             {
-                <table class="table tc-cards team-shifts">
-                    <thead><tr><th>Person</th><th>Day</th><th>Time</th><th class="num">Hours</th><th>Location</th><th></th></tr></thead>
-                    <tbody>
-                        @foreach (var s in shifts.Items)
-                        {
-                            <tr class="@(s.IsVoided ? "row-muted voided" : null)">
-                                <td><a class="strong" href="@TimeClockUi.ShiftPath(s.Id)">@s.EmployeeName</a></td>
-                                <td class="nowrap" data-label="Day">@TimeClockText.Day(s.Date)</td>
-                                <td class="nowrap" data-label="Time"><span class="shift-time">@TimeClockUi.Span(s)</span></td>
-                                <td class="num" data-label="Hours">
-                                    @Format.Hours(s.Duration)@(s.IsOpen ? " so far" : null)
-                                </td>
-                                <td data-label="Location">
-                                    <span class="small">@TimeClockText.Location(s.ClockIn.Status)@(s.ClockIn.DistanceMeters is { } meters ? $" · {TimeClockText.Distance(meters)}" : null)</span>
-                                </td>
-                                <td><div class="shift-flags"><partial name="_ShiftFlags" model="s" /></div></td>
-                            </tr>
-                        }
-                    </tbody>
-                </table>
+                <div class="table-wrap">
+                    <table class="table tc-cards team-shifts">
+                        <thead><tr><th>Person</th><th>Day</th><th>Time</th><th class="num">Hours</th><th>Location</th><th></th></tr></thead>
+                        <tbody>
+                            @foreach (var s in shifts.Items)
+                            {
+                                <tr class="@(s.IsVoided ? "row-muted voided" : null)">
+                                    <td><a class="strong" href="@TimeClockUi.ShiftPath(s.Id)">@s.EmployeeName</a></td>
+                                    <td class="nowrap" data-label="Day">@TimeClockText.Day(s.Date)</td>
+                                    <td class="nowrap" data-label="Time"><span class="shift-time">@TimeClockUi.Span(s)</span></td>
+                                    <td class="num" data-label="Hours">
+                                        @Format.Hours(s.Duration)@(s.IsOpen ? " so far" : null)
+                                    </td>
+                                    <td data-label="Location">
+                                        <span class="small">@TimeClockText.Location(s.ClockIn.Status)@(s.ClockIn.DistanceMeters is { } meters ? $" · {TimeClockText.Distance(meters)}" : null)</span>
+                                    </td>
+                                    <td><div class="shift-flags"><partial name="_ShiftFlags" model="s" /></div></td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
             }
         </div>
     }
