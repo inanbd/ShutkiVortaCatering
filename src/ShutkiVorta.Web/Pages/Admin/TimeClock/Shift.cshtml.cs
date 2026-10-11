@@ -42,6 +42,9 @@ public sealed class ShiftModel(ISender sender) : AppPageModel(sender)
         return Page();
     }
 
+    /// <summary>A post without a known action (an old form, a mistyped link): nothing to do but show the shift.</summary>
+    public IActionResult OnPost(int id) => Redirect(TimeClockUi.ShiftPath(id));
+
     [RequirePermission(Permissions.TimeClockManage)]
     public Task<IActionResult> OnPostCorrectAsync(int id, CancellationToken cancellationToken)
     {

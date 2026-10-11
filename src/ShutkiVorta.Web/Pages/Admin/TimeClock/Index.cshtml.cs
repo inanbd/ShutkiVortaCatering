@@ -29,6 +29,9 @@ public sealed class IndexModel(ISender sender) : AppPageModel(sender)
 
     public Task OnGetAsync(CancellationToken cancellationToken) => LoadAsync(cancellationToken);
 
+    /// <summary>A post without a known action (an old form, a mistyped link): nothing to do but show the time clock.</summary>
+    public IActionResult OnPost() => Redirect(TimeClockUi.TimeClockPath);
+
     public Task<IActionResult> OnPostClockInAsync(CancellationToken cancellationToken) =>
         PunchAsync(new ClockInCommand(Punch.ToLocation(), Punch.Note), cancellationToken);
 

@@ -561,12 +561,33 @@ public sealed partial class TimeClockTests(TestServers servers)
         AssertRedirectedTo(await employee.GetAsync("/clock"), Page);
     }
 
+    [Theory]
+    [MemberData(nameof(TestServers.Providers), MemberType = typeof(TestServers))]
+    public async Task APostWithoutAKnownAction_ShowsThePageAgain(string provider)
+    {
+        var app = servers.Get(provider);
+        var manager = await CreateStaffAsync(app, StaffRole.Manager, [Permissions.TimeClockViewAll]);
+        var shift = await AddClosedShiftAsync(app, manager, DaysAgo(app, 3, 9), DaysAgo(app, 3, 17));
+        var client = await SignInAsync(app, manager.Email);
+        var html = await client.GetStringAsync(Page);
+
+        foreach (var handler in new[] { string.Empty, "?handler=Bogus" })
+        {
+            AssertRedirectedTo(await PostFormAsync(client, $"{Page}{handler}", html, new Dictionary<string, string>()), Page);
+            AssertRedirectedTo(await PostFormAsync(client, $"{Page}/shifts/{shift.Id}{handler}", html, new Dictionary<string, string>()), $"{Page}/shifts/{shift.Id}");
+            Assert.Equal(HttpStatusCode.OK, (await PostFormAsync(client, $"{Page}/team{handler}", html, new Dictionary<string, string>())).StatusCode);
+        }
+
+        Assert.Equal(shift.Version, (await ShiftsOfAsync(app, manager.UserId)).Single().Version);
+    }
+
     // ---- The agreed access of the time clock pages ----
 
     private static readonly IReadOnlyDictionary<string, string> TimeClockAccess = new Dictionary<string, string>
     {
         ["/Pages/Admin/TimeClock/Index.cshtml"] = "any staff",
         ["/Pages/Admin/TimeClock/Index.cshtml OnGetAsync"] = "page rule",
+        ["/Pages/Admin/TimeClock/Index.cshtml OnPost"] = "page rule",
         ["/Pages/Admin/TimeClock/Index.cshtml OnPostClockInAsync"] = "page rule",
         ["/Pages/Admin/TimeClock/Index.cshtml OnPostClockOutAsync"] = "page rule",
         ["/Pages/Admin/TimeClock/Index.cshtml OnPostFixForgottenAsync"] = "page rule",
@@ -577,6 +598,7 @@ public sealed partial class TimeClockTests(TestServers servers)
         ["/Pages/Admin/TimeClock/Team.cshtml OnPostKitchenLocationAsync"] = "admin",
         ["/Pages/Admin/TimeClock/Shift.cshtml"] = "any staff",
         ["/Pages/Admin/TimeClock/Shift.cshtml OnGetAsync"] = "page rule",
+        ["/Pages/Admin/TimeClock/Shift.cshtml OnPost"] = "page rule",
         ["/Pages/Admin/TimeClock/Shift.cshtml OnPostCorrectAsync"] = Permissions.TimeClockManage,
         ["/Pages/Admin/TimeClock/Shift.cshtml OnPostCloseAsync"] = Permissions.TimeClockManage,
         ["/Pages/Admin/TimeClock/Shift.cshtml OnPostVoidAsync"] = Permissions.TimeClockManage,
