@@ -46,6 +46,7 @@ public static class StaffAuditActions
     public const string ShiftVoided = "ShiftVoided";
     public const string ShiftClosed = "ShiftClosed";
     public const string ShiftSelfCorrected = "ShiftSelfCorrected";
+    public const string ShiftReviewed = "ShiftReviewed";
 
     /// <summary>A short label for people, e.g. "Role changed".</summary>
     public static string DisplayName(string action) => action switch
@@ -64,6 +65,7 @@ public static class StaffAuditActions
         ShiftVoided => "Shift voided",
         ShiftClosed => "Shift closed",
         ShiftSelfCorrected => "Forgotten clock-out entered",
+        ShiftReviewed => "Shift marked reviewed",
         _ => action,
     };
 }

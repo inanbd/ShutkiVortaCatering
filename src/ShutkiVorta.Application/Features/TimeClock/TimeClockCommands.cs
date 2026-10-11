@@ -310,16 +310,11 @@ internal static class TimeClockTime
 /// <summary>How shift changes are described in the staff audit log ("Shift #12 (Mon, Oct 5): …"), so a shift's page can list its history.</summary>
 internal static class ShiftAudit
 {
-    /// <summary>Not in <see cref="StaffAuditActions"/>: clearing a review flag changes no times.</summary>
-    public const string ShiftReviewed = "ShiftReviewed";
-
     public static string Details(int shiftId, DateTime clockInLocal, string what) =>
         $"{Prefix(shiftId)}{TimeClockText.Day(DateOnly.FromDateTime(clockInLocal))}): {what}";
 
     public static bool IsAbout(StaffAuditEntryDto entry, int shiftId) =>
         entry.Details?.StartsWith(Prefix(shiftId), StringComparison.Ordinal) == true;
-
-    public static string ActionName(string action) => action == ShiftReviewed ? "Marked as reviewed" : StaffAuditActions.DisplayName(action);
 
     /// <summary>"Shift #12 (": how every entry about the shift starts.</summary>
     public static string Prefix(int shiftId) => $"Shift #{shiftId} (";

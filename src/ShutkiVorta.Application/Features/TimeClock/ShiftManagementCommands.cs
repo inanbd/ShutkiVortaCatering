@@ -201,7 +201,7 @@ internal sealed class ShiftManagementHandlers(
             throw new ValidationException(ChangedMeanwhile);
         }
 
-        await WriteAuditAsync(shift, ShiftAudit.ShiftReviewed, "marked as reviewed.", cancellationToken);
+        await WriteAuditAsync(shift, StaffAuditActions.ShiftReviewed, "marked as reviewed.", cancellationToken);
     }
 
     /// <summary>True when both ids name the same account, however they are written (SQL Server compares ids without case).</summary>
