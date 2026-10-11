@@ -66,7 +66,8 @@ internal sealed class SettingsImporter(SettingsRepository repository, SettingsSt
 
             // A live site whose settings were only in appsettings.json may have lost them in the upgrade (the file was replaced,
             // perhaps leaving only a password in an environment variable or an empty entry): flag the section for admins to check.
-            var needsReview = !exists && hasBusinessData
+            // (Not a section that is newer than the database settings: it never was in appsettings.json.)
+            var needsReview = section.ReviewWhenMissing && !exists && hasBusinessData
                 && !configured.Any(kv => !ManagedSettings.IsSecret(kv.Key) && !string.IsNullOrEmpty(kv.Value));
 
             // The fingerprint is only kept while the switch is on, so that a start with the switch still on does not apply the

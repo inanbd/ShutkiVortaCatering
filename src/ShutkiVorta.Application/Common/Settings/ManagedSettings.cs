@@ -6,7 +6,12 @@ namespace ShutkiVorta.Application.Common.Settings;
 /// <param name="Name">Configuration section name, e.g. "Ordering".</param>
 /// <param name="OptionsType">The options class bound from the section.</param>
 /// <param name="CreateDefaults">Values for a brand-new installation (lists included, which the class initialisers leave empty).</param>
-public sealed record ManagedSection(string Name, Type OptionsType, Func<object> CreateDefaults);
+/// <param name="ReviewWhenMissing">
+/// When a site that already has orders starts without the section stored or configured, its values may have been lost in the
+/// upgrade, so admins are asked to check them. False for sections added after settings moved to the database: they never had
+/// configured values to lose, and their defaults are right for a site that never used them.
+/// </param>
+public sealed record ManagedSection(string Name, Type OptionsType, Func<object> CreateDefaults, bool ReviewWhenMissing = true);
 
 /// <summary>
 /// The settings that live in the database instead of appsettings.json. Infrastructure settings that are needed before the
@@ -29,7 +34,7 @@ public static class ManagedSettings
         new(SiteOptions.SectionName, typeof(SiteOptions), () => new SiteOptions()),
         new(AccountOptions.SectionName, typeof(AccountOptions), () => new AccountOptions()),
         new(RateLimitingOptions.SectionName, typeof(RateLimitingOptions), () => new RateLimitingOptions()),
-        new(TimeClockOptions.SectionName, typeof(TimeClockOptions), () => new TimeClockOptions()),
+        new(TimeClockOptions.SectionName, typeof(TimeClockOptions), () => new TimeClockOptions(), ReviewWhenMissing: false),
     ];
 
     /// <summary>Settings stored encrypted and never shown back in the admin UI.</summary>

@@ -3,8 +3,10 @@ using System.Net;
 using System.Reflection;
 using System.Text;
 using System.Text.RegularExpressions;
+using Dapper;
 using Microsoft.AspNetCore.Razor.Hosting;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using ShutkiVorta.Application.Common.Interfaces;
 using ShutkiVorta.Application.Common.Options;
@@ -12,6 +14,7 @@ using ShutkiVorta.Application.Common.Security;
 using ShutkiVorta.Application.Features.Staff;
 using ShutkiVorta.Application.Features.TimeClock;
 using ShutkiVorta.Domain.TimeClock;
+using ShutkiVorta.Infrastructure.Persistence;
 using ShutkiVorta.IntegrationTests.Infrastructure;
 using ShutkiVorta.Web.Infrastructure.Security;
 using static ShutkiVorta.IntegrationTests.Infrastructure.StaffTestHelper;
@@ -521,6 +524,39 @@ public sealed partial class TimeClockTests(TestServers servers)
         AssertDenied(await PostFormAsync(managerClient, "/admin/settings/time-clock", await managerClient.GetStringAsync(Page), new Dictionary<string, string> { ["__revision"] = "0" }));
     }
 
+    [Fact]
+    public async Task ALiveSiteUpgrading_GetsTheTimeClockSettingsFromTheirDefaults_WithoutBeingAskedToCheckThem()
+    {
+        var directory = AppFactory.NewDirectory();
+        try
+        {
+            // A site that already has business data, from before the time clock existed.
+            await using (var app = new AppFactory("Sqlite", directory: directory))
+            {
+                await ExecuteAsync(app, "INSERT INTO CateringInquiries (Name, Email, Message, CreatedAtUtc) VALUES ('Guest', 'guest@test.local', 'A wedding', '2026-10-01 12:00:00')");
+                await ExecuteAsync(app, "DELETE FROM AppSettings WHERE [Key] LIKE 'TimeClock:%'");
+                await ExecuteAsync(app, "DELETE FROM AppSettingsSections WHERE Section = 'TimeClock'");
+            }
+
+            var errors = new ErrorLog();
+            await using (var app = new AppFactory("Sqlite", directory: directory, configureServices: services => services.AddSingleton<ILoggerProvider>(errors)))
+            {
+                var options = app.Services.GetRequiredService<IOptionsMonitor<TimeClockOptions>>().CurrentValue;
+                Assert.Equal((300, DayOfWeek.Monday, false, false), (options.NearKitchenRadiusMeters, options.WorkweekStartsOn, options.RequireLocation, options.HasKitchenLocation));
+                Assert.Empty(errors.Messages);
+
+                var admin = await SignInAsync(app, AppFactory.AdminEmail);
+                Assert.DoesNotContain("data-settings-review", await admin.GetStringAsync("/admin/settings/time-clock"));
+                Assert.DoesNotContain("data-settings-review", await admin.GetStringAsync("/admin/settings"));
+            }
+        }
+        finally
+        {
+            Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
     [Theory]
     [MemberData(nameof(TestServers.Providers), MemberType = typeof(TestServers))]
     public async Task WithTheKitchenSet_PunchesRecordTheDistance_AndRequiredLocationsAreEnforced(string provider)
@@ -786,6 +822,36 @@ public sealed partial class TimeClockTests(TestServers servers)
     {
         using var scope = app.Services.CreateScope();
         return await scope.ServiceProvider.GetRequiredService<IStaffAuditLog>().ListAsync(userId, 50);
+    }
+
+    private static async Task ExecuteAsync(AppFactory app, string sql)
+    {
+        await using var connection = await app.Services.GetRequiredService<IDbConnectionFactory>().OpenAsync();
+        await connection.ExecuteAsync(sql);
+    }
+
+    /// <summary>Collects what the app logs at Error level or above.</summary>
+    private sealed class ErrorLog : ILoggerProvider, ILogger
+    {
+        public System.Collections.Concurrent.ConcurrentQueue<string> Messages { get; } = new();
+
+        public ILogger CreateLogger(string categoryName) => this;
+
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+
+        public bool IsEnabled(LogLevel logLevel) => logLevel >= LogLevel.Error;
+
+        public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
+        {
+            if (IsEnabled(logLevel))
+            {
+                Messages.Enqueue(formatter(state, exception));
+            }
+        }
+
+        public void Dispose()
+        {
+        }
     }
 
     [GeneratedRegex("name=\"Version\" value=\"(\\d+)\"")]
