@@ -189,6 +189,49 @@ public sealed partial class TimeClockTests(TestServers servers)
         Assert.True(fixedShift.NeedsReview); // edited: on the review list until someone marks it reviewed
     }
 
+    [Theory]
+    [MemberData(nameof(TestServers.Providers), MemberType = typeof(TestServers))]
+    public async Task ANightShiftPastMidnight_EndsWithOneTap_WithoutBeingCalledForgotten(string provider)
+    {
+        // The app's clock reads 4:00 AM business time, whenever the test runs.
+        await using var app = new AppFactory(provider, configureServices: services =>
+        {
+            var real = services.Last(d => d.ServiceType == typeof(IDateTimeProvider));
+            services.AddSingleton<IDateTimeProvider>(sp => new EarlyMorningClock((IDateTimeProvider)ActivatorUtilities.CreateInstance(sp, real.ImplementationType!)));
+        });
+        var clock = app.Services.GetRequiredService<IDateTimeProvider>();
+        Assert.Equal(4, clock.BusinessNow.Hour);
+        var employee = await CreateStaffAsync(app, StaffRole.Employee, []);
+        var client = await SignInAsync(app, employee.Email);
+        var night = await AddOpenShiftAsync(app, employee, clock.ToUtc(clock.BusinessNow.Date.AddHours(-2))); // 10:00 PM yesterday
+
+        var html = WebUtility.HtmlDecode(await client.GetStringAsync(Page));
+        Assert.Contains("Your shift started", html);
+        Assert.Contains("Are you finishing now?", html);
+        Assert.Contains("I'm finishing now</span> <span aria-hidden=\"true\">·</span> <span class=\"bn\" lang=\"bn\">কাজ শেষ", html);
+        Assert.Contains("Finished earlier? I finished at", html);
+        Assert.DoesNotContain("You didn't clock out", html);
+
+        // The "Clock out" of a page opened before midnight asks to confirm, without saying they forgot.
+        var plain = WebUtility.HtmlDecode(await (await PunchAsync(client, "ClockOut", AtTheKitchen())).Content.ReadAsStringAsync());
+        Assert.Contains("before midnight, so please confirm when you finish", plain);
+        Assert.DoesNotContain("You didn't clock out", plain);
+
+        // One tap ends it now; a second tap (a double tap) shows the same result.
+        AssertRedirectedTo(await PostFormAsync(client, $"{Page}?handler=FixForgotten", html, new Dictionary<string, string> { ["Forgotten.FinishingNow"] = "true" }), Page);
+        var shift = Assert.Single(await ShiftsOfAsync(app, employee.UserId));
+        Assert.Equal((night.Id, ClockOutSource.SelfCorrected), (shift.Id, shift.ClockOutSource));
+        Assert.InRange(shift.ClockOutUtc!.Value, clock.UtcNow.AddMinutes(-1), clock.UtcNow);
+        Assert.True(shift.CountsTowardsHours);
+        Assert.True(shift.NeedsReview);
+        Assert.Contains("A manager checks shifts that run past midnight.", WebUtility.HtmlDecode(await client.GetStringAsync(Page)));
+
+        AssertRedirectedTo(await PostFormAsync(client, $"{Page}?handler=FixForgotten", html, new Dictionary<string, string> { ["Forgotten.FinishingNow"] = "true" }), Page);
+        Assert.Equal(shift.ClockOutUtc, Assert.Single(await ShiftsOfAsync(app, employee.UserId)).ClockOutUtc);
+        var audit = await AuditOfAsync(app, employee.UserId);
+        Assert.Contains(audit, e => e.Details!.StartsWith($"Shift #{shift.Id} (") && e.Details.Contains("shift ran past midnight"));
+    }
+
     // ---- Who sees and fixes what ----
 
     [Theory]
@@ -889,6 +932,18 @@ public sealed partial class TimeClockTests(TestServers servers)
     {
         await using var connection = await app.Services.GetRequiredService<IDbConnectionFactory>().OpenAsync();
         await connection.ExecuteAsync(sql);
+    }
+
+    /// <summary>The app's clock moved to 4:00 AM business time today (and running on from there).</summary>
+    private sealed class EarlyMorningClock(IDateTimeProvider real) : IDateTimeProvider
+    {
+        private readonly TimeSpan _offset = real.ToUtc(real.BusinessNow.Date.AddHours(4)) - real.UtcNow;
+
+        public DateTime UtcNow => real.UtcNow + _offset;
+        public DateTime BusinessNow => real.ToBusinessTime(UtcNow);
+        public TimeZoneInfo BusinessTimeZone => real.BusinessTimeZone;
+        public DateTime ToBusinessTime(DateTime utc) => real.ToBusinessTime(utc);
+        public DateTime ToUtc(DateTime businessLocal) => real.ToUtc(businessLocal);
     }
 
     /// <summary>Collects what the app logs at Error level or above.</summary>

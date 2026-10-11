@@ -101,6 +101,20 @@ public sealed class TimeClockRulesTests
     }
 
     [Fact]
+    public void ANightShiftPastMidnight_IsStale_ButMayStillBeRunning_ForSixteenHours()
+    {
+        var clockIn = Utc(2026, 10, 5, 22, 0); // Mon 10:00 PM in Dallas
+        Assert.False(ShiftRules.RanPastMidnight(clockIn, Utc(2026, 10, 5, 23, 30), Dallas)); // not stale at all yet
+        Assert.True(ShiftRules.IsStale(clockIn, Utc(2026, 10, 6, 4, 0), Dallas));
+        Assert.True(ShiftRules.RanPastMidnight(clockIn, Utc(2026, 10, 6, 4, 0), Dallas));
+        Assert.True(ShiftRules.RanPastMidnight(clockIn, Utc(2026, 10, 6, 14, 0), Dallas));
+        Assert.False(ShiftRules.RanPastMidnight(clockIn, Utc(2026, 10, 6, 14, 1), Dallas)); // over 16 h: forgotten
+
+        // Stale for its length on the same day: forgotten, not a night shift.
+        Assert.False(ShiftRules.RanPastMidnight(Utc(2026, 10, 5, 0, 10), Utc(2026, 10, 5, 16, 11), Dallas));
+    }
+
+    [Fact]
     public void TheTimeSomeoneSaysTheyLeft_IsAfterClockIn_NotInTheFuture_AndAtMostSixteenHoursLater()
     {
         var clockIn = Utc(2026, 10, 5, 9, 0);

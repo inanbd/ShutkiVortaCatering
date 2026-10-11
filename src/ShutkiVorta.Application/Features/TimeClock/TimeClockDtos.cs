@@ -137,6 +137,9 @@ public sealed record MyTimeClockDto
     /// <summary>The open shift is from an earlier day or over 16 hours old: ask when they left instead of clocking out now.</summary>
     public bool OpenShiftIsStale { get; init; }
 
+    /// <summary>The open shift is stale only because it ran past midnight (under 16 hours): they may be finishing it now.</summary>
+    public bool OpenShiftRanPastMidnight { get; init; }
+
     /// <summary>The range for "When did you leave?" (business-local).</summary>
     public DateTime? LeftAtEarliestLocal { get; init; }
 

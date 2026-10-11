@@ -16,22 +16,41 @@
 
 @if (open is not null && c.OpenShiftIsStale)
 {
-    <section class="panel clock-panel stale" aria-labelledby="forgotten-title">
+    @* A shift that ran past midnight is most likely a night shift ending now, not a forgotten one: one tap ends it now. *@
+    var pastMidnight = c.OpenShiftRanPastMidnight;
+    <section class="panel clock-panel @(pastMidnight ? "on" : "stale")" aria-labelledby="forgotten-title">
         <div class="clock-state">
-            @Icons.Get("alert")
+            @Icons.Get(pastMidnight ? "clock" : "alert")
             <div>
-                <h2 id="forgotten-title">You didn't clock out on @TimeClockText.When(open.ClockInLocal, c.NowLocal). When did you leave?</h2>
-                <p class="muted">Enter the time you left that day. A manager will check it. Then you can clock in.</p>
+                @if (pastMidnight)
+                {
+                    <h2 id="forgotten-title">Your shift started @TimeClockText.When(open.ClockInLocal, c.NowLocal). Are you finishing now?</h2>
+                    <p class="muted">It ran past midnight, so the time clock asks you to confirm. A manager checks shifts that run past midnight.</p>
+                }
+                else
+                {
+                    <h2 id="forgotten-title">You didn't clock out on @TimeClockText.When(open.ClockInLocal, c.NowLocal). When did you leave?</h2>
+                    <p class="muted">Enter the time you left that day. A manager will check it. Then you can clock in.</p>
+                }
             </div>
         </div>
+        @if (pastMidnight)
+        {
+            <form method="post" asp-page-handler="FixForgotten" class="clock-form">
+                <input type="hidden" name="Forgotten.FinishingNow" value="true" />
+                <button class="btn btn-lg btn-block clock-button btn-primary" type="submit">
+                    <span>I'm finishing now</span> <span aria-hidden="true">·</span> <span class="bn" lang="bn">কাজ শেষ</span>
+                </button>
+            </form>
+        }
         <form method="post" asp-page-handler="FixForgotten" class="forgotten-form">
             <div class="field">
-                <label for="left-at">I left at</label>
+                <label for="left-at">@(pastMidnight ? "Finished earlier? I finished at" : "I left at")</label>
                 <input class="input" id="left-at" type="datetime-local" name="Forgotten.LeftAt" required
                        value="@TimeClockUi.LocalInput(Model.Forgotten.LeftAt)"
                        min="@TimeClockUi.LocalInput(c.LeftAtEarliestLocal)" max="@TimeClockUi.LocalInput(c.LeftAtLatestLocal)" />
             </div>
-            <button class="btn btn-green" type="submit">@Icons.Get("check") Save the time I left</button>
+            <button class="btn @(pastMidnight ? "btn-outline" : "btn-green")" type="submit">@Icons.Get("check") @(pastMidnight ? "Save the time I finished" : "Save the time I left")</button>
         </form>
         <form method="post" asp-page-handler="FixForgotten" class="forgotten-unknown">
             <input type="hidden" name="Forgotten.DontRemember" value="true" />

@@ -27,11 +27,14 @@ public sealed record ClockInCommand(PunchLocationInput Location, string? Note = 
 public sealed record ClockOutCommand(PunchLocationInput Location, string? Note = null) : IRequest<ClockResult>, IRequireStaff;
 
 /// <summary>
-/// Closes the caller's own forgotten shift (one from an earlier day or over 16 hours old) with the time they say they left
+/// Closes the caller's own stale shift (one from an earlier day or over 16 hours old) with the time they say they left
 /// (business-local), or, when <paramref name="LeftAtLocal"/> is null, as "I don't remember" (no hours until a manager fixes it).
 /// Flagged for review either way. Acts only on the caller's open shift.
 /// </summary>
-public sealed record FixMyForgottenClockOutCommand(DateTime? LeftAtLocal) : IRequest<ClockResult>, IRequireStaff;
+/// <param name="FinishingNow">
+/// "I'm finishing now" on a shift that ran past midnight: it ends now (server time), like a clock-out; <paramref name="LeftAtLocal"/> is ignored.
+/// </param>
+public sealed record FixMyForgottenClockOutCommand(DateTime? LeftAtLocal, bool FinishingNow = false) : IRequest<ClockResult>, IRequireStaff;
 
 /// <param name="ClockedIn">True after a clock-in; false after a clock-out or a fixed forgotten shift.</param>
 /// <param name="AtLocal">When it happened (business-local).</param>
@@ -129,8 +132,11 @@ internal sealed class TimeClockCommandHandlers(
 
         if (ShiftRules.IsStale(open.ClockInUtc, now, clock.BusinessTimeZone))
         {
-            throw new ValidationException(
-                $"You didn't clock out on {TimeClockText.When(clock.ToBusinessTime(open.ClockInUtc), clock.ToBusinessTime(now))}. Please tell us when you left first.");
+            // A night shift (an old page still showing "Clock out" after midnight) is not a forgotten one.
+            var started = TimeClockText.When(clock.ToBusinessTime(open.ClockInUtc), clock.ToBusinessTime(now));
+            throw new ValidationException(ShiftRules.RanPastMidnight(open.ClockInUtc, now, clock.BusinessTimeZone)
+                ? $"Your shift started {started}, before midnight, so please confirm when you finish: tap \"I'm finishing now\"."
+                : $"You didn't clock out on {started}. Please tell us when you left first.");
         }
 
         var settings = options.Value;
@@ -153,18 +159,24 @@ internal sealed class TimeClockCommandHandlers(
         var now = TimeClockTime.Now(clock);
         var zone = clock.BusinessTimeZone;
 
-        var open = await repository.GetOpenShiftAsync(userId, cancellationToken)
-            ?? throw new ValidationException("You're not clocked in, so there is no shift to fix.");
+        var open = await repository.GetOpenShiftAsync(userId, cancellationToken);
+        if (open is null)
+        {
+            return await AlreadyFixedAsync(userId, now, "You're not clocked in, so there is no shift to fix.", cancellationToken);
+        }
+
         if (!ShiftRules.IsStale(open.ClockInUtc, now, zone))
         {
             throw new ValidationException("Your shift started today, so just clock out.");
         }
 
+        var finishingNow = request.FinishingNow;
+        var remembered = finishingNow || request.LeftAtLocal is not null;
         DateTime leftAtUtc;
         try
         {
-            leftAtUtc = request.LeftAtLocal is { } leftAt ? BusinessTime.FromLocalInput(leftAt, zone) : open.ClockInUtc;
-            if (request.LeftAtLocal is not null)
+            leftAtUtc = finishingNow ? now : request.LeftAtLocal is { } leftAt ? BusinessTime.FromLocalInput(leftAt, zone) : open.ClockInUtc;
+            if (remembered)
             {
                 ShiftRules.CheckForgottenClockOut(open.ClockInUtc, leftAtUtc, now);
             }
@@ -174,22 +186,40 @@ internal sealed class TimeClockCommandHandlers(
             throw new ValidationException(nameof(FixMyForgottenClockOutCommand.LeftAtLocal), ex.Message);
         }
 
-        var remembered = request.LeftAtLocal is not null;
         var source = remembered ? ClockOutSource.SelfCorrected : ClockOutSource.Missed;
         var by = currentUser.Email ?? open.EmployeeName;
-        var reason = remembered ? "Forgot to clock out; entered when they left" : "Forgot to clock out; doesn't remember when they left";
+        var reason = finishingNow ? "Shift ran past midnight; tapped \"I'm finishing now\""
+            : remembered ? "Forgot to clock out; entered when they left" : "Forgot to clock out; doesn't remember when they left";
         if (!await repository.CloseForgottenShiftAsync(new ForgottenClockOut(open.Id, userId, leftAtUtc, source, by, reason, now), cancellationToken))
         {
-            throw new ValidationException("That shift was already closed. Reload the page to see it.");
+            return await AlreadyFixedAsync(userId, now, "That shift was already closed. Reload the page to see it.", cancellationToken);
         }
 
         var inLocal = clock.ToBusinessTime(open.ClockInUtc);
-        var details = remembered
-            ? $"forgot to clock out; says they left at {TimeClockText.Times(inLocal, clock.ToBusinessTime(leftAtUtc))}."
+        var times = TimeClockText.Times(inLocal, clock.ToBusinessTime(leftAtUtc));
+        var details = finishingNow ? $"shift ran past midnight; finished {times} (tapped \"I'm finishing now\")."
+            : remembered ? $"forgot to clock out; says they left at {times}."
             : "forgot to clock out and doesn't remember when they left (no hours count until a manager fixes it).";
         await audit.WriteAsync(new StaffAuditEntry(userId, open.EmployeeName, StaffAuditActions.ShiftSelfCorrected, ShiftAudit.Details(open.Id, inLocal, details), by), cancellationToken);
 
         return new ClockResult(false, clock.ToBusinessTime(leftAtUtc), false, null, false, null, true, remembered ? leftAtUtc - open.ClockInUtc : null);
+    }
+
+    /// <summary>
+    /// No open shift (any more): a second tap within a couple of minutes of closing it on this screen shows the first tap's
+    /// result; otherwise <paramref name="refusal"/>.
+    /// </summary>
+    private async Task<ClockResult> AlreadyFixedAsync(string userId, DateTime now, string refusal, CancellationToken cancellationToken)
+    {
+        var last = await repository.GetLastClosedShiftAsync(userId, cancellationToken);
+        if (last is { ClockOutSource: ClockOutSource.SelfCorrected or ClockOutSource.Missed, ClockOutUtc: { } closedAt, EditedAtUtc: { } fixedAt }
+            && now - fixedAt <= ShiftRules.RepeatTapWindow && now >= fixedAt)
+        {
+            var remembered = last.ClockOutSource == ClockOutSource.SelfCorrected;
+            return new ClockResult(false, clock.ToBusinessTime(closedAt), true, null, false, null, true, remembered ? closedAt - last.ClockInUtc : null);
+        }
+
+        throw new ValidationException(refusal);
     }
 
     /// <summary>The caller's own user id (the request marker guarantees staff access).</summary>

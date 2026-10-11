@@ -115,6 +115,7 @@ internal sealed class TimeClockQueryHandlers(
         {
             OpenShift = open?.ToDto(clock, Settings),
             OpenShiftIsStale = stale,
+            OpenShiftRanPastMidnight = stale && ShiftRules.RanPastMidnight(open!.ClockInUtc, now, Zone),
             LeftAtEarliestLocal = stale ? clock.ToBusinessTime(open!.ClockInUtc.AddMinutes(1)) : null,
             LeftAtLatestLocal = stale ? clock.ToBusinessTime(Min(now, open!.ClockInUtc + ShiftRules.LongShift)) : null,
             RequireLocation = Settings.RequireLocation,

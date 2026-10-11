@@ -25,6 +25,13 @@ public static class ShiftRules
         BusinessTime.DateOf(clockInUtc, zone) < BusinessTime.DateOf(nowUtc, zone) || nowUtc - clockInUtc > LongShift;
 
     /// <summary>
+    /// A stale open shift that is not over <see cref="LongShift"/> yet: it is only stale because it ran past midnight, so the
+    /// person may simply be finishing a night shift now. They are offered "I'm finishing now" (server time) first.
+    /// </summary>
+    public static bool RanPastMidnight(DateTime clockInUtc, DateTime nowUtc, TimeZoneInfo zone) =>
+        IsStale(clockInUtc, nowUtc, zone) && nowUtc - clockInUtc <= LongShift;
+
+    /// <summary>
     /// The part of a shift inside [<paramref name="startUtc"/>, <paramref name="endUtc"/>):
     /// max(0, min(out ?? now, end) − max(in, start)). UTC arithmetic only, so daylight-saving changes count correctly.
     /// </summary>

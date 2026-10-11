@@ -252,6 +252,62 @@ public sealed class TimeClockHandlerTests
     }
 
     [Fact]
+    public async Task ANightShiftPastMidnight_EndsNowWithOneTap_AndIsNotCalledForgotten()
+    {
+        _clock.At(2026, 10, 6, 4, 0); // Tue 4:00 AM
+        _repository.GetOpenShiftAsync(Me, Arg.Any<CancellationToken>()).Returns(Punched(5, Me, Utc(2026, 10, 5, 22, 0)));
+        ForgottenClockOut? fix = null;
+        await _repository.CloseForgottenShiftAsync(Arg.Do<ForgottenClockOut>(f => fix = f), Arg.Any<CancellationToken>());
+
+        // A page still showing "Clock out" from before midnight: asked to confirm, not told they forgot.
+        var plain = await Assert.ThrowsAsync<ValidationException>(() => Clock().Handle(new ClockOutCommand(AtTheKitchen), CancellationToken.None));
+        Assert.Equal("Your shift started Mon at 10:00 PM, before midnight, so please confirm when you finish: tap \"I'm finishing now\".", plain.Message);
+
+        // "I'm finishing now" ends it by the server's clock, whatever time came with it.
+        var result = await Clock().Handle(new FixMyForgottenClockOutCommand(new DateTime(2026, 10, 5, 23, 0, 0), FinishingNow: true), CancellationToken.None);
+
+        Assert.Equal((5, Me, ClockOutSource.SelfCorrected, _clock.UtcNow), (fix!.ShiftId, fix.UserId, fix.Source, fix.ClockOutUtc));
+        Assert.Equal("Shift ran past midnight; tapped \"I'm finishing now\"", fix.Reason);
+        Assert.Equal((new DateTime(2026, 10, 6, 4, 0, 0), TimeSpan.FromHours(6), true), (result.AtLocal, result.ShiftLength, result.FlaggedForReview));
+        await _audit.Received(1).WriteAsync(
+            Arg.Is<StaffAuditEntry>(e => e.Action == StaffAuditActions.ShiftSelfCorrected
+                && e.Details == "Shift #5 (Mon, Oct 5): shift ran past midnight; finished Mon, Oct 5, 10:00 PM – Tue, Oct 6, 4:00 AM (tapped \"I'm finishing now\")."),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task FinishingNow_IsRefusedForAShiftOverSixteenHours()
+    {
+        _repository.GetOpenShiftAsync(Me, Arg.Any<CancellationToken>()).Returns(Punched(5, Me, Utc(2026, 10, 5, 9, 0))); // 25 hours ago
+
+        var error = await Assert.ThrowsAsync<ValidationException>(() =>
+            Clock().Handle(new FixMyForgottenClockOutCommand(null, FinishingNow: true), CancellationToken.None));
+
+        Assert.Contains("more than 16 hours", error.Message);
+        await _repository.DidNotReceiveWithAnyArgs().CloseForgottenShiftAsync(default!, default);
+    }
+
+    [Fact]
+    public async Task ASecondTapOnTheForgottenShiftScreen_ShowsTheFirstResult_LaterThereIsNothingToFix()
+    {
+        _clock.At(2026, 10, 6, 4, 1);
+        var closed = Punched(5, Me, Utc(2026, 10, 5, 22, 0), Utc(2026, 10, 6, 4, 0))
+            .With(nameof(TimeClockShift.ClockOutSource), ClockOutSource.SelfCorrected)
+            .With(nameof(TimeClockShift.EditedAtUtc), Utc(2026, 10, 6, 4, 0));
+        _repository.GetLastClosedShiftAsync(Me, Arg.Any<CancellationToken>()).Returns(closed);
+
+        var repeated = await Clock().Handle(new FixMyForgottenClockOutCommand(null, FinishingNow: true), CancellationToken.None);
+        Assert.True(repeated.Repeated);
+        Assert.Equal((new DateTime(2026, 10, 6, 4, 0, 0), TimeSpan.FromHours(6)), (repeated.AtLocal, repeated.ShiftLength));
+        await _repository.DidNotReceiveWithAnyArgs().CloseForgottenShiftAsync(default!, default);
+
+        _clock.UtcNow = _clock.UtcNow.AddMinutes(5);
+        var error = await Assert.ThrowsAsync<ValidationException>(() =>
+            Clock().Handle(new FixMyForgottenClockOutCommand(null, FinishingNow: true), CancellationToken.None));
+        Assert.Equal("You're not clocked in, so there is no shift to fix.", error.Message);
+    }
+
+    [Fact]
     public async Task OnlyAStaleShift_CanBeFixedThisWay()
     {
         _repository.GetOpenShiftAsync(Me, Arg.Any<CancellationToken>()).Returns(Punched(5, Me, _clock.UtcNow.AddHours(-2)));
@@ -433,6 +489,7 @@ public sealed class TimeClockHandlerTests
 
         Assert.Equal(3, mine.OpenShift!.Id);
         Assert.True(mine.OpenShiftIsStale);
+        Assert.False(mine.OpenShiftRanPastMidnight); // 25 hours: forgotten
         Assert.Equal(new DateTime(2026, 10, 5, 9, 1, 0), mine.LeftAtEarliestLocal);
         Assert.Equal(new DateTime(2026, 10, 6, 1, 0, 0), mine.LeftAtLatestLocal);
         Assert.Equal(new DateOnly(2026, 10, 5), mine.ThisWeek.Start);
@@ -440,6 +497,19 @@ public sealed class TimeClockHandlerTests
         Assert.Equal(TimeSpan.FromHours(10.5), mine.LastWeek.Total);
         Assert.Equal(TimeSpan.FromHours(25), mine.ThisWeek.InProgress); // shown as "so far", not counted
         Assert.Equal([new DateOnly(2026, 9, 29), new DateOnly(2026, 10, 4)], mine.LastWeek.Days.Select(d => d.Date));
+    }
+
+    [Fact]
+    public async Task MyTimeClock_TellsANightShiftPastMidnight_FromAForgottenOne()
+    {
+        _clock.At(2026, 10, 6, 4, 0);
+        _repository.ListOverlappingAsync(default, default, default, default).ReturnsForAnyArgs([Punched(3, Me, Utc(2026, 10, 5, 22, 0))]);
+
+        var night = await Queries().Handle(new GetMyTimeClockQuery(), CancellationToken.None);
+
+        Assert.True(night.OpenShiftIsStale);
+        Assert.True(night.OpenShiftRanPastMidnight);
+        Assert.Equal(new DateTime(2026, 10, 6, 4, 0, 0), night.LeftAtLatestLocal);
     }
 
     [Fact]
