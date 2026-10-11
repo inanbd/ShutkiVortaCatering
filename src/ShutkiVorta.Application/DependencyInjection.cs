@@ -28,6 +28,7 @@ public static class DependencyInjection
         services.AddLiveOptions<WholesaleOptions>(settings, WholesaleOptions.SectionName);
         services.AddLiveOptions<AccountOptions>(settings, AccountOptions.SectionName);
         services.AddLiveOptions<RateLimitingOptions>(settings, RateLimitingOptions.SectionName);
+        services.AddLiveOptions<TimeClockOptions>(settings, TimeClockOptions.SectionName);
 
         services.AddMediatR(cfg =>
         {

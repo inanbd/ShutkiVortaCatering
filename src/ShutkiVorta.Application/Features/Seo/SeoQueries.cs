@@ -35,6 +35,7 @@ public static class SeoPaths
     public static readonly IReadOnlyList<string> Disallowed =
     [
         "/admin",
+        "/clock",
         "/account",
         "/cart",
         "/checkout",

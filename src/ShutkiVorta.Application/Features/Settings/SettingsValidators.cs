@@ -200,3 +200,21 @@ internal sealed class RateLimitingOptionsValidator : AbstractValidator<RateLimit
 }
 
 internal sealed class AccountOptionsValidator : AbstractValidator<AccountOptions>;
+
+internal sealed class TimeClockOptionsValidator : AbstractValidator<TimeClockOptions>
+{
+    public TimeClockOptionsValidator()
+    {
+        // InclusiveBetween also refuses NaN and infinity.
+        RuleFor(x => x.KitchenLatitude).InclusiveBetween(-90, 90).When(x => x.KitchenLatitude.HasValue);
+        RuleFor(x => x.KitchenLongitude).InclusiveBetween(-180, 180).When(x => x.KitchenLongitude.HasValue);
+
+        // Each message goes on the empty field, the one to fill in.
+        RuleFor(x => x.KitchenLongitude).NotNull().When(x => x.KitchenLatitude.HasValue)
+            .WithMessage("Enter the longitude as well (or leave both empty).");
+        RuleFor(x => x.KitchenLatitude).NotNull().When(x => x.KitchenLongitude.HasValue)
+            .WithMessage("Enter the latitude as well (or leave both empty).");
+        RuleFor(x => x.NearKitchenRadiusMeters).InclusiveBetween(25, 50000);
+        RuleFor(x => x.WorkweekStartsOn).IsInEnum();
+    }
+}

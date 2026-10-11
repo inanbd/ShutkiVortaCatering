@@ -121,6 +121,9 @@ public static class DependencyInjection
         // ---- Restaurant standing orders: generate upcoming deliveries in the background ----
         services.AddHostedService<StandingOrderGenerator>();
 
+        // ---- Time clock ----
+        services.AddScoped<ITimeClockRepository, TimeClockRepository>();
+
         return services;
     }
 

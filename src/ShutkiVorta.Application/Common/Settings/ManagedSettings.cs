@@ -29,6 +29,7 @@ public static class ManagedSettings
         new(SiteOptions.SectionName, typeof(SiteOptions), () => new SiteOptions()),
         new(AccountOptions.SectionName, typeof(AccountOptions), () => new AccountOptions()),
         new(RateLimitingOptions.SectionName, typeof(RateLimitingOptions), () => new RateLimitingOptions()),
+        new(TimeClockOptions.SectionName, typeof(TimeClockOptions), () => new TimeClockOptions()),
     ];
 
     /// <summary>Settings stored encrypted and never shown back in the admin UI.</summary>

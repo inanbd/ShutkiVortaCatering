@@ -176,6 +176,28 @@ public static class SettingsCatalog
             Field("RateLimiting:FormPostsPerWindow", "Submissions allowed per form", SettingKind.Integer, "Limits") with { Min = 3, Max = 1000, Help = "Per visitor. If the site runs behind a proxy, make sure forwarded headers are enabled so visitors are told apart." },
             Field("RateLimiting:WindowMinutes", "…within this many minutes", SettingKind.Integer, "Limits") with { Min = 1, Max = 1440 },
         ]),
+
+        new("time-clock", TimeClockOptions.SectionName, "Time clock", "Where the kitchen is, when the workweek starts, and whether staff must share their location to clock in or out.", "clock",
+        [
+            Field("TimeClock:KitchenLatitude", "Kitchen latitude", SettingKind.Decimal, "Kitchen location") with
+            {
+                Min = -90, Max = 90, Step = 0.000001m,
+                Help = "Private: only used to show how far from the kitchen staff clocked in (not the map position in Business details). Leave both empty if you don't want distances. Easiest: \"Use my current location as the kitchen\" on Time clock → Team, while standing in the kitchen.",
+            },
+            Field("TimeClock:KitchenLongitude", "Kitchen longitude", SettingKind.Decimal, "Kitchen location") with { Min = -180, Max = 180, Step = 0.000001m },
+            Field("TimeClock:NearKitchenRadiusMeters", "Counts as at the kitchen within (metres)", SettingKind.Integer, "Kitchen location") with
+            {
+                Min = 25, Max = 50000, Help = "Clock-ins and clock-outs farther away are marked for review (300 m by default). Catering at an event venue is far away too, so it is a note for managers, not a rule.",
+            },
+            Field("TimeClock:WorkweekStartsOn", "Workweek starts on", SettingKind.Select, "Weekly hours") with
+            {
+                Choices = Weekdays, Help = "Weekly hours and overtime (over 40 hours a week) are counted from this day. Monday unless you change it.",
+            },
+            Field("TimeClock:RequireLocation", "Require location to clock in or out", SettingKind.Bool, "Location") with
+            {
+                Help = "Off by default: without a location the shift is still recorded and marked for review. When on, staff are shown how to turn location on, and a manager can add a shift by hand if a phone can't share it.",
+            },
+        ]),
     ];
 
     public static SettingsPage? FindBySlug(string? slug) =>
