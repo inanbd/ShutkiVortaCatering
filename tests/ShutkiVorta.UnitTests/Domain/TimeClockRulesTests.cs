@@ -117,18 +117,24 @@ public sealed class TimeClockRulesTests
     // ---- Corrections ----
 
     [Fact]
-    public void CorrectedTimes_EndAfterTheyStart_AreNotInTheFuture_AndLastAtMost24Hours()
+    public void CorrectedTimes_EndAfterTheyStart_AreNotInTheFutureOrBefore2000_AndLastAtMost24Hours()
     {
         var now = Utc(2026, 10, 8, 12, 0);
         var clockIn = Utc(2026, 10, 7, 9, 0);
         ShiftRules.CheckTimes(clockIn, Utc(2026, 10, 7, 17, 0), now);
         ShiftRules.CheckTimes(clockIn, clockIn.AddHours(24), now);
         ShiftRules.CheckTimes(clockIn, null, now); // stays open
+        ShiftRules.CheckTimes(Utc(2000, 1, 1, 9, 0), Utc(2000, 1, 1, 17, 0), now);
 
         Assert.Equal("The clock-out must be after the clock-in.", Assert.Throws<DomainException>(() => ShiftRules.CheckTimes(clockIn, clockIn, now)).Message);
         Assert.Contains("at most 24 hours", Assert.Throws<DomainException>(() => ShiftRules.CheckTimes(clockIn, clockIn.AddHours(24).AddMinutes(1), now)).Message);
         Assert.Contains("future", Assert.Throws<DomainException>(() => ShiftRules.CheckTimes(clockIn, now.AddMinutes(1), now)).Message);
         Assert.Contains("future", Assert.Throws<DomainException>(() => ShiftRules.CheckTimes(now.AddMinutes(1), null, now)).Message);
+
+        // A year typed as 0202 (the date picker allows it).
+        Assert.Equal(
+            "Please check the year: a shift can't start before 2000.",
+            Assert.Throws<DomainException>(() => ShiftRules.CheckTimes(Utc(202, 10, 7, 9, 0), Utc(202, 10, 7, 17, 0), now)).Message);
     }
 
     [Fact]

@@ -271,6 +271,47 @@ public sealed partial class TimeClockTests(TestServers servers)
 
     [Theory]
     [MemberData(nameof(TestServers.Providers), MemberType = typeof(TestServers))]
+    public async Task YearTyposAndPagesPastTheEnd_ShowWhatThereIs_AndShiftsBefore2000_AreRefused(string provider)
+    {
+        var app = servers.Get(provider);
+        var manager = await CreateStaffAsync(app, StaffRole.Manager, [Permissions.TimeClockViewAll]);
+        var employee = await CreateStaffAsync(app, StaffRole.Employee, []);
+        var shift = await AddClosedShiftAsync(app, employee, DaysAgo(app, 6, 9), DaysAgo(app, 6, 17));
+        var client = await SignInAsync(app, manager.Email);
+
+        string[] filters =
+        [
+            "from=0202-10-01&to=2026-10-11", "from=1700-01-01", "show=review&from=0202-10-01", "to=9999-12-31", "from=9999-12-31",
+            "from=0001-01-01&to=0001-01-01", "tab=weekly&to=9999-12-31", "tab=weekly&from=0001-01-01&to=0001-01-01", "p=50000000", "p=2147483647",
+        ];
+        foreach (var filter in filters)
+        {
+            foreach (var handler in new[] { string.Empty, "&handler=ExportShifts", "&handler=ExportWeekly" })
+            {
+                var response = await client.GetAsync($"{Page}/team?{filter}{handler}");
+                Assert.True(response.StatusCode == HttpStatusCode.OK, $"{filter}{handler}: {(int)response.StatusCode}");
+            }
+        }
+
+        // From the start until "9999": everything there is.
+        const string everything = "from=0202-10-01&to=9999-12-31";
+        Assert.Contains($"/shifts/{shift.Id}\"", await client.GetStringAsync($"{Page}/team?user={employee.UserId}&{everything}"));
+        Assert.Equal(2, (await CsvLinesAsync(await client.GetAsync($"{Page}/team?handler=ExportShifts&user={employee.UserId}&{everything}"))).Count);
+        Assert.Contains(
+            await CsvLinesAsync(await client.GetAsync($"{Page}/team?handler=ExportWeekly&user={employee.UserId}&{everything}")),
+            l => l.Contains($",{employee.Email},8.00,", StringComparison.Ordinal));
+
+        // A shift typed with such a year is refused with a message, not a database error.
+        var admin = await SignInAsync(app, AppFactory.AdminEmail);
+        var added = await AddShiftAsync(admin, employee, new DateTime(202, 10, 1, 9, 0, 0), new DateTime(202, 10, 1, 17, 0, 0), "typo");
+        Assert.Contains("Please check the year: a shift can't start before 2000.", WebUtility.HtmlDecode(await added.Content.ReadAsStringAsync()));
+        var corrected = await CorrectAsync(admin, shift.Id, new DateTime(1700, 1, 1, 9, 0, 0), new DateTime(1700, 1, 1, 17, 0, 0), "typo");
+        Assert.Contains("Please check the year: a shift can't start before 2000.", WebUtility.HtmlDecode(await corrected.Content.ReadAsStringAsync()));
+        Assert.Equal(shift.ClockInUtc, (await ShiftsOfAsync(app, employee.UserId)).Single().ClockInUtc);
+    }
+
+    [Theory]
+    [MemberData(nameof(TestServers.Providers), MemberType = typeof(TestServers))]
     public async Task AManager_FixesOtherPeoplesShifts_ButNotTheirOwn(string provider)
     {
         var app = servers.Get(provider);

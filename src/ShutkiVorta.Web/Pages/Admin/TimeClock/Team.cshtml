@@ -137,11 +137,11 @@
             </div>
             <div class="field">
                 <label for="from">From</label>
-                <input id="from" name="from" type="date" value="@Model.From?.ToString("yyyy-MM-dd")" />
+                <input id="from" name="from" type="date" min="@ShiftRules.EarliestDate.ToString("yyyy-MM-dd")" value="@Model.From?.ToString("yyyy-MM-dd")" />
             </div>
             <div class="field">
                 <label for="to">to</label>
-                <input id="to" name="to" type="date" value="@Model.To?.ToString("yyyy-MM-dd")" />
+                <input id="to" name="to" type="date" min="@ShiftRules.EarliestDate.ToString("yyyy-MM-dd")" value="@Model.To?.ToString("yyyy-MM-dd")" />
             </div>
             @if (!Model.IsWeekly)
             {

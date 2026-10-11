@@ -14,6 +14,9 @@ public static class ShiftRules
     /// <summary>A second tap on the same button within this time shows the first tap's result instead of an error.</summary>
     public static readonly TimeSpan RepeatTapWindow = TimeSpan.FromMinutes(2);
 
+    /// <summary>No shift starts before this date: an earlier year is a typo (and SQL Server's datetime starts in 1753).</summary>
+    public static readonly DateOnly EarliestDate = new(2000, 1, 1);
+
     /// <summary>
     /// An open shift the person most likely forgot to clock out of: it started on an earlier business day, or more than
     /// <see cref="LongShift"/> ago. They are asked when they left instead of being clocked out now.
@@ -32,13 +35,21 @@ public static class ShiftRules
         return end > start ? end - start : TimeSpan.Zero;
     }
 
-    /// <summary>Times a manager enters for a shift: the clock-out after the clock-in, nothing in the future, at most 24 hours.</summary>
+    /// <summary>
+    /// Times a manager enters for a shift: the clock-out after the clock-in, nothing in the future or before
+    /// <see cref="EarliestDate"/>, at most 24 hours.
+    /// </summary>
     /// <param name="clockOutUtc">Null while the shift stays open.</param>
     public static void CheckTimes(DateTime clockInUtc, DateTime? clockOutUtc, DateTime nowUtc)
     {
         if (clockInUtc > nowUtc)
         {
             throw new DomainException("A shift can't start in the future.");
+        }
+
+        if (clockInUtc < EarliestDate.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc))
+        {
+            throw new DomainException($"Please check the year: a shift can't start before {EarliestDate.Year}.");
         }
 
         if (clockOutUtc is not { } clockOut)

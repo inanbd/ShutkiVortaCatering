@@ -338,8 +338,21 @@ internal sealed class TimeClockQueryHandlers(
     /// <summary>One person's id, or null (an empty filter) for everyone.</summary>
     private static string? Person(string? userId) => string.IsNullOrWhiteSpace(userId) ? null : userId;
 
-    private static (DateOnly? From, DateOnly? To) Ordered(DateOnly? from, DateOnly? to) =>
-        from > to ? (to, from) : (from, to);
+    /// <summary>
+    /// The dates in order, each kept between <see cref="ShiftRules.EarliestDate"/> and tomorrow: no shift is outside them,
+    /// so a year typed as 0202 or 9999 just means "from the start" or "until now" (instead of an error from the database).
+    /// </summary>
+    private (DateOnly? From, DateOnly? To) Ordered(DateOnly? from, DateOnly? to)
+    {
+        var (first, last) = (Within(from), Within(to));
+        return first > last ? (last, first) : (first, last);
+    }
+
+    private DateOnly? Within(DateOnly? date)
+    {
+        var latest = Today.AddDays(1);
+        return date < ShiftRules.EarliestDate ? ShiftRules.EarliestDate : date > latest ? latest : date;
+    }
 
     private static TimeSpan Sum(IEnumerable<TimeClockShift> shifts, Func<TimeClockShift, TimeSpan> hours) =>
         shifts.Aggregate(TimeSpan.Zero, (total, s) => total + hours(s));

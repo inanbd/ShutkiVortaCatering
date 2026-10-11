@@ -293,7 +293,7 @@ internal sealed class TimeClockRepository(IDbConnectionFactory connections, ISql
         });
 
         var where = "WHERE " + string.Join(" AND ", conditions);
-        parameters.Add("Skip", (search.Page - 1) * search.PageSize);
+        parameters.Add("Skip", (search.Page - 1L) * search.PageSize); // a long: a page far past the end must not wrap around
         parameters.Add("Take", search.PageSize);
 
         await using var connection = await connections.OpenAsync(cancellationToken);
