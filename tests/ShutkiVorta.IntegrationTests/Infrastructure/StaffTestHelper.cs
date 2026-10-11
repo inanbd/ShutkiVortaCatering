@@ -123,8 +123,12 @@ public static partial class StaffTestHelper
         Assert.StartsWith("/account/login", response.Headers.Location!.PathAndQuery(), StringComparison.OrdinalIgnoreCase);
     }
 
-    /// <summary>Waits for an email to <paramref name="to"/> in the pickup folder and returns its To: header line followed by its HTML body.</summary>
-    public static async Task<string> WaitForEmailAsync(AppFactory app, string to, TimeSpan timeout)
+    /// <summary>
+    /// Waits for an email to <paramref name="to"/> in the pickup folder and returns the NEWEST one's To: header line followed
+    /// by its HTML body. Pass <paramref name="sinceUtc"/> (taken before the action) to ignore emails written earlier, e.g.
+    /// the first invitation when testing a resend.
+    /// </summary>
+    public static async Task<string> WaitForEmailAsync(AppFactory app, string to, TimeSpan timeout, DateTime? sinceUtc = null)
     {
         var deadline = DateTime.UtcNow + timeout;
         while (true)
@@ -132,8 +136,9 @@ public static partial class StaffTestHelper
             // Each email is saved as .html (body) plus .eml (with headers).
             var mail = Directory.Exists(app.MailDirectory)
                 ? Directory.GetFiles(app.MailDirectory, "*.html")
-                    .Select(html => (Header: ToHeader(Path.ChangeExtension(html, ".eml")), Html: html))
-                    .Where(m => m.Header.Contains(to, StringComparison.OrdinalIgnoreCase))
+                    .Select(html => (Header: ToHeader(Path.ChangeExtension(html, ".eml")), Html: html, WrittenUtc: File.GetLastWriteTimeUtc(html)))
+                    .Where(m => m.Header.Contains(to, StringComparison.OrdinalIgnoreCase) && (sinceUtc is null || m.WrittenUtc >= sinceUtc))
+                    .OrderByDescending(m => m.WrittenUtc)
                     .Select(m => m.Header + "\n" + File.ReadAllText(m.Html))
                     .FirstOrDefault()
                 : null;

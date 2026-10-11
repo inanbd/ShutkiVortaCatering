@@ -1,3 +1,4 @@
+using System.Text.RegularExpressions;
 using MediatR;
 using ShutkiVorta.Application.Common.Email;
 using ShutkiVorta.Application.Common.Interfaces;
@@ -44,8 +45,11 @@ public sealed class EmailLogEntryDto
     public DateTime? LastAttemptAtUtc { get; init; }
     public DateTime? SentAtUtc { get; init; }
     public DateTime? NextAttemptAtUtc { get; init; }
-    public string? HtmlBody { get; init; }
-    public string? TextBody { get; init; }
+    public string? HtmlBody { get; set; }
+    public string? TextBody { get; set; }
+
+    /// <summary>Order-status links were removed from the content, because the viewer may not change orders.</summary>
+    public bool PrivateLinksHidden { get; set; }
 
     /// <summary>Contains a private link; the content is never shown in the log.</summary>
     public bool IsSensitive { get; init; }
@@ -97,7 +101,7 @@ public sealed record RetryFailedEmailsCommand : IRequest<int>;
 
 public sealed record TestSmtpConnectionCommand : IRequest<SmtpConnectionTestResult>, IRequireAdmin;
 
-internal sealed class EmailLogHandlers(IEmailLog log, IEmailTransport transport) :
+internal sealed partial class EmailLogHandlers(IEmailLog log, IEmailTransport transport, ICurrentStaff currentStaff) :
     IRequestHandler<GetEmailLogQuery, PagedResult<EmailLogEntryDto>>,
     IRequestHandler<GetEmailLogEntryQuery, EmailLogEntryDto?>,
     IRequestHandler<RetryEmailCommand, bool>,
@@ -110,8 +114,23 @@ internal sealed class EmailLogHandlers(IEmailLog log, IEmailTransport transport)
         return log.ListAsync(request.Status, page, size, cancellationToken);
     }
 
-    public Task<EmailLogEntryDto?> Handle(GetEmailLogEntryQuery request, CancellationToken cancellationToken) =>
-        log.GetAsync(request.Id, cancellationToken);
+    public async Task<EmailLogEntryDto?> Handle(GetEmailLogEntryQuery request, CancellationToken cancellationToken)
+    {
+        var entry = await log.GetAsync(request.Id, cancellationToken);
+        if (entry is null || (await currentStaff.GetAsync(cancellationToken)).Can(Permissions.OrdersManage))
+        {
+            return entry;
+        }
+
+        // An order-status link lets whoever holds it cancel a pending order, so it is only shown to staff who may
+        // change orders (the order page applies the same rule).
+        var html = OrderStatusToken().Replace(entry.HtmlBody ?? string.Empty, "$1hidden");
+        var text = OrderStatusToken().Replace(entry.TextBody ?? string.Empty, "$1hidden");
+        entry.PrivateLinksHidden = html != (entry.HtmlBody ?? string.Empty) || text != (entry.TextBody ?? string.Empty);
+        entry.HtmlBody = entry.HtmlBody is null ? null : html;
+        entry.TextBody = entry.TextBody is null ? null : text;
+        return entry;
+    }
 
     public Task<bool> Handle(RetryEmailCommand request, CancellationToken cancellationToken) =>
         log.RetryAsync(request.Id, cancellationToken);
@@ -121,4 +140,8 @@ internal sealed class EmailLogHandlers(IEmailLog log, IEmailTransport transport)
 
     public Task<SmtpConnectionTestResult> Handle(TestSmtpConnectionCommand request, CancellationToken cancellationToken) =>
         transport.TestConnectionAsync(cancellationToken);
+
+    /// <summary>The token of an order-status link (/order/{number}?token=…), as written by IAppUrls.OrderStatus.</summary>
+    [GeneratedRegex(@"(/order/[^\s""'<>?]+\?token=)[^&\s""'<>]+")]
+    private static partial Regex OrderStatusToken();
 }

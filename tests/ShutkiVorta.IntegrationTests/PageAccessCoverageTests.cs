@@ -70,10 +70,10 @@ public sealed class PageAccessCoverageTests
         }
     }
 
-    /// <summary>On a page anyone with "view" may open, every action handler says what it needs (usually the "manage" permission).</summary>
+    /// <summary>On a page anyone with "view" may open, every action handler says what it needs, and it is more than "view".</summary>
     [Theory]
     [MemberData(nameof(AdminPagePaths))]
-    public void PostHandlersOnViewPages_StateTheirOwnRequirement(string path)
+    public void ActionHandlersOnViewPages_StateTheirOwnRequirement(string path)
     {
         var model = AdminPages.Single(p => p.Path == path).PageModel;
         if (PermissionPageFilter.RulesFor(model).SingleOrDefault() is not RequirePermissionAttribute { } page
@@ -82,10 +82,12 @@ public sealed class PageAccessCoverageTests
             return;
         }
 
-        foreach (var handler in Handlers(model).Where(h => h.Name.StartsWith("OnPost", StringComparison.Ordinal)))
+        foreach (var handler in Handlers(model).Where(h => !h.Name.StartsWith("OnGet", StringComparison.Ordinal)))
         {
-            Assert.True(PermissionPageFilter.RulesFor(handler).Length > 0,
+            var rules = PermissionPageFilter.RulesFor(handler);
+            Assert.True(rules.Length > 0,
                 $"{model.Name}.{handler.Name} changes something on a {page.Permission} page but has no [RequirePermission] or [AdminOnly].");
+            Assert.DoesNotContain(rules, r => r is RequirePermissionAttribute { Permission: var p } && p.EndsWith(".view", StringComparison.Ordinal));
         }
     }
 
@@ -97,10 +99,53 @@ public sealed class PageAccessCoverageTests
         Assert.False(typeof(IFilterMetadata).IsAssignableFrom(typeof(AnyStaffAttribute)));
     }
 
+    /// <summary>The agreed access table for the pages that existed before staff roles (pages and every action handler).</summary>
+    private static readonly IReadOnlyDictionary<string, string> AgreedAccess = new Dictionary<string, string>
+    {
+        ["/Pages/Admin/Index.cshtml"] = "any staff",
+        ["/Pages/Admin/Orders/Index.cshtml"] = Permissions.OrdersView,
+        ["/Pages/Admin/Orders/Details.cshtml"] = Permissions.OrdersView,
+        ["/Pages/Admin/Orders/Details.cshtml OnPostStatusAsync"] = Permissions.OrdersManage,
+        ["/Pages/Admin/Orders/Details.cshtml OnPostNotesAsync"] = Permissions.OrdersManage,
+        ["/Pages/Admin/Recurring/Index.cshtml"] = Permissions.RestaurantsView,
+        ["/Pages/Admin/Recurring/Index.cshtml OnPostGenerateAsync"] = Permissions.RestaurantsManage,
+        ["/Pages/Admin/Recurring/Details.cshtml"] = Permissions.RestaurantsView,
+        ["/Pages/Admin/Recurring/Details.cshtml OnPostStatusAsync"] = Permissions.RestaurantsManage,
+        ["/Pages/Admin/Recurring/Details.cshtml OnPostSkipAsync"] = Permissions.RestaurantsManage,
+        ["/Pages/Admin/Recurring/Details.cshtml OnPostTermsAsync"] = Permissions.RestaurantsManage,
+        ["/Pages/Admin/Recurring/Statement.cshtml"] = Permissions.RestaurantsView,
+        ["/Pages/Admin/Production/Index.cshtml"] = Permissions.ProductionView,
+        ["/Pages/Admin/Menu/Index.cshtml"] = Permissions.MenuView,
+        ["/Pages/Admin/Menu/Index.cshtml OnPostAvailabilityAsync"] = Permissions.MenuManage,
+        ["/Pages/Admin/Menu/Index.cshtml OnPostDeleteAsync"] = Permissions.MenuManage,
+        ["/Pages/Admin/Menu/Edit.cshtml"] = Permissions.MenuView,
+        ["/Pages/Admin/Menu/Edit.cshtml OnPostAsync"] = Permissions.MenuManage,
+        ["/Pages/Admin/Inventory/Index.cshtml"] = Permissions.InventoryView,
+        ["/Pages/Admin/Inventory/Edit.cshtml"] = Permissions.InventoryView,
+        ["/Pages/Admin/Inventory/Edit.cshtml OnPostAsync"] = Permissions.InventoryManage,
+        ["/Pages/Admin/Inventory/Edit.cshtml OnPostDeleteAsync"] = Permissions.InventoryManage,
+        ["/Pages/Admin/Inventory/Items.cshtml"] = Permissions.InventoryView,
+        ["/Pages/Admin/Inventory/Items.cshtml OnPostAddAsync"] = Permissions.InventoryManage,
+        ["/Pages/Admin/Inventory/Item.cshtml"] = Permissions.InventoryView,
+        ["/Pages/Admin/Inventory/Item.cshtml OnPostAsync"] = Permissions.InventoryManage,
+        ["/Pages/Admin/Inventory/Item.cshtml OnPostDeleteAsync"] = Permissions.InventoryManage,
+        ["/Pages/Admin/Inventory/Receipt.cshtml"] = Permissions.InventoryView,
+        ["/Pages/Admin/Inquiries/Index.cshtml"] = Permissions.InquiriesView,
+        ["/Pages/Admin/Inquiries/Index.cshtml OnPostHandledAsync"] = Permissions.InquiriesManage,
+        ["/Pages/Admin/Emails/Index.cshtml"] = Permissions.EmailsView,
+        ["/Pages/Admin/Emails/Index.cshtml OnPostRetryAsync"] = Permissions.EmailsManage,
+        ["/Pages/Admin/Emails/Index.cshtml OnPostRetryFailedAsync"] = Permissions.EmailsManage,
+        ["/Pages/Admin/Emails/Details.cshtml"] = Permissions.EmailsView,
+        ["/Pages/Admin/Emails/Details.cshtml OnPostRetryAsync"] = Permissions.EmailsManage,
+        ["/Pages/Admin/Settings/Index.cshtml"] = "admin",
+        ["/Pages/Admin/Settings/Edit.cshtml"] = "admin",
+    };
+
+    /// <summary>Pinned in both directions: every listed page/handler has this rule, and the listed pages have no other action handlers.</summary>
     [Fact]
     public void TheExistingPages_HaveTheirAgreedAccess()
     {
-        string Rule(string path) => PermissionPageFilter.RulesFor(AdminPages.Single(p => p.Path == path).PageModel).Single() switch
+        static string Describe(Attribute rule) => rule switch
         {
             RequirePermissionAttribute r => r.Permission,
             AdminOnlyAttribute => "admin",
@@ -108,16 +153,23 @@ public sealed class PageAccessCoverageTests
             var other => other.ToString()!,
         };
 
-        Assert.Equal("any staff", Rule("/Pages/Admin/Index.cshtml"));
-        Assert.Equal(Permissions.OrdersView, Rule("/Pages/Admin/Orders/Details.cshtml"));
-        Assert.Equal(Permissions.RestaurantsView, Rule("/Pages/Admin/Recurring/Statement.cshtml"));
-        Assert.Equal(Permissions.ProductionView, Rule("/Pages/Admin/Production/Index.cshtml"));
-        Assert.Equal(Permissions.MenuView, Rule("/Pages/Admin/Menu/Edit.cshtml"));
-        Assert.Equal(Permissions.InventoryView, Rule("/Pages/Admin/Inventory/Receipt.cshtml"));
-        Assert.Equal(Permissions.InquiriesView, Rule("/Pages/Admin/Inquiries/Index.cshtml"));
-        Assert.Equal(Permissions.EmailsView, Rule("/Pages/Admin/Emails/Details.cshtml"));
-        Assert.Equal("admin", Rule("/Pages/Admin/Settings/Index.cshtml"));
-        Assert.Equal("admin", Rule("/Pages/Admin/Settings/Edit.cshtml"));
+        foreach (var (key, expected) in AgreedAccess)
+        {
+            var parts = key.Split(' ');
+            var model = AdminPages.Single(p => p.Path == parts[0]).PageModel;
+            var member = parts.Length == 1 ? (MemberInfo)model : Handlers(model).Single(h => h.Name == parts[1]);
+            Assert.Equal(expected, Describe(PermissionPageFilter.RulesFor(member).Single()));
+        }
+
+        // Pages anyone with "view" may open need a rule on each action handler; Admin-only pages are covered by the page rule.
+        foreach (var page in AgreedAccess.Where(e => !e.Key.Contains(' ') && e.Value.EndsWith(".view", StringComparison.Ordinal)).Select(e => e.Key))
+        {
+            var model = AdminPages.Single(p => p.Path == page).PageModel;
+            foreach (var handler in Handlers(model).Where(h => !h.Name.StartsWith("OnGet", StringComparison.Ordinal)))
+            {
+                Assert.True(AgreedAccess.ContainsKey($"{page} {handler.Name}"), $"{page} {handler.Name} is not in the agreed access table.");
+            }
+        }
     }
 
     /// <summary>The page model (the @model type when it is a PageModel, otherwise the generated page itself).</summary>
@@ -127,7 +179,8 @@ public sealed class PageAccessCoverageTests
         return model is not null && typeof(PageModel).IsAssignableFrom(model) ? model : pageType;
     }
 
+    /// <summary>Razor Pages handler methods: On{Verb}[Name][Async] for any HTTP verb.</summary>
     private static IEnumerable<MethodInfo> Handlers(Type model) =>
         model.GetMethods(BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly)
-            .Where(m => m.Name.StartsWith("OnGet", StringComparison.Ordinal) || m.Name.StartsWith("OnPost", StringComparison.Ordinal));
+            .Where(m => new[] { "OnGet", "OnPost", "OnPut", "OnDelete", "OnPatch" }.Any(verb => m.Name.StartsWith(verb, StringComparison.Ordinal)));
 }

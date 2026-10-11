@@ -45,6 +45,20 @@ public sealed class StaffRoleTests
         Assert.False(own.Succeeded);
         Assert.Contains("your own role", own.Errors[0]);
 
+        // ...not even with their id written differently (SQL Server compares ids case-insensitively and ignores trailing spaces).
+        foreach (var disguised in new[] { secondAdmin.UserId.ToUpperInvariant(), secondAdmin.UserId + " " })
+        {
+            var sneaky = await StoreAsync(app, s => s.SetStaffRoleAsync(disguised, StaffRole.Employee, secondAdmin.UserId, "tests"));
+            Assert.False(sneaky.Succeeded);
+            Assert.True((await AccessAsync(app, secondAdmin.UserId)).IsAdmin);
+        }
+
+        // A locked-out Admin cannot sign in right now, so they do not count as the remaining Admin either.
+        await ExecuteAsync(app, "UPDATE Users SET LockoutEnabled = 1, LockoutEndUtc = @Until WHERE Id = @Id",
+            new { Id = secondAdmin.UserId, Until = DateTime.UtcNow.AddMinutes(15) });
+        Assert.False((await StoreAsync(app, s => s.SetStaffRoleAsync(seedAdmin, StaffRole.Manager, secondAdmin.UserId, "tests"))).Succeeded);
+        await ExecuteAsync(app, "UPDATE Users SET LockoutEndUtc = NULL WHERE Id = @Id", new { Id = secondAdmin.UserId });
+
         // With a second Admin who can sign in, the seeded one can be demoted (and then is a Manager on the next request).
         Assert.True((await StoreAsync(app, s => s.SetStaffRoleAsync(seedAdmin, StaffRole.Manager, secondAdmin.UserId, "tests"))).Succeeded);
         var access = await AccessAsync(app, seedAdmin);

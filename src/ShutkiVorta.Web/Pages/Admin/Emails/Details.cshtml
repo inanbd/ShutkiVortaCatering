@@ -26,6 +26,10 @@
         }
         else
         {
+            @if (e.PrivateLinksHidden)
+            {
+                <div class="panel-body"><p class="small muted mb-0">The customer's private order link is hidden: it is only shown to staff who may change orders.</p></div>
+            }
             <div class="panel-body flush">
                 <iframe class="email-preview" title="Email preview" sandbox srcdoc="@e.HtmlBody"></iframe>
             </div>

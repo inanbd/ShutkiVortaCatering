@@ -230,6 +230,7 @@ internal sealed class StaffRepository(IDbConnectionFactory connections, IDateTim
             return Result.Failure("This account no longer exists.");
         }
 
+        userId = user.Id; // the id exactly as stored (see SetStaffRoleAsync)
         var role = StaffRoles.Lowest(await ReadStaffRolesAsync(connection, transaction, userId, cancellationToken));
         if (role is not { } staffRole)
         {
@@ -291,7 +292,7 @@ internal sealed class StaffRepository(IDbConnectionFactory connections, IDateTim
 
     public async Task<Result> SetStaffRoleAsync(string userId, StaffRole? role, string actorUserId, string changedBy, CancellationToken cancellationToken = default)
     {
-        if (string.Equals(userId, actorUserId, StringComparison.Ordinal))
+        if (IsSameUser(userId, actorUserId))
         {
             return Result.Failure("You can't change your own role or remove yourself from the staff. Ask another admin.");
         }
@@ -305,6 +306,14 @@ internal sealed class StaffRepository(IDbConnectionFactory connections, IDateTim
         if (user is null)
         {
             return Result.Failure("This account no longer exists.");
+        }
+
+        // From here on use the id exactly as stored: SQL Server matches ids case-insensitively and ignores trailing
+        // spaces, so "the same person written differently" must not get past the own-role rule.
+        userId = user.Id;
+        if (IsSameUser(userId, actorUserId))
+        {
+            return Result.Failure("You can't change your own role or remove yourself from the staff. Ask another admin.");
         }
 
         var currentRoles = await ReadStaffRolesAsync(connection, transaction, userId, cancellationToken);
@@ -323,7 +332,7 @@ internal sealed class StaffRepository(IDbConnectionFactory connections, IDateTim
             return Result.Success();
         }
 
-        if (current == StaffRole.Admin && role != StaffRole.Admin && await CountOtherActiveAdminsAsync(connection, transaction, userId, cancellationToken) == 0)
+        if (current == StaffRole.Admin && role != StaffRole.Admin && await CountOtherActiveAdminsAsync(connection, transaction, userId, now, cancellationToken) == 0)
         {
             return Result.Failure(
                 "There must always be at least one Admin who can sign in. Make someone else an Admin (and let them set their password) first.");
@@ -384,6 +393,13 @@ internal sealed class StaffRepository(IDbConnectionFactory connections, IDateTim
         await using var connection = await connections.OpenAsync(cancellationToken);
         await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
 
+        var user = await ReadUserAsync(connection, transaction, userId, cancellationToken);
+        if (user is null)
+        {
+            return;
+        }
+
+        userId = user.Id; // the id exactly as stored (see SetStaffRoleAsync)
         var profile = await ReadProfileAsync(connection, transaction, userId, cancellationToken);
         if (profile is null)
         {
@@ -398,9 +414,8 @@ internal sealed class StaffRepository(IDbConnectionFactory connections, IDateTim
 
         if (profile?.JobTitle != title)
         {
-            var user = await ReadUserAsync(connection, transaction, userId, cancellationToken);
             await StaffAuditLogRepository.InsertAsync(connection, transaction, new StaffAuditEntry(
-                userId, user?.FullName, StaffAuditActions.ProfileChanged,
+                userId, user.FullName, StaffAuditActions.ProfileChanged,
                 title is null ? "Job title removed." : $"Job title: {title}.", changedBy), now, cancellationToken);
         }
 
@@ -408,6 +423,10 @@ internal sealed class StaffRepository(IDbConnectionFactory connections, IDateTim
     }
 
     // ---- Helpers ----
+
+    /// <summary>Ids are GUID strings; compare them the way SQL Server's default collation would (case and trailing spaces).</summary>
+    private static bool IsSameUser(string userId, string actorUserId) =>
+        string.Equals(userId.Trim(), actorUserId.Trim(), StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
     /// Serialises staff changes: a no-op update takes the ADMIN row's write lock until the transaction ends, so a
@@ -417,17 +436,21 @@ internal sealed class StaffRepository(IDbConnectionFactory connections, IDateTim
         connection.ExecuteAsync(new CommandDefinition(
             "UPDATE Roles SET ConcurrencyStamp = ConcurrencyStamp WHERE NormalizedName = 'ADMIN'", transaction: transaction, cancellationToken: cancellationToken));
 
-    /// <summary>Admins other than this person who are only Admin and can sign in (a password and a confirmed email).</summary>
-    private static Task<int> CountOtherActiveAdminsAsync(DbConnection connection, DbTransaction transaction, string userId, CancellationToken cancellationToken) =>
+    /// <summary>
+    /// Admins other than this person who are only Admin and can sign in now (a password, a confirmed email, not locked out).
+    /// </summary>
+    private static Task<int> CountOtherActiveAdminsAsync(
+        DbConnection connection, DbTransaction transaction, string userId, DateTime now, CancellationToken cancellationToken) =>
         connection.ExecuteScalarAsync<int>(new CommandDefinition(
             """
             SELECT COUNT(*) FROM Users u
              WHERE u.Id <> @UserId AND u.PasswordHash IS NOT NULL AND u.EmailConfirmed = 1
+               AND (u.LockoutEnabled = 0 OR u.LockoutEndUtc IS NULL OR u.LockoutEndUtc <= @Now)
                AND EXISTS (SELECT 1 FROM UserRoles ur INNER JOIN Roles r ON r.Id = ur.RoleId
                             WHERE ur.UserId = u.Id AND r.NormalizedName = 'ADMIN')
                AND NOT EXISTS (SELECT 1 FROM UserRoles ur INNER JOIN Roles r ON r.Id = ur.RoleId
                                 WHERE ur.UserId = u.Id AND r.NormalizedName IN ('MANAGER', 'EMPLOYEE'))
-            """, new { UserId = userId }, transaction, cancellationToken: cancellationToken));
+            """, new { UserId = userId, Now = now }, transaction, cancellationToken: cancellationToken));
 
     /// <summary>Closes the person's open shift now, flagged for review. True when there was one.</summary>
     private static async Task<bool> CloseOpenShiftAsync(

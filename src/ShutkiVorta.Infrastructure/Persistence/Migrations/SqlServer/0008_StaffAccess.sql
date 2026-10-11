@@ -13,7 +13,7 @@ CREATE TABLE dbo.RolePermissionSets (
 CREATE TABLE dbo.RolePermissions (
     Role        NVARCHAR(20)  NOT NULL CONSTRAINT CK_RolePermissions_Role CHECK (Role IN (N'Manager', N'Employee')),
     Permission  NVARCHAR(64)  NOT NULL,
-    IsGranted   BIT           NOT NULL,
+    IsGranted   BIT           NOT NULL CONSTRAINT DF_RolePermissions_IsGranted DEFAULT 0,
     CONSTRAINT PK_RolePermissions PRIMARY KEY (Role, Permission)
 );
 

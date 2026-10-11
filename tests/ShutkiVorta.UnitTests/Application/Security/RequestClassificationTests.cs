@@ -69,6 +69,7 @@ public sealed class RequestClassificationTests
     [
         "TestSmtpConnectionCommand", "GetSettingsOverviewQuery", "SendTestEmailCommand", "GetSettingsPagesQuery",
         "GetSettingsNoticesQuery", "GetSettingsPageQuery", "UpdateSettingsPageCommand",
+        "GetUsersQuery", // the old user list; removed with the new customer list
     ];
 
     private static readonly IReadOnlyList<Type> Requests = typeof(GetDashboardQuery).Assembly.GetTypes()
