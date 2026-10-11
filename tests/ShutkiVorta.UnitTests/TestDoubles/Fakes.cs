@@ -15,6 +15,7 @@ internal sealed class FakeClock(DateTime utcNow) : IDateTimeProvider
 internal sealed class FakeUrls : IAppUrls
 {
     public string BaseUrl => "https://shutki.test";
+    public bool HasConfiguredBaseUrl { get; set; } = true;
     public string Absolute(string relativePath) => BaseUrl + "/" + relativePath.TrimStart('/');
     public string Home() => BaseUrl + "/";
     public string Menu() => Absolute("/menu");
@@ -28,6 +29,7 @@ internal sealed class FakeUrls : IAppUrls
     public string Restaurants() => Absolute("/restaurants");
     public string ConfirmEmail(string userId, string code) => Absolute($"/account/confirm-email?userId={userId}&code={code}");
     public string ResetPassword(string email, string code) => Absolute($"/account/reset-password?email={email}&code={code}");
+    public string StaffInvitation(string email, string code) => Absolute($"/account/reset-password?invite=1&email={email}&code={code}");
     public string Login() => Absolute("/account/login");
 }
 

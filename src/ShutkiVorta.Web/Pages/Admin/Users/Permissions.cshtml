@@ -1,0 +1,176 @@
+@page "/admin/permissions"
+@model ShutkiVorta.Web.Pages.Admin.Users.PermissionsModel
+@{
+    var o = Model.Overview;
+}
+@section Head {
+    <link rel="stylesheet" href="~/css/admin-users.css" asp-append-version="true" />
+}
+@section Actions {
+    <a class="btn btn-outline btn-sm" href="@StaffUi.UsersPath">@Icons.Get("users") Users</a>
+}
+
+<p class="settings-lead">
+    Managers and Employees start with the levels marked <em>(default)</em>; what you save here applies to everyone with that role
+    from their next click, except people with custom permissions. Admins always have everything.
+</p>
+
+@* One form per role; the selects and buttons in the table belong to them through their form="" attribute. *@
+@foreach (var set in o.Roles)
+{
+    <form method="post" asp-page-handler="Save" id="save-@set.Role" data-role-save="@set.Role">
+        <input type="hidden" name="role" value="@set.Role" />
+        <input type="hidden" name="revision" value="@set.Revision" />
+    </form>
+    <form method="post" asp-page-handler="Restore" id="restore-@set.Role">
+        <input type="hidden" name="role" value="@set.Role" />
+        <input type="hidden" name="revision" value="@set.Revision" />
+    </form>
+}
+
+<section class="panel">
+    <div class="panel-body flush table-wrap">
+        <table class="table permissions-table">
+            <thead>
+                <tr>
+                    <th>Module</th>
+                    <th>Admin</th>
+                    @foreach (var set in o.Roles)
+                    {
+                        <th>
+                            @set.Role.DisplayName()
+                            <span class="role-state">@(set.IsDefault ? "Defaults" : "Changed")</span>
+                        </th>
+                    }
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var module in PermissionCatalog.Modules)
+                {
+                    <tr>
+                        <td class="module-cell"><strong>@module.Name</strong><span class="small muted">@module.Description</span></td>
+                        <td data-label="Admin" class="locked-cell">@Icons.Get("lock") Everything</td>
+                        @foreach (var set in o.Roles)
+                        {
+                            var current = PermissionCatalog.LevelFor(module, set.Granted);
+                            <td data-label="@set.Role.DisplayName()">
+                                <select name="levels[@module.Key]" form="save-@set.Role" aria-label="@set.Role.DisplayName(): @module.Name" data-role="@set.Role">
+                                    @foreach (var level in module.Levels)
+                                    {
+                                        <option value="@level.Key" selected="@(current.Key == level.Key)" title="@level.Description">@StaffUi.LevelLabel(module, level, set.Role)</option>
+                                    }
+                                </select>
+                                <span class="level-help small muted">@current.Description</span>
+                            </td>
+                        }
+                    </tr>
+                }
+                @foreach (var (name, description) in PermissionCatalog.AdminOnly)
+                {
+                    <tr class="locked-row">
+                        <td class="module-cell"><strong>@name</strong><span class="small muted">@description</span></td>
+                        <td data-label="Admin" class="locked-cell">@Icons.Get("lock") Yes</td>
+                        <td colspan="@o.Roles.Count" data-label="Managers and Employees" class="locked-cell">@Icons.Get("lock") Admins only</td>
+                    </tr>
+                }
+            </tbody>
+            <tfoot>
+                <tr>
+                    <td class="tfoot-label"></td>
+                    <td class="tfoot-label"></td>
+                    @foreach (var set in o.Roles)
+                    {
+                        <td class="role-actions" data-label="@set.Role.DisplayName()">
+                            <button class="btn btn-primary btn-sm" type="submit" form="save-@set.Role" data-save-button="@set.Role">@Icons.Get("check") Save @set.Role.DisplayName() permissions</button>
+                            <span class="small unsaved" data-unsaved="@set.Role" hidden>Unsaved changes</span>
+                            @if (!set.IsDefault)
+                            {
+                                <button class="btn btn-outline btn-sm" type="submit" form="restore-@set.Role"
+                                        data-confirm="Restore the default @set.Role.DisplayName() permissions? Everyone with that role (except people with custom permissions) gets the defaults from their next click.">@Icons.Get("refresh") Restore defaults</button>
+                            }
+                            @if (set.UpdatedAtUtc is { } updated)
+                            {
+                                <span class="small muted">Saved @Format.DateTime(Model.Local(updated)) by @set.UpdatedBy</span>
+                            }
+                        </td>
+                    }
+                </tr>
+            </tfoot>
+        </table>
+    </div>
+</section>
+
+<div class="detail-grid permissions-grid">
+    <div>
+        <section class="panel">
+            <div class="panel-head">
+                <h2>Not affected</h2>
+                <span class="pill @(o.CustomPermissionPeople.Count == 0 ? "pill-off" : "pill-warn")">@o.CustomPermissionPeople.Count @(o.CustomPermissionPeople.Count == 1 ? "person" : "people") with custom permissions</span>
+            </div>
+            <div class="panel-body">
+                @if (o.CustomPermissionPeople.Count == 0)
+                {
+                    <p class="muted mb-0">Everyone follows their role. To give one person different permissions, open them on the <a href="@StaffUi.UsersPath">Users</a> page.</p>
+                }
+                else
+                {
+                    <p class="small muted">Changes here don't reach these people: they have their own permissions (set on their page).</p>
+                    <ul class="custom-people">
+                        @foreach (var person in o.CustomPermissionPeople)
+                        {
+                            <li><a href="@StaffUi.UserPath(person.UserId)">@person.FullName</a> @Ui.RolePill(person.Role)</li>
+                        }
+                    </ul>
+                }
+            </div>
+        </section>
+
+        <section class="panel">
+            <div class="panel-head"><h2>Every staff member can always…</h2></div>
+            <div class="panel-body">
+                <ul class="every-staff-list">
+                    @foreach (var item in PermissionCatalog.EveryStaffMember)
+                    {
+                        <li>@Icons.Get("check") @item</li>
+                    }
+                </ul>
+            </div>
+        </section>
+    </div>
+
+    <section class="panel">
+        <div class="panel-head"><h2>Recent permission changes</h2></div>
+        <div class="panel-body">
+            @if (o.RecentChanges.Count == 0)
+            {
+                <p class="muted mb-0">No changes yet: Managers and Employees have the defaults.</p>
+            }
+            else
+            {
+                <ul class="audit-list">
+                    @foreach (var entry in o.RecentChanges)
+                    {
+                        <li>
+                            <strong>
+                                @if (entry.TargetUserId is { } target)
+                                {
+                                    <a href="@StaffUi.UserPath(target)">@entry.TargetName</a><text>: </text>
+                                }
+                                @StaffAuditActions.DisplayName(entry.Action)
+                            </strong>
+                            <span class="small muted">@Format.DateTime(Model.Local(entry.ChangedAtUtc)) · @entry.ChangedBy</span>
+                            @if (!string.IsNullOrWhiteSpace(entry.Details))
+                            {
+                                <span class="small">@entry.Details</span>
+                            }
+                        </li>
+                    }
+                </ul>
+            }
+        </div>
+    </section>
+</div>
+
+@section Scripts {
+    <script src="~/js/admin-users.js" asp-append-version="true"></script>
+}

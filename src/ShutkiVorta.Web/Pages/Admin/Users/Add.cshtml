@@ -1,0 +1,104 @@
+@page "/admin/users/add"
+@model ShutkiVorta.Web.Pages.Admin.Users.AddModel
+@{
+    var roles = new (StaffRole Role, string Description)[]
+    {
+        (StaffRole.Employee, "Clocks in and out, and sees what you allow Employees on the Permissions page."),
+        (StaffRole.Manager, "Runs the day: orders, menu, inventory and the team's shifts, as allowed on the Permissions page."),
+        (StaffRole.Admin, "Everything, including settings, staff and permissions."),
+    };
+}
+@section Head {
+    <link rel="stylesheet" href="~/css/admin-users.css" asp-append-version="true" />
+}
+@section Actions {
+    <a class="btn btn-outline btn-sm" href="@StaffUi.UsersPath">&larr; Users</a>
+}
+
+@if (Model.ExistingAccount is { } account)
+{
+    <section class="panel add-user">
+        <div class="panel-head"><h2>This email already has an account</h2></div>
+        <div class="panel-body">
+            <dl class="kv">
+                <dt>Name</dt><dd><strong>@account.FullName</strong></dd>
+                <dt>Email</dt><dd>@account.Email</dd>
+                <dt>Joined</dt><dd>@Format.ShortDate(account.CreatedAtUtc)</dd>
+                <dt>Orders</dt><dd>@(account.OrderCount == 0 ? "None" : account.OrderCount == 1 ? "1 order" : $"{account.OrderCount} orders")</dd>
+                @if (account.IsFormerStaff)
+                {
+                    <dt>Staff</dt><dd>Worked here before</dd>
+                }
+            </dl>
+            <p class="mt-2">Is this the person you mean? They will be added as <strong>@Model.Input.Role.DisplayName()</strong>, keep their
+                password and get a short email saying they've been added to the staff.</p>
+            <form method="post" class="add-user-confirm">
+                <input type="hidden" asp-for="Input.FullName" />
+                <input type="hidden" asp-for="Input.Email" />
+                <input type="hidden" asp-for="Input.PhoneNumber" />
+                <input type="hidden" asp-for="Input.Role" />
+                <input type="hidden" asp-for="Input.JobTitle" />
+                <input type="hidden" name="ConfirmedUserId" value="@account.UserId" />
+                <button class="btn btn-primary" type="submit">@Icons.Get("check") Yes, add @account.FullName as @Model.Input.Role.DisplayName()</button>
+                <a class="btn btn-outline" href="@StaffUi.AddPath">Cancel</a>
+            </form>
+        </div>
+    </section>
+}
+else
+{
+    <section class="panel add-user">
+        <div class="panel-head"><h2>Who is joining?</h2></div>
+        <div class="panel-body">
+            @if (Model.AlreadyStaff is { } staff)
+            {
+                <div class="alert alert-error" role="alert">
+                    <strong>@staff.Email</strong> is already on the staff (@staff.FullName, @staff.Role?.DisplayName()). To change what they
+                    can do, <a href="@StaffUi.UserPath(staff.UserId)">change their role on their page</a>.
+                </div>
+            }
+            <form method="post" class="form-grid">
+                <div asp-validation-summary="ModelOnly" class="validation-summary-errors full"></div>
+                <div class="field">
+                    <label asp-for="Input.FullName"></label>
+                    <input asp-for="Input.FullName" autocomplete="off" />
+                    <span asp-validation-for="Input.FullName" class="field-validation-error"></span>
+                </div>
+                <div class="field">
+                    <label asp-for="Input.Email"></label>
+                    <input asp-for="Input.Email" type="email" autocomplete="off" />
+                    <span asp-validation-for="Input.Email" class="field-validation-error"></span>
+                </div>
+                <div class="field">
+                    <label asp-for="Input.PhoneNumber"></label>
+                    <input asp-for="Input.PhoneNumber" type="tel" autocomplete="off" />
+                    <span asp-validation-for="Input.PhoneNumber" class="field-validation-error"></span>
+                </div>
+                <div class="field">
+                    <label asp-for="Input.JobTitle"></label>
+                    <input asp-for="Input.JobTitle" placeholder="e.g. Cook, Delivery" autocomplete="off" />
+                    <span asp-validation-for="Input.JobTitle" class="field-validation-error"></span>
+                </div>
+                <fieldset class="full role-choice">
+                    <legend class="label">Role</legend>
+                    @foreach (var (role, description) in roles)
+                    {
+                        <label class="role-option">
+                            <input type="radio" name="Input.Role" value="@role" checked="@(Model.Input.Role == role)" />
+                            <span><strong>@role.DisplayName()</strong> <span class="small muted">@description</span></span>
+                        </label>
+                    }
+                    <span asp-validation-for="Input.Role" class="field-validation-error"></span>
+                </fieldset>
+                <div class="full">
+                    <button class="btn btn-primary" type="submit">@Icons.Get("user-plus") Add and send invitation</button>
+                </div>
+            </form>
+        </div>
+    </section>
+    <p class="small muted mt-2">
+        New people get an email with a link to set their password (it works for @StaffInvitations.ValidFor.Days days); you'll also see
+        the link once, to text it to them. They can open the staff pages once their password is set. Someone who already has an
+        account on the website with a confirmed email keeps their password.
+    </p>
+}

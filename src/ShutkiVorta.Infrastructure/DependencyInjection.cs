@@ -75,7 +75,8 @@ public static class DependencyInjection
             .AddUserStore<DapperUserStore>()
             .AddRoleStore<DapperRoleStore>()
             .AddClaimsPrincipalFactory<ApplicationClaimsPrincipalFactory>()
-            .AddDefaultTokenProviders();
+            .AddDefaultTokenProviders()
+            .AddTokenProvider<StaffInvitationTokenProvider>(StaffInvitationTokenProvider.ProviderName);
 
         services.AddScoped<IUserConfirmation<ApplicationUser>, SettingsUserConfirmation>();
         services.AddScoped<IIdentityService, IdentityService>();
@@ -123,6 +124,9 @@ public static class DependencyInjection
 
         // ---- Time clock ----
         services.AddScoped<ITimeClockRepository, TimeClockRepository>();
+
+        // ---- Users & permissions ----
+        services.AddScoped<IStaffEmailLog, StaffEmailLog>();
 
         return services;
     }

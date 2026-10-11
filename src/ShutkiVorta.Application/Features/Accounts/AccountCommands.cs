@@ -23,7 +23,12 @@ public sealed record ResendConfirmationEmailCommand(string Email) : IRequest;
 
 public sealed record ForgotPasswordCommand(string Email) : IRequest;
 
-public sealed record ResetPasswordCommand(string Email, string Code, string Password) : IRequest<Result>;
+/// <summary>
+/// Sets a new password with an emailed code. With <paramref name="IsStaffInvitation"/> the code is a staff invitation
+/// (from the Users page): the person's first password is set, their email confirmed and they are signed in; the result then
+/// carries their user id.
+/// </summary>
+public sealed record ResetPasswordCommand(string Email, string Code, string Password, bool IsStaffInvitation = false) : IRequest<Result<string?>>;
 
 public sealed record ChangePasswordCommand(string CurrentPassword, string NewPassword) : IRequest<Result>, IRequireAuthenticatedUser;
 
@@ -99,7 +104,7 @@ internal sealed class AccountCommandHandlers(
     IRequestHandler<ConfirmEmailCommand, Result>,
     IRequestHandler<ResendConfirmationEmailCommand>,
     IRequestHandler<ForgotPasswordCommand>,
-    IRequestHandler<ResetPasswordCommand, Result>,
+    IRequestHandler<ResetPasswordCommand, Result<string?>>,
     IRequestHandler<ChangePasswordCommand, Result>,
     IRequestHandler<GetMyProfileQuery, UserAccount?>,
     IRequestHandler<UpdateMyProfileCommand, Result>
@@ -180,8 +185,24 @@ internal sealed class AccountCommandHandlers(
         await email.QueueAsync(EmailMessage.Create(emailAddress, rendered) with { Sensitive = true }, cancellationToken);
     }
 
-    public Task<Result> Handle(ResetPasswordCommand request, CancellationToken cancellationToken) =>
-        identity.ResetPasswordAsync(request.Email.Trim(), request.Code, request.Password);
+    public async Task<Result<string?>> Handle(ResetPasswordCommand request, CancellationToken cancellationToken)
+    {
+        if (!request.IsStaffInvitation)
+        {
+            var reset = await identity.ResetPasswordAsync(request.Email.Trim(), request.Code, request.Password);
+            return reset.Succeeded ? Result<string?>.Success(null) : Result<string?>.Failure(reset.Errors);
+        }
+
+        var accepted = await identity.AcceptStaffInvitationAsync(request.Email.Trim(), request.Code, request.Password);
+        if (!accepted.Succeeded)
+        {
+            return Result<string?>.Failure(accepted.Errors);
+        }
+
+        // Straight in: they just proved they own the address and chose their password (on the phone they will clock in with).
+        await identity.SignInAsync(accepted.Value!, isPersistent: true);
+        return Result<string?>.Success(accepted.Value);
+    }
 
     public Task<Result> Handle(ChangePasswordCommand request, CancellationToken cancellationToken) =>
         identity.ChangePasswordAsync(currentUser.UserId!, request.CurrentPassword, request.NewPassword);

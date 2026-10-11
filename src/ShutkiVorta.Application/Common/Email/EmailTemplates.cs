@@ -17,4 +17,6 @@ public static class EmailTemplates
     public const string AdminStandingOrderChanged = "AdminStandingOrderChanged";
     public const string StandingOrderReceived = "StandingOrderReceived";
     public const string StandingOrderStatusUpdate = "StandingOrderStatusUpdate";
+    public const string StaffInvitation = "StaffInvitation";
+    public const string StaffAdded = "StaffAdded";
 }

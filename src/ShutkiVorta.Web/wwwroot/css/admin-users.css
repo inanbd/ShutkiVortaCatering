@@ -1,0 +1,102 @@
+/* ---------- Users (/admin/users) and Permissions (/admin/permissions) ---------- */
+
+.staff-title { display: block; color: var(--ink-500); font-size: .85rem; }
+.staff-contact span { display: block; overflow-wrap: anywhere; }
+.staff-cards td .pill { margin: 2px 2px 2px 0; }
+.break { overflow-wrap: anywhere; }
+
+/* A person's page. */
+.staff-heading { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; margin-bottom: 20px; }
+.staff-heading .staff-title { display: inline; font-size: 1rem; font-weight: 600; color: var(--ink-700); }
+.staff-grid .panel + .panel, .permissions-grid .panel + .panel { margin-top: 24px; }
+.invitation-panel { margin-bottom: 24px; border-color: var(--gold-500); }
+.invitation-panel .panel-body > p:first-child { margin-top: 0; }
+.invite-link { display: grid; gap: 10px; margin: 0 0 16px; }
+.invite-link .input { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: .9rem; background: var(--cream-50); }
+.invite-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; }
+.invite-forms { display: grid; gap: 16px; }
+.invite-forms form:first-child { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+.email-status { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
+.clock-line { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 0; }
+.unlock { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 12px; }
+.unlock svg.icon, .read-only-note svg.icon { width: 16px; height: 16px; vertical-align: -3px; }
+.danger-zone { border-color: #e3b1b1; }
+.danger-zone .panel-head h2 { color: var(--maroon-800); }
+
+.permission-summary { list-style: none; margin: 0 0 12px; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 4px 20px; }
+.permission-summary li { display: flex; justify-content: space-between; gap: 10px; padding: 6px 0; border-bottom: 1px dashed var(--line); }
+.permission-summary li.no-access { color: var(--ink-400); }
+.permission-summary li.no-access strong { font-weight: 500; }
+.every-staff summary { cursor: pointer; color: var(--green-900); font-weight: 600; }
+.every-staff ul { margin: 8px 0 0; padding-left: 1.3em; }
+
+.permission-mode { border: 0; margin: 0 0 14px; padding: 0; display: grid; gap: 8px; }
+.module-selects { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px 16px; margin-bottom: 12px; }
+.module-selects[data-disabled] { opacity: .55; }
+
+.audit-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
+.audit-list li { display: grid; gap: 2px; padding-bottom: 12px; border-bottom: 1px dashed var(--line); overflow-wrap: anywhere; }
+.audit-list li:last-child { padding-bottom: 0; border-bottom: 0; }
+
+/* Add a user: the role as three choices with a line each. */
+.role-choice { border: 0; margin: 0; padding: 0; display: grid; gap: 8px; min-width: 0; }
+.role-option { display: flex; align-items: flex-start; gap: 10px; padding: 10px 12px; border: 1.5px solid var(--line); border-radius: var(--radius); background: var(--white); cursor: pointer; }
+.role-option input { margin-top: 4px; accent-color: var(--green-800); }
+.role-option:has(input:checked) { border-color: var(--green-700); background: var(--green-100); }
+.role-option .small { display: block; }
+.add-user { max-width: 820px; }
+.add-user-confirm { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 16px; }
+
+/* Permissions page: one select per module and role, the Admin column and admin-only rows locked. */
+.permissions-table th .role-state { display: block; font-size: .68rem; letter-spacing: .06em; color: var(--ink-400); }
+.permissions-table td { vertical-align: top; }
+.permissions-table .module-cell { min-width: 220px; }
+.permissions-table .module-cell span { display: block; margin-top: 2px; }
+.permissions-table select { width: 100%; min-width: 170px; padding: .5em .6em; font: inherit; border: 1.5px solid var(--cream-300); border-radius: var(--radius); background: var(--white); }
+.permissions-table select[data-changed] { border-color: var(--gold-500); box-shadow: 0 0 0 3px rgba(214, 167, 64, .2); }
+.permissions-table .level-help { display: block; margin-top: 4px; max-width: 260px; }
+.permissions-table .locked-cell { color: var(--ink-500); white-space: nowrap; }
+.permissions-table .locked-cell svg.icon { width: 15px; height: 15px; vertical-align: -2px; color: var(--maroon-700); }
+.permissions-table tr.locked-row td { background: #fcf8ef; }
+.permissions-table tfoot td { background: var(--cream-50); border-bottom: 0; }
+.permissions-table .role-actions { display: table-cell; }
+.permissions-table .role-actions > * { display: block; margin-top: 6px; }
+.permissions-table .role-actions > .btn { display: inline-flex; margin-right: 6px; }
+.permissions-table .unsaved { color: var(--maroon-700); font-weight: 600; }
+.permissions-grid { margin-top: 24px; }
+.custom-people, .every-staff-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.custom-people li { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.every-staff-list svg.icon { width: 16px; height: 16px; color: var(--green-800); vertical-align: -3px; }
+
+@media (max-width: 560px) {
+  /* The staff list: one card per person. */
+  .staff-cards thead { display: none; }
+  .staff-cards, .staff-cards tbody, .staff-cards tr, .staff-cards td { display: block; }
+  .staff-cards tr { padding: 12px 16px; border-bottom: 1px solid #efe4cc; }
+  .staff-cards td { padding: 2px 0; border: 0; }
+  .staff-cards td.num { text-align: left; padding-top: 8px; }
+  .staff-cards td[data-label]::before { content: attr(data-label) ": "; color: var(--ink-400); font-size: .8rem; font-weight: 600; }
+  .staff-cards td.staff-contact::before { display: none; }
+  .staff-cards tr:hover td { background: none; }
+
+  .invite-actions .btn { flex: 1 1 auto; justify-content: center; }
+  .module-selects { grid-template-columns: minmax(0, 1fr); }
+  .add-user-confirm .btn { width: 100%; justify-content: center; }
+
+  /* The permissions table: one card per module, the roles' selects stacked. */
+  .permissions-table thead { display: none; }
+  .permissions-table, .permissions-table tbody, .permissions-table tfoot, .permissions-table tr, .permissions-table td { display: block; }
+  .permissions-table tr { padding: 12px 16px; border-bottom: 1px solid #efe4cc; }
+  .permissions-table td { padding: 4px 0; border: 0; }
+  .permissions-table .module-cell { min-width: 0; padding-bottom: 8px; }
+  .permissions-table td[data-label]::before { content: attr(data-label); display: block; color: var(--ink-400); font-size: .78rem; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; }
+  .permissions-table .locked-cell { white-space: normal; }
+  .permissions-table .locked-cell::before { display: inline !important; margin-right: 6px; }
+  .permissions-table select { min-width: 0; }
+  .permissions-table .level-help { max-width: none; }
+  .permissions-table tr:hover td { background: none; }
+  .permissions-table tfoot tr { padding: 0; border-bottom: 0; }
+  .permissions-table tfoot td.tfoot-label { display: none; }
+  .permissions-table .role-actions { display: block; padding: 12px 16px; border-bottom: 1px solid #efe4cc; }
+  .permissions-table .role-actions > .btn { width: 100%; justify-content: center; margin: 6px 0 0; }
+}

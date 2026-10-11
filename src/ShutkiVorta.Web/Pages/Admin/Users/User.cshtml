@@ -1,0 +1,399 @@
+@page "/admin/users/{id:guid}"
+@model ShutkiVorta.Web.Pages.Admin.Users.UserModel
+@{
+    var m = Model.Member;
+    var d = Model.Details;
+    var firstName = m.FullName.Split(' ', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault() ?? m.FullName;
+    var onClockSince = Model.Local(d.OnClockSinceUtc);
+    var statuses = StaffUi.Statuses(m, onClockSince, Model.NowLocal);
+    var configurable = m.Role is StaffRole.Manager or StaffRole.Employee;
+    var levels = PermissionLevels.Of(d.Permissions);
+    var emailUrl = $"{StaffUi.UserPath(m.UserId)}?handler=EmailStatus";
+    var latest = d.LatestEmail;
+    var invitation = Model.Invitation;
+}
+@section Head {
+    <link rel="stylesheet" href="~/css/admin-users.css" asp-append-version="true" />
+}
+@section Actions {
+    <a class="btn btn-outline btn-sm" href="@StaffUi.UsersPath">&larr; Users</a>
+}
+
+<div class="staff-heading">
+    @if (m.Role is null)
+    {
+        <span class="pill pill-off">Former staff</span>
+    }
+    else
+    {
+        @Ui.RolePill(m.Role)
+    }
+    @if (!string.IsNullOrWhiteSpace(m.JobTitle))
+    {
+        <span class="staff-title">@m.JobTitle</span>
+    }
+    @foreach (var (text, css) in statuses)
+    {
+        <span class="pill @css">@text</span>
+    }
+    @if (Model.IsYou)
+    {
+        <span class="small muted">This is you.</span>
+    }
+</div>
+
+@if (invitation is not null)
+{
+    var current = latest is not null && latest.CreatedAtUtc >= invitation.CreatedAtUtc.AddSeconds(-5) ? latest : null;
+    <section class="panel invitation-panel" data-invitation>
+        <div class="panel-head">
+            <h2>@(invitation.Link is null ? $"{firstName} is on the staff" : $"Invitation link for {firstName}")</h2>
+        </div>
+        <div class="panel-body">
+            @if (invitation.Link is { } link)
+            {
+                var message = $"Hi {firstName}, here is your link to set your password for the staff pages: {link}";
+                var phone = new string((m.PhoneNumber ?? string.Empty).Where(c => char.IsDigit(c) || c == '+').ToArray());
+                <p>Send this link to @firstName, for example by text message. It works once, until @Format.DateTime(Model.Local(invitation.ExpiresAtUtc)!.Value).
+                    <strong>It is shown only now:</strong> after you leave or reload this page it is gone (send a new invitation if you need it again).</p>
+                <div class="invite-link">
+                    <label for="invite-link" class="visually-hidden">Invitation link</label>
+                    <input id="invite-link" class="input" value="@link" readonly data-invite-link />
+                    <div class="invite-actions">
+                        <button class="btn btn-green btn-sm" type="button" data-copy-link>@Icons.Get("check-circle") Copy</button>
+                        <a class="btn btn-outline btn-sm" href="sms:@phone?&body=@Uri.EscapeDataString(message)" data-share-link data-share-text="@message">@Icons.Get("chat") Share</a>
+                        <span class="small" data-copy-status role="status"></span>
+                    </div>
+                </div>
+            }
+            else
+            {
+                <p>They keep their password and sign in as usual. We emailed them to say they've been added.</p>
+            }
+
+            @if (!invitation.Emailed)
+            {
+                <div class="alert alert-warn mb-0">
+                    @Icons.Get("alert") Not emailed: set the Website address in <a href="@StaffUi.WebsiteSettingsPath">Settings → Website</a> to email invitations.
+                    Until then, send the link above yourself.
+                </div>
+            }
+            else
+            {
+                <p class="email-status mb-0">
+                    @(invitation.Link is null ? "Email" : "Invitation email"):
+                    <span class="pill @(current is null ? "pill-off" : StaffUi.EmailStatusCss(current.Status))" data-email-status data-url="@emailUrl"
+                          data-waiting="@(current is null || current.IsWaiting ? "true" : "false")">@(current is null ? "Waiting to send" : StaffUi.EmailStatusText(current))</span>
+                    <a class="small" href="@StaffUi.EmailSettingsPath">Settings → Email</a>
+                </p>
+            }
+        </div>
+    </section>
+}
+else if (Model.IsAdmin && m.Role is not null && !m.HasStaffAccess)
+{
+    <section class="panel invitation-panel">
+        <div class="panel-head"><h2>@firstName can't sign in yet</h2></div>
+        <div class="panel-body">
+            <p>
+                @if (!m.HasPassword)
+                {
+                    <text>They haven't set their password yet. The invitation link works for @StaffInvitations.ValidFor.Days days.</text>
+                }
+                else
+                {
+                    <text>Their email address isn't confirmed. A new invitation lets them set a password, which confirms it.</text>
+                }
+            </p>
+            @if (latest is not null)
+            {
+                <p class="email-status">
+                    Last email (@Format.DateTime(Model.Local(latest.CreatedAtUtc)!.Value)):
+                    <span class="pill @StaffUi.EmailStatusCss(latest.Status)" data-email-status data-url="@emailUrl" data-waiting="@(latest.IsWaiting ? "true" : "false")">@StaffUi.EmailStatusText(latest)</span>
+                    <a class="small" href="@StaffUi.EmailSettingsPath">Settings → Email</a>
+                </p>
+            }
+            <div class="invite-forms">
+                <form method="post" asp-page-handler="Resend">
+                    <button class="btn btn-primary btn-sm" type="submit">@Icons.Get("refresh") Send a new invitation</button>
+                    <span class="small muted">Earlier links stop working.</span>
+                </form>
+                @if (!m.HasPassword)
+                {
+                    <form method="post" asp-page-handler="Email" class="filters">
+                        <div class="field grow">
+                            <label for="new-email">Wrong email? Fix it and invite again</label>
+                            <input id="new-email" name="email" type="email" class="input" value="@m.Email" required autocomplete="off" />
+                        </div>
+                        <button class="btn btn-outline btn-sm" type="submit">@Icons.Get("mail") Change email and invite</button>
+                    </form>
+                }
+            </div>
+        </div>
+    </section>
+}
+
+<div class="detail-grid staff-grid">
+    <div>
+        <section class="panel">
+            <div class="panel-head">
+                <h2>What @firstName can do</h2>
+                @if (configurable)
+                {
+                    <span class="pill @(m.UsesCustomPermissions ? "pill-warn" : "pill-off")">@(m.UsesCustomPermissions ? "Custom permissions" : $"{m.Role!.Value.DisplayName()} permissions")</span>
+                }
+            </div>
+            <div class="panel-body">
+                @if (m.Role is null)
+                {
+                    <p class="mb-0">Nothing: @firstName is not on the staff any more.</p>
+                }
+                else if (m.Role == StaffRole.Admin)
+                {
+                    <p class="mb-0">Everything. Admins have every permission, including settings, staff and permissions.</p>
+                }
+                else
+                {
+                    @if (!m.HasStaffAccess)
+                    {
+                        <p class="small muted">From when they have set their password:</p>
+                    }
+                    <ul class="permission-summary">
+                        @foreach (var module in PermissionCatalog.Modules)
+                        {
+                            var level = PermissionCatalog.LevelFor(module, d.Permissions);
+                            <li class="@(level.Key == PermissionCatalog.NoAccess ? "no-access" : null)"><span>@module.Name</span><strong>@level.Label</strong></li>
+                        }
+                    </ul>
+                    <p class="small muted mb-0">
+                        @(m.UsesCustomPermissions
+                            ? "Their own permissions: changes on the Permissions page don't reach them."
+                            : $"The {m.Role.Value.DisplayName()} permissions, as set on the Permissions page.")
+                    </p>
+                }
+                @if (m.Role is not null)
+                {
+                    <details class="every-staff">
+                        <summary>Every staff member can always…</summary>
+                        <ul>
+                            @foreach (var item in PermissionCatalog.EveryStaffMember)
+                            {
+                                <li>@item</li>
+                            }
+                        </ul>
+                    </details>
+                }
+            </div>
+        </section>
+
+        @if (Model.IsAdmin && configurable)
+        {
+            <section class="panel" id="permissions">
+                <div class="panel-head"><h2>Change @(firstName)'s permissions</h2></div>
+                <div class="panel-body">
+                    <form method="post" asp-page-handler="Permissions" class="permissions-form" data-permissions-form>
+                        <input type="hidden" name="version" value="@d.Version" />
+                        <fieldset class="permission-mode">
+                            <legend class="visually-hidden">Permissions</legend>
+                            <label class="check"><input type="radio" name="mode" value="@UserModel.FollowRole" checked="@(!m.UsesCustomPermissions)" data-mode /> Follow the @m.Role!.Value.DisplayName() permissions</label>
+                            <label class="check"><input type="radio" name="mode" value="@UserModel.Custom" checked="@m.UsesCustomPermissions" data-mode /> Custom: choose for @firstName only</label>
+                        </fieldset>
+                        <div class="module-selects" data-custom-levels>
+                            @foreach (var module in PermissionCatalog.Modules)
+                            {
+                                <div class="field">
+                                    <label for="level-@module.Key">@module.Name</label>
+                                    <select id="level-@module.Key" name="levels[@module.Key]">
+                                        @foreach (var level in module.Levels)
+                                        {
+                                            <option value="@level.Key" selected="@(levels[module.Key] == level.Key)">@StaffUi.LevelLabel(module, level, m.Role)</option>
+                                        }
+                                    </select>
+                                </div>
+                            }
+                        </div>
+                        <p class="small muted">The choices start from what @firstName can do now. Changing their role later resets custom permissions.</p>
+                        <button class="btn btn-primary btn-sm" type="submit">@Icons.Get("check") Save permissions</button>
+                    </form>
+                </div>
+            </section>
+        }
+
+        @if (Model.IsAdmin && m.Role is not null)
+        {
+            <section class="panel">
+                <div class="panel-head"><h2>Role</h2></div>
+                <div class="panel-body">
+                    @if (Model.IsYou)
+                    {
+                        <p class="mb-0">@Icons.Get("lock") You can't change your own role or remove yourself. Ask another admin.</p>
+                    }
+                    else
+                    {
+                        <form method="post" asp-page-handler="Role" class="filters" data-role-form data-name="@m.FullName" data-custom="@(m.UsesCustomPermissions ? "true" : "false")"
+                              data-confirm="Change @(m.FullName)'s role? Any custom permissions are replaced by the new role's permissions.">
+                            <input type="hidden" name="version" value="@d.Version" />
+                            <div class="field">
+                                <label for="role">Role</label>
+                                <select id="role" name="role">
+                                    @foreach (var role in StaffRoles.All)
+                                    {
+                                        <option value="@role" selected="@(m.Role == role)">@role.DisplayName()</option>
+                                    }
+                                </select>
+                            </div>
+                            <button class="btn btn-outline btn-sm" type="submit">@Icons.Get("shield") Change role</button>
+                        </form>
+                        <p class="small muted mb-0 mt-1">Changing the role resets custom permissions to the new role's. It applies from their next click.</p>
+                    }
+                </div>
+            </section>
+        }
+
+        @if (Model.IsAdmin)
+        {
+            <section class="panel">
+                <div class="panel-head"><h2>Details</h2></div>
+                <div class="panel-body">
+                    <form method="post" asp-page-handler="Details" class="form-grid">
+                        <div asp-validation-summary="All" class="validation-summary-errors full"></div>
+                        <input type="hidden" name="version" value="@d.Version" />
+                        <div class="field">
+                            <label for="full-name">Full name</label>
+                            <input id="full-name" class="input" name="details.FullName" value="@Model.DetailsForm.FullName" maxlength="120" required />
+                        </div>
+                        <div class="field">
+                            <label for="phone">Mobile phone</label>
+                            <input id="phone" class="input" type="tel" name="details.PhoneNumber" value="@Model.DetailsForm.PhoneNumber" maxlength="30" />
+                        </div>
+                        <div class="field full">
+                            <label for="job-title">Job title</label>
+                            <input id="job-title" class="input" name="details.JobTitle" value="@Model.DetailsForm.JobTitle" maxlength="100" placeholder="e.g. Cook" />
+                        </div>
+                        <div class="full"><button class="btn btn-primary btn-sm" type="submit">@Icons.Get("check") Save details</button></div>
+                    </form>
+                </div>
+            </section>
+        }
+    </div>
+
+    <div>
+        <section class="panel">
+            <div class="panel-head"><h2>Time clock</h2></div>
+            <div class="panel-body">
+                <p class="clock-line">
+                    @if (onClockSince is { } since)
+                    {
+                        <span class="pill pill-on">On the clock</span> <text>since @TimeClockText.When(since, Model.NowLocal) · @Format.Hours(Model.NowLocal - since)</text>
+                    }
+                    else
+                    {
+                        <span class="muted">Not on the clock.</span>
+                    }
+                </p>
+                @if (Model.CanSeeHours && m.Role is not null)
+                {
+                    var week = Model.ThisWeek;
+                    <p>This week: <strong>@(week is null ? "0" : Format.DecimalHours(week.Total)) h</strong>
+                        @if (week is { InProgress.Ticks: > 0 })
+                        {
+                            <span class="muted">+ @Format.Hours(week.InProgress) so far</span>
+                        }
+                    </p>
+                }
+                <a class="btn btn-outline btn-sm" link-permission="@Permissions.TimeClockViewAll" href="@StaffUi.ShiftsPath(m.UserId)">@Icons.Get("clock") See @(firstName)'s shifts</a>
+            </div>
+        </section>
+
+        <section class="panel">
+            <div class="panel-head"><h2>Sign-in</h2></div>
+            <div class="panel-body">
+                <dl class="kv">
+                    <dt>Email</dt><dd class="break">@m.Email</dd>
+                    <dt>Phone</dt><dd>@(string.IsNullOrWhiteSpace(m.PhoneNumber) ? "—" : m.PhoneNumber)</dd>
+                    <dt>Password</dt><dd>@(m.HasPassword ? "Set" : "Not set yet (invitation pending)")</dd>
+                    <dt>Joined</dt><dd>@Format.ShortDate(Model.Local(m.CreatedAtUtc)!.Value)</dd>
+                </dl>
+                @if (m.IsLockedOut)
+                {
+                    <div class="alert alert-warn mt-2 mb-0 unlock">
+                        <span>@Icons.Get("lock") Locked out after too many wrong passwords@(m.LockoutEndUtc is { } end ? $", until {Format.Time(Model.Local(end)!.Value)}" : "").</span>
+                        @if (Model.IsAdmin)
+                        {
+                            <form method="post" asp-page-handler="Unlock">
+                                <button class="btn btn-outline btn-sm" type="submit">@Icons.Get("refresh") Unlock sign-in</button>
+                            </form>
+                        }
+                    </div>
+                }
+            </div>
+        </section>
+
+        <section class="panel">
+            <div class="panel-head"><h2>Recent changes</h2></div>
+            <div class="panel-body">
+                @if (d.RecentActivity.Count == 0)
+                {
+                    <p class="muted mb-0">Nothing recorded yet.</p>
+                }
+                else
+                {
+                    <ul class="audit-list">
+                        @foreach (var entry in d.RecentActivity)
+                        {
+                            <li>
+                                <strong>@StaffAuditActions.DisplayName(entry.Action)</strong>
+                                <span class="small muted">@Format.DateTime(Model.Local(entry.ChangedAtUtc)!.Value) · @entry.ChangedBy</span>
+                                @if (!string.IsNullOrWhiteSpace(entry.Details))
+                                {
+                                    <span class="small">@entry.Details</span>
+                                }
+                            </li>
+                        }
+                    </ul>
+                }
+            </div>
+        </section>
+
+        @if (Model.IsAdmin && m.Role is not null && !Model.IsYou)
+        {
+            <section class="panel danger-zone">
+                <div class="panel-head"><h2>Remove from staff</h2></div>
+                <div class="panel-body">
+                    <p class="small">@firstName keeps their account and shifts but can no longer open the staff pages.@(onClockSince is null ? "" : " Their open shift is closed now and flagged for review.")</p>
+                    <form method="post" asp-page-handler="Remove"
+                          data-confirm="Remove @m.FullName from the staff? They keep their account and shifts and lose access at once. If they're on the clock, their shift is closed now and flagged for review.">
+                        <input type="hidden" name="version" value="@d.Version" />
+                        <button class="btn btn-danger btn-sm" type="submit">@Icons.Get("trash") Remove from staff</button>
+                    </form>
+                </div>
+            </section>
+        }
+
+        @if (Model.IsAdmin && m.Role is null)
+        {
+            <section class="panel" id="re-add">
+                <div class="panel-head"><h2>Re-add to the staff</h2></div>
+                <div class="panel-body">
+                    <form method="post" asp-page-handler="ReAdd" class="filters">
+                        <div class="field">
+                            <label for="re-add-role">As</label>
+                            <select id="re-add-role" name="role">
+                                @foreach (var role in StaffRoles.All.OrderByDescending(r => r))
+                                {
+                                    <option value="@role">@role.DisplayName()</option>
+                                }
+                            </select>
+                        </div>
+                        <button class="btn btn-primary btn-sm" type="submit">@Icons.Get("user-plus") Re-add</button>
+                    </form>
+                    <p class="small muted mb-0 mt-1">If they can't sign in with a password of their own, they get a new invitation.</p>
+                </div>
+            </section>
+        }
+    </div>
+</div>
+
+@section Scripts {
+    <script src="~/js/admin-users.js" asp-append-version="true"></script>
+}

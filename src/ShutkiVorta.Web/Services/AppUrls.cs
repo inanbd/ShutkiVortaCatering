@@ -24,6 +24,8 @@ public sealed class AppUrls(IOptionsMonitor<SiteOptions> site, IHttpContextAcces
         }
     }
 
+    public bool HasConfiguredBaseUrl => !string.IsNullOrWhiteSpace(site.CurrentValue.BaseUrl);
+
     public string Absolute(string relativePath)
     {
         if (relativePath.StartsWith("http://", StringComparison.OrdinalIgnoreCase) || relativePath.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
@@ -60,6 +62,9 @@ public sealed class AppUrls(IOptionsMonitor<SiteOptions> site, IHttpContextAcces
 
     public string ResetPassword(string email, string code) =>
         Absolute($"/account/reset-password?email={Uri.EscapeDataString(email)}&code={Uri.EscapeDataString(code)}");
+
+    public string StaffInvitation(string email, string code) =>
+        Absolute($"/account/reset-password?invite=1&email={Uri.EscapeDataString(email)}&code={Uri.EscapeDataString(code)}");
 
     public string Login() => Absolute("/account/login");
 }

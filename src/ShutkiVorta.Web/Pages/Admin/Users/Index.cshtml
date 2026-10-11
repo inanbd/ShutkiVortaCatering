@@ -1,0 +1,135 @@
+@page "/admin/users"
+@model ShutkiVorta.Web.Pages.Admin.Users.IndexModel
+@{
+    var list = Model.List;
+}
+@section Head {
+    <link rel="stylesheet" href="~/css/admin-users.css" asp-append-version="true" />
+}
+@section Actions {
+    @if (Model.IsAdmin)
+    {
+        <a class="btn btn-outline btn-sm" href="@StaffUi.PermissionsPath">@Icons.Get("shield") Permissions</a>
+        <a class="btn btn-primary btn-sm" href="@StaffUi.AddPath">@Icons.Get("user-plus") Add user</a>
+    }
+}
+
+<nav class="tabs" aria-label="Users">
+    <a class="@(Model.ShowFormer ? null : "active")" href="@Model.TabUrl(former: false)" aria-current="@(Model.ShowFormer ? null : "page")">Staff <span class="count">@list.StaffCount</span></a>
+    <a class="@(Model.ShowFormer ? "active" : null)" href="@Model.TabUrl(former: true)" aria-current="@(Model.ShowFormer ? "page" : null)">Former staff <span class="count">@list.FormerCount</span></a>
+</nav>
+
+@if (!Model.IsAdmin)
+{
+    <p class="read-only-note small muted">@Icons.Get("lock") You can see the staff list. Only Admins can add people or change anyone's access.</p>
+}
+
+<section class="panel">
+    <div class="panel-head">
+        <form method="get" class="filters" style="width:100%;">
+            @if (Model.ShowFormer)
+            {
+                <input type="hidden" name="show" value="@IndexModel.FormerTab" />
+            }
+            else
+            {
+                <div class="field">
+                    <label for="role">Role</label>
+                    <select id="role" name="role">
+                        <option value="">Every role</option>
+                        @foreach (var role in StaffRoles.All)
+                        {
+                            <option value="@role.RoleName().ToLowerInvariant()" selected="@(Model.RoleFilter == role)">@role.DisplayName()</option>
+                        }
+                    </select>
+                </div>
+            }
+            <div class="field grow">
+                <label for="q">Search</label>
+                <input id="q" name="q" value="@Model.Search" placeholder="Name, email or phone" autocomplete="off" />
+            </div>
+            <button class="btn btn-green btn-sm" type="submit">@Icons.Get("search") Search</button>
+            @if (!string.IsNullOrWhiteSpace(Model.Search) || Model.RoleFilter is not null)
+            {
+                <a class="btn btn-outline btn-sm" href="@(Model.ShowFormer ? $"{StaffUi.UsersPath}?show={IndexModel.FormerTab}" : StaffUi.UsersPath)">Reset</a>
+            }
+        </form>
+    </div>
+    <div class="panel-body flush">
+        @if (list.Members.Count == 0)
+        {
+            <p class="muted" style="padding:24px;">
+                @if (Model.ShowFormer)
+                {
+                    <text>Nobody has left the staff@(string.IsNullOrWhiteSpace(Model.Search) ? "" : " matching your search").</text>
+                }
+                else
+                {
+                    <text>Nobody matches.</text>
+                }
+            </p>
+        }
+        else
+        {
+            <div class="table-wrap">
+                <table class="table staff-cards">
+                    <thead>
+                        <tr><th>Name</th><th>Contact</th><th>Role</th><th>Permissions</th><th>Status</th>@if (Model.ShowFormer && Model.IsAdmin) {<th></th>}</tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var m in list.Members)
+                        {
+                            var statuses = StaffUi.Statuses(m, Model.Local(m.OnClockSinceUtc), Model.NowLocal);
+                            <tr class="@(m.IsFormerStaff ? "row-muted" : null)">
+                                <td>
+                                    <a class="strong" href="@StaffUi.UserPath(m.UserId)">@m.FullName</a>
+                                    @if (!string.IsNullOrWhiteSpace(m.JobTitle))
+                                    {
+                                        <span class="staff-title">@m.JobTitle</span>
+                                    }
+                                </td>
+                                <td class="staff-contact" data-label="Contact">
+                                    <span>@m.Email</span>
+                                    @if (!string.IsNullOrWhiteSpace(m.PhoneNumber))
+                                    {
+                                        <span class="muted">@m.PhoneNumber</span>
+                                    }
+                                </td>
+                                <td data-label="Role">@if (m.Role is null) {<span class="pill pill-off">Former staff</span>} else {@Ui.RolePill(m.Role)}</td>
+                                <td data-label="Permissions">@StaffUi.PermissionsLabel(m)</td>
+                                <td data-label="Status">
+                                    @if (statuses.Count == 0)
+                                    {
+                                        <span class="muted">@(m.IsFormerStaff ? "—" : "Active")</span>
+                                    }
+                                    @foreach (var (text, css) in statuses)
+                                    {
+                                        <span class="pill @css">@text</span>
+                                    }
+                                </td>
+                                @if (Model.ShowFormer && Model.IsAdmin)
+                                {
+                                    <td class="num"><a class="btn btn-outline btn-sm" href="@(StaffUi.UserPath(m.UserId))#re-add">@Icons.Get("user-plus") Re-add…</a></td>
+                                }
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </div>
+</section>
+<p class="small muted mt-2">
+    @if (Model.ShowFormer)
+    {
+        <text>Former staff keep their account and their shifts; they can no longer open the staff pages.</text>
+    }
+    else
+    {
+        <text>New people can sign in once they have set their password through their invitation link.</text>
+    }
+    @if (Model.IsAdmin)
+    {
+        <text>What Managers and Employees may do is set on the <a href="@StaffUi.PermissionsPath">Permissions</a> page; open a person to give them their own.</text>
+    }
+</p>
