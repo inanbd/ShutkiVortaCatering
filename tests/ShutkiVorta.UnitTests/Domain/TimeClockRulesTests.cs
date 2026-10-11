@@ -249,6 +249,7 @@ public sealed class TimeClockRulesTests
         Assert.True(added.IsManualEntry);
         Assert.Equal(LocationStatus.ManualEntry, added.ClockInLocationStatus);
         Assert.Equal(ClockOutSource.Manager, added.ClockOutSource);
+        Assert.True(added.NeedsReview); // like every edited shift, until someone marks it reviewed
         Assert.Equal(TimeSpan.FromHours(8), added.HoursWithin(DateTime.MinValue, DateTime.MaxValue));
         Assert.Throws<DomainException>(() => TimeClockShift.AddByHand("u1", "Rahim", clockIn, clockIn.AddHours(8), "m", " ", clockIn.AddDays(1)));
         Assert.Throws<DomainException>(() => TimeClockShift.Open("u1", "Rahim", PunchLocation.ManualEntry, null, null, false, clockIn));

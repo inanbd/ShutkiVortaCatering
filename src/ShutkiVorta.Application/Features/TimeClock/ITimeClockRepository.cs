@@ -32,7 +32,7 @@ public interface ITimeClockRepository
 
     /// <summary>
     /// A manager's new times, in one UPDATE that also checks the version and that no other shift of the person overlaps.
-    /// The first correction keeps the punched times as the original ones.
+    /// The first correction keeps the punched times as the original ones; the edited shift then needs a review.
     /// </summary>
     Task<ShiftChangeOutcome> ChangeTimesAsync(ShiftTimesChange change, CancellationToken cancellationToken = default);
 

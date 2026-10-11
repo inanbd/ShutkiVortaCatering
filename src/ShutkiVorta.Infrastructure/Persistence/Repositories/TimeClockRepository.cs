@@ -141,14 +141,15 @@ internal sealed class TimeClockRepository(IDbConnectionFactory connections, ISql
     public async Task<ShiftChangeOutcome> ChangeTimesAsync(ShiftTimesChange change, CancellationToken cancellationToken = default)
     {
         // The first correction keeps the punched times (all SET expressions read the row as it was before this UPDATE).
-        // Closing an open shift by hand records that nobody punched out on a device.
+        // Closing an open shift by hand records that nobody punched out on a device. An edited shift needs a review until
+        // someone marks it reviewed.
         const string sql = $"""
             UPDATE TimeClockShifts
                SET OriginalClockInUtc = CASE WHEN OriginalClockInUtc IS NULL THEN ClockInUtc ELSE OriginalClockInUtc END,
                    OriginalClockOutUtc = CASE WHEN OriginalClockInUtc IS NULL THEN ClockOutUtc ELSE OriginalClockOutUtc END,
                    ClockInUtc = @ClockInUtc, ClockOutUtc = @ClockOutUtc, ClockOutSource = @Source,
                    ClockOutLocationStatus = CASE WHEN ClockOutUtc IS NULL AND @ClockOutUtc IS NOT NULL THEN @ManualEntry ELSE ClockOutLocationStatus END,
-                   NeedsReview = 0, EditedBy = @EditedBy, EditedAtUtc = @NowUtc, EditReason = @Reason,
+                   NeedsReview = 1, EditedBy = @EditedBy, EditedAtUtc = @NowUtc, EditReason = @Reason,
                    Version = Version + 1, UpdatedAtUtc = @NowUtc
              WHERE Id = @ShiftId AND Version = @ExpectedVersion AND VoidedAtUtc IS NULL
                AND NOT EXISTS (SELECT 1 FROM TimeClockShifts o WHERE {OverlapCondition})

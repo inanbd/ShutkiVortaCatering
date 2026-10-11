@@ -183,6 +183,7 @@ public sealed partial class TimeClockTests(TestServers servers)
         Assert.Equal((DaysAgo(app, 2, 7), DaysAgo(app, 2, 9)), (fixedShift.ClockInUtc, fixedShift.ClockOutUtc!.Value));
         Assert.Equal(ClockOutSource.Manager, fixedShift.ClockOutSource);
         Assert.True(fixedShift.CountsTowardsHours);
+        Assert.True(fixedShift.NeedsReview); // edited: on the review list until someone marks it reviewed
     }
 
     // ---- Who sees and fixes what ----
@@ -271,7 +272,7 @@ public sealed partial class TimeClockTests(TestServers servers)
         Assert.Equal("attachment", weeklyExport.Content.Headers.ContentDisposition!.DispositionType);
         var weeklyLines = await CsvLinesAsync(weeklyExport);
         Assert.Equal("Week starting,Week ending,Name,Email,Hours,Hours (h:mm),Over 40 h,Shifts,Shifts needing review,On the clock now (not counted)", weeklyLines[0]);
-        Assert.Contains(weeklyLines, l => l.Contains($",{employee.FullName},{employee.Email},8.50,8:30,,1,0,", StringComparison.Ordinal));
+        Assert.Contains(weeklyLines, l => l.Contains($",{employee.FullName},{employee.Email},8.50,8:30,,1,1,", StringComparison.Ordinal)); // added by hand: needs a review
 
         // Seeing the team is not fixing it.
         AssertDenied(await client.GetAsync($"{Page}/add"));
@@ -349,6 +350,17 @@ public sealed partial class TimeClockTests(TestServers servers)
         // The page the manager had open is now out of date: a second save is refused instead of overwriting.
         var stale = await CorrectAsync(client, theirs.Id, DaysAgoLocal(app, 4, 8), DaysAgoLocal(app, 4, 17), "again", version: theirs.Version);
         Assert.Contains("Someone changed this shift", WebUtility.HtmlDecode(await stale.Content.ReadAsStringAsync()));
+
+        // An edited shift needs a review (like one added by hand) until someone marks it reviewed.
+        Assert.True(corrected.NeedsReview);
+        Assert.Contains($"/shifts/{theirs.Id}\"", await client.GetStringAsync($"{Page}/team?show=review&user={employee.UserId}"));
+        var shiftPage = await client.GetStringAsync($"{Page}/shifts/{theirs.Id}");
+        AssertRedirectedTo(
+            await PostFormAsync(client, $"{Page}/shifts/{theirs.Id}?handler=Reviewed", shiftPage, new Dictionary<string, string> { ["Version"] = VersionOn(shiftPage) }),
+            $"{Page}/shifts/{theirs.Id}");
+        Assert.False((await ShiftsOfAsync(app, employee.UserId)).Single().NeedsReview);
+        Assert.DoesNotContain($"/shifts/{theirs.Id}\"", await client.GetStringAsync($"{Page}/team?show=review&user={employee.UserId}"));
+        Assert.Contains(await AuditOfAsync(app, employee.UserId), e => e.Action == "ShiftReviewed" && e.ChangedBy == manager.Email);
     }
 
     [Theory]
@@ -444,8 +456,8 @@ public sealed partial class TimeClockTests(TestServers servers)
         var to = monday.AddDays(6).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
         var lines = await CsvLinesAsync(await admin.GetAsync($"{Page}/team?handler=ExportWeekly&user={employee.UserId}&from={from}&to={to}"));
         Assert.Equal(3, lines.Count);
-        Assert.StartsWith($"{from},{monday.AddDays(-1):yyyy-MM-dd},{employee.FullName},{employee.Email},2.00,2:00,,1,0,", lines[1]);
-        Assert.StartsWith($"{monday:yyyy-MM-dd},{to},{employee.FullName},{employee.Email},12.00,12:00,,2,0,", lines[2]);
+        Assert.StartsWith($"{from},{monday.AddDays(-1):yyyy-MM-dd},{employee.FullName},{employee.Email},2.00,2:00,,1,1,", lines[1]); // added by hand: needs a review
+        Assert.StartsWith($"{monday:yyyy-MM-dd},{to},{employee.FullName},{employee.Email},12.00,12:00,,2,2,", lines[2]);
 
         // The shift list for those two weeks counts the same 14 hours and shows the voided shift struck through.
         var list = WebUtility.HtmlDecode(await admin.GetStringAsync($"{Page}/team?user={employee.UserId}&from={from}&to={to}"));

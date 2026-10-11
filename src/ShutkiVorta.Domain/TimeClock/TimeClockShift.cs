@@ -51,7 +51,10 @@ public sealed class TimeClockShift : Entity
     /// <summary>Added by a manager for someone who could not clock in (dead phone, no signal…).</summary>
     public bool IsManualEntry { get; private set; }
 
-    /// <summary>Flagged for a manager: a doubtful punch, a forgotten clock-out, or a shift closed by the system.</summary>
+    /// <summary>
+    /// Flagged for a manager until someone marks it reviewed: a doubtful punch, a very long shift, a forgotten clock-out, a
+    /// shift closed by the system, or one a manager corrected or added by hand.
+    /// </summary>
     public bool NeedsReview { get; private set; }
 
     /// <summary>The punched times before the first correction (null until a manager corrects the shift).</summary>
@@ -120,7 +123,10 @@ public sealed class TimeClockShift : Entity
         };
     }
 
-    /// <summary>A shift a manager enters for someone who could not clock in. It is closed, with no device location.</summary>
+    /// <summary>
+    /// A shift a manager enters for someone who could not clock in. It is closed, with no device location, and needs a review
+    /// like every edited shift.
+    /// </summary>
     public static TimeClockShift AddByHand(
         string userId, string employeeName, DateTime clockInUtc, DateTime clockOutUtc, string addedBy, string reason, DateTime nowUtc)
     {
@@ -135,6 +141,7 @@ public sealed class TimeClockShift : Entity
             ClockOutLocationStatus = LocationStatus.ManualEntry,
             ClockOutSource = TimeClock.ClockOutSource.Manager,
             IsManualEntry = true,
+            NeedsReview = true,
             EditedBy = Guard.NotEmpty(addedBy, "Added by", 256),
             EditedAtUtc = nowUtc,
             EditReason = Guard.NotEmpty(reason, "Reason", MaxReasonLength),
