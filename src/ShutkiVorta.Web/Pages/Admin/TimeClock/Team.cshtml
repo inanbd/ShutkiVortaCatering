@@ -1,0 +1,272 @@
+@page "/admin/time-clock/team"
+@model ShutkiVorta.Web.Pages.Admin.TimeClock.TeamModel
+@{
+    var t = Model.Team;
+    var current = t.People.Where(p => !p.IsFormerStaff).ToList();
+    var former = t.People.Where(p => p.IsFormerStaff).ToList();
+}
+@section Head {
+    <link rel="stylesheet" href="~/css/admin-timeclock.css" asp-append-version="true" />
+}
+@section Actions {
+    <a class="btn btn-primary btn-sm" requires-permission="@Permissions.TimeClockManage" href="/admin/time-clock/add">@Icons.Get("plus") Add shift</a>
+}
+
+<partial name="_TimeClockTabs" model="@(Model.IsWeekly ? "weekly" : "team")" />
+
+<div class="kpis kpis-3">
+    <div class="kpi">
+        <div class="label">On the clock now</div>
+        <div class="value">@t.OnTheClock.Count</div>
+        <div class="sub">@(t.OnTheClock.Count == 1 ? "person" : "people")</div>
+    </div>
+    <div class="kpi red @(t.NeedsReviewCount > 0 ? "attention" : null)"><a href="@(TimeClockUi.TeamPath)?show=review">
+        <div class="label">Needs review</div>
+        <div class="value">@t.NeedsReviewCount</div>
+        <div class="sub">missed or late clock-outs, long shifts, no location, away from the kitchen</div></a>
+    </div>
+    <div class="kpi gold"><a href="@(TimeClockUi.TeamPath)?show=edited">
+        <div class="label">Edited this week</div>
+        <div class="value">@t.EditedThisWeekCount</div>
+        <div class="sub">corrected, entered later or added by hand</div></a>
+    </div>
+</div>
+
+@if (!t.KitchenLocationSet || Model.IsAdmin)
+{
+    <div class="alert @(t.KitchenLocationSet ? "alert-info" : "alert-warn") kitchen-banner">
+        <span>
+            @Icons.Get("map")
+            @if (t.KitchenLocationSet)
+            {
+                <text>Clock-ins farther than @TimeClockText.Distance(t.NearKitchenRadiusMeters) from the kitchen are marked for review.</text>
+            }
+            else
+            {
+                <text>The kitchen location isn't set, so distances aren't recorded. Set it to see who clocked in away from the kitchen.</text>
+            }
+            @if (!Model.IsAdmin)
+            {
+                <text>Ask an admin to set it.</text>
+            }
+        </span>
+        @if (Model.IsAdmin)
+        {
+            <form method="post" asp-page-handler="KitchenLocation" class="kitchen-form" data-kitchen-form
+                  data-confirm="Set the kitchen location to where you are now? Do this while standing in the kitchen.">
+                <input type="hidden" name="latitude" data-punch="latitude" />
+                <input type="hidden" name="longitude" data-punch="longitude" />
+                <input type="hidden" name="accuracy" data-punch="accuracy" />
+                <button class="btn btn-outline btn-sm" type="submit" data-kitchen-button>@Icons.Get("pin") Use my current location as the kitchen</button>
+                <a class="small" href="/admin/settings/time-clock">Time clock settings</a>
+                <span class="small" data-kitchen-message role="status"></span>
+            </form>
+        }
+    </div>
+}
+
+@if (!Model.IsWeekly)
+{
+    <section class="panel">
+        <div class="panel-head"><h2>On the clock now</h2></div>
+        <div class="panel-body flush">
+            @if (t.OnTheClock.Count == 0)
+            {
+                <p class="muted" style="padding:24px;">Nobody is clocked in.</p>
+            }
+            else
+            {
+                <table class="table tc-cards">
+                    <thead><tr><th>Person</th><th>Since</th><th>Clock-in location</th><th></th></tr></thead>
+                    <tbody>
+                        @foreach (var on in t.OnTheClock)
+                        {
+                            var s = on.Shift;
+                            <tr>
+                                <td><strong>@s.EmployeeName</strong></td>
+                                <td data-label="Since">
+                                    @TimeClockText.When(s.ClockInLocal, t.NowLocal)
+                                    <span class="muted">· @Format.Hours(s.Duration)</span>
+                                    @if (on.IsStale)
+                                    {
+                                        <span class="pill pill-bad">Probably forgot to clock out</span>
+                                    }
+                                </td>
+                                <td data-label="Location">
+                                    @TimeClockText.Location(s.ClockIn.Status)
+                                    @if (s.ClockIn.DistanceMeters is { } meters)
+                                    {
+                                        <span class="muted">· @TimeClockText.Distance(meters) from the kitchen</span>
+                                    }
+                                </td>
+                                <td class="num"><a class="btn btn-outline btn-sm" href="@TimeClockUi.ShiftPath(s.Id)">Open</a></td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            }
+        </div>
+    </section>
+}
+
+<section class="panel">
+    <div class="panel-head">
+        <form method="get" class="filters" style="width:100%;">
+            @if (Model.IsWeekly)
+            {
+                <input type="hidden" name="tab" value="@TeamModel.WeeklyTab" />
+            }
+            <div class="field grow">
+                <label for="user">Person</label>
+                <select id="user" name="user">
+                    <option value="">Everyone</option>
+                    @foreach (var p in current)
+                    {
+                        <option value="@p.UserId" selected="@(p.UserId == Model.Person)">@p.Name</option>
+                    }
+                    @if (former.Count > 0)
+                    {
+                        <optgroup label="Former staff">
+                            @foreach (var p in former)
+                            {
+                                <option value="@p.UserId" selected="@(p.UserId == Model.Person)">@p.Name</option>
+                            }
+                        </optgroup>
+                    }
+                </select>
+            </div>
+            <div class="field">
+                <label for="from">From</label>
+                <input id="from" name="from" type="date" value="@Model.From?.ToString("yyyy-MM-dd")" />
+            </div>
+            <div class="field">
+                <label for="to">to</label>
+                <input id="to" name="to" type="date" value="@Model.To?.ToString("yyyy-MM-dd")" />
+            </div>
+            @if (!Model.IsWeekly)
+            {
+                <div class="field">
+                    <label for="show">Show</label>
+                    <select id="show" name="show">
+                        <option value="">All shifts</option>
+                        <option value="review" selected="@(Model.Filter == ShiftFilter.NeedsReview)">Needs review</option>
+                        <option value="edited" selected="@(Model.Filter == ShiftFilter.Edited)">Edited</option>
+                        <option value="open" selected="@(Model.Filter == ShiftFilter.Open)">Still open</option>
+                        <option value="voided" selected="@(Model.Filter == ShiftFilter.Voided)">Voided</option>
+                    </select>
+                </div>
+            }
+            <button class="btn btn-green btn-sm" type="submit">@Icons.Get("search") Show</button>
+            <a class="btn btn-outline btn-sm" href="@(Model.IsWeekly ? $"{TimeClockUi.TeamPath}?tab={TeamModel.WeeklyTab}" : TimeClockUi.TeamPath)">Reset</a>
+            <a class="btn btn-outline btn-sm" href="@Model.FilterUrl(handler: Model.IsWeekly ? "ExportWeekly" : "ExportShifts")" data-export>@Icons.Get("download") Export CSV</a>
+        </form>
+    </div>
+
+    @if (Model.Weekly is { } weekly)
+    {
+        <div class="panel-body flush">
+            @foreach (var week in weekly.Weeks)
+            {
+                <h3 class="week-title">Week of @TimeClockText.Day(week.Start) – @TimeClockText.Day(week.End)</h3>
+                @if (week.People.Count == 0)
+                {
+                    <p class="muted" style="padding:0 20px 16px;">No shifts.</p>
+                }
+                else
+                {
+                    <table class="table tc-cards weekly-hours">
+                        <thead><tr><th>Person</th><th class="num">Hours</th><th class="num">h:mm</th><th class="num">Shifts</th><th class="num">To review</th></tr></thead>
+                        <tbody>
+                            @foreach (var p in week.People)
+                            {
+                                <tr class="@(p.IsOvertime ? "overtime" : null)">
+                                    <td>
+                                        <a class="strong" href="@($"{TimeClockUi.TeamPath}?user={Uri.EscapeDataString(p.UserId)}&from={week.Start:yyyy-MM-dd}&to={week.End:yyyy-MM-dd}")">@p.Name</a>
+                                        @if (p.IsOvertime)
+                                        {
+                                            <span class="pill pill-warn">Over 40 h: +@Format.DecimalHours(p.Overtime) h</span>
+                                        }
+                                        @if (p.InProgress > TimeSpan.Zero)
+                                        {
+                                            <span class="small muted">+ @Format.Hours(p.InProgress) on the clock now</span>
+                                        }
+                                    </td>
+                                    <td class="num" data-label="Hours"><strong>@Format.DecimalHours(p.Total)</strong></td>
+                                    <td class="num" data-label="h:mm">@TimeClockText.HoursMinutes(p.Total)</td>
+                                    <td class="num" data-label="Shifts">@p.ShiftCount</td>
+                                    <td class="num" data-label="To review">
+                                        @if (p.FlaggedCount > 0)
+                                        {
+                                            <span class="pill pill-bad">@p.FlaggedCount</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="muted">0</span>
+                                        }
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                }
+            }
+        </div>
+    }
+    else if (Model.Shifts is { } list)
+    {
+        var shifts = list.Shifts;
+        <div class="panel-body flush">
+            @if (shifts.Items.Count == 0)
+            {
+                <p class="muted" style="padding:24px;">@(Model.Filter == ShiftFilter.NeedsReview ? "Nothing needs a review." : "No shifts match these filters.")</p>
+            }
+            else
+            {
+                <table class="table tc-cards team-shifts">
+                    <thead><tr><th>Person</th><th>Day</th><th>Time</th><th class="num">Hours</th><th>Location</th><th></th></tr></thead>
+                    <tbody>
+                        @foreach (var s in shifts.Items)
+                        {
+                            <tr class="@(s.IsVoided ? "row-muted voided" : null)">
+                                <td><a class="strong" href="@TimeClockUi.ShiftPath(s.Id)">@s.EmployeeName</a></td>
+                                <td class="nowrap" data-label="Day">@TimeClockText.Day(s.Date)</td>
+                                <td class="nowrap" data-label="Time"><span class="shift-time">@TimeClockUi.Span(s)</span></td>
+                                <td class="num" data-label="Hours">
+                                    @Format.Hours(s.Duration)@(s.IsOpen ? " so far" : null)
+                                </td>
+                                <td data-label="Location">
+                                    <span class="small">@TimeClockText.Location(s.ClockIn.Status)@(s.ClockIn.DistanceMeters is { } meters ? $" · {TimeClockText.Distance(meters)}" : null)</span>
+                                </td>
+                                <td class="shift-flags"><partial name="_ShiftFlags" model="s" /></td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            }
+        </div>
+    }
+</section>
+
+@if (Model.Shifts is { } summary)
+{
+    <p class="small muted mt-2">
+        @summary.Shifts.TotalCount shift(s).
+        @if (summary.Total is { } total)
+        {
+            <text>Hours for these dates: <strong>@TimeClockUi.Hours(total)</strong>@(summary.InProgress > TimeSpan.Zero ? $" + {Format.Hours(summary.InProgress!.Value)} on the clock now" : null).</text>
+        }
+        Voided shifts and missed clock-outs don't count; shifts crossing midnight on the first or last day count only their part inside the dates.
+    </p>
+    <partial name="_Pager" model="(summary.Shifts.Page, summary.Shifts.TotalPages, (Func<int, string>)Model.PageUrl)" />
+}
+else if (Model.Weekly is { } info)
+{
+    <p class="small muted mt-2">
+        Workweeks start on @info.WorkweekStartsOn (Settings → Time clock). Over 40 hours a week is highlighted. Shifts crossing the start of a week
+        count in both weeks, each its own part. Voided shifts, missed clock-outs and shifts still open don't count.
+    </p>
+}
+
+@section Scripts {
+    <script src="~/js/admin-timeclock.js" asp-append-version="true"></script>
+}

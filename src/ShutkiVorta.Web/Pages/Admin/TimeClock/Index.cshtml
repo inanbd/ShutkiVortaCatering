@@ -1,0 +1,165 @@
+@page "/admin/time-clock"
+@using System.Globalization
+@model ShutkiVorta.Web.Pages.Admin.TimeClock.IndexModel
+@{
+    var c = Model.Clock;
+    var open = c.OpenShift;
+    var weeks = new[] { ("This week", c.ThisWeek), ("Last week", c.LastWeek) };
+}
+@section Head {
+    <link rel="stylesheet" href="~/css/admin-timeclock.css" asp-append-version="true" />
+}
+
+<partial name="_TimeClockTabs" model="@("mine")" />
+
+<div asp-validation-summary="All" class="validation-summary-errors"></div>
+
+@if (open is not null && c.OpenShiftIsStale)
+{
+    <section class="panel clock-panel stale" aria-labelledby="forgotten-title">
+        <div class="clock-state">
+            @Icons.Get("alert")
+            <div>
+                <h2 id="forgotten-title">You didn't clock out on @TimeClockText.When(open.ClockInLocal, c.NowLocal). When did you leave?</h2>
+                <p class="muted">Enter the time you left that day. A manager will check it. Then you can clock in.</p>
+            </div>
+        </div>
+        <form method="post" asp-page-handler="FixForgotten" class="forgotten-form">
+            <div class="field">
+                <label for="left-at">I left at</label>
+                <input class="input" id="left-at" type="datetime-local" name="Forgotten.LeftAt" required
+                       value="@TimeClockUi.LocalInput(Model.Forgotten.LeftAt)"
+                       min="@TimeClockUi.LocalInput(c.LeftAtEarliestLocal)" max="@TimeClockUi.LocalInput(c.LeftAtLatestLocal)" />
+            </div>
+            <button class="btn btn-green" type="submit">@Icons.Get("check") Save the time I left</button>
+        </form>
+        <form method="post" asp-page-handler="FixForgotten" class="forgotten-unknown">
+            <input type="hidden" name="Forgotten.DontRemember" value="true" />
+            <button class="btn btn-outline" type="submit">I don't remember</button>
+            <span class="small muted">That shift then won't count until a manager fixes it.</span>
+        </form>
+    </section>
+}
+else
+{
+    var clockingIn = open is null;
+    <section class="panel clock-panel @(clockingIn ? "off" : "on")">
+        <div class="clock-state">
+            @Icons.Get("clock")
+            <div>
+                @if (open is null)
+                {
+                    <h2>You're not clocked in</h2>
+                    <p class="muted">Tap the button when you start work.</p>
+                }
+                else
+                {
+                    <h2>You're on the clock</h2>
+                    <p>
+                        Since <strong>@TimeClockText.When(open.ClockInLocal, c.NowLocal)</strong> ·
+                        <span data-elapsed-minutes="@((long)open.Duration.TotalMinutes)">@Format.Hours(open.Duration)</span>
+                    </p>
+                }
+            </div>
+        </div>
+
+        @* One form per action, each with its own address: the script posts it with form.submit() after filling in the location. *@
+        <form method="post" asp-page-handler="@(clockingIn ? "ClockIn" : "ClockOut")" class="clock-form" data-clock-form>
+            <input type="hidden" name="Punch.Status" value="@LocationStatus.NotProvided" data-punch="status" />
+            <input type="hidden" name="Punch.Latitude" data-punch="latitude" />
+            <input type="hidden" name="Punch.Longitude" data-punch="longitude" />
+            <input type="hidden" name="Punch.Accuracy" data-punch="accuracy" />
+            <button class="btn btn-lg btn-block clock-button @(clockingIn ? "btn-green" : "btn-primary")" type="submit" data-clock-button>
+                @if (clockingIn)
+                {
+                    <span>Clock in</span> <span aria-hidden="true">·</span> <span class="bn" lang="bn">কাজ শুরু</span>
+                }
+                else
+                {
+                    <span>Clock out</span> <span aria-hidden="true">·</span> <span class="bn" lang="bn">কাজ শেষ</span>
+                }
+            </button>
+            <p class="clock-locating" data-locating role="status" hidden>
+                <span class="spinner" aria-hidden="true"></span> Getting your location… <button type="button" class="btn-link" data-skip-location>Skip</button>
+            </p>
+            <details class="clock-note">
+                <summary>Add a note</summary>
+                <label class="visually-hidden" for="punch-note">Note</label>
+                <textarea class="input" id="punch-note" name="Punch.Note" rows="2" maxlength="@TimeClockShift.MaxNoteLength" placeholder="Optional, e.g. working at the event venue">@Model.Punch.Note</textarea>
+            </details>
+        </form>
+
+        <p class="clock-location" data-location-status>
+            @Icons.Get("pin")
+            <span>
+                <span data-location-text>@(c.RequireLocation ? "Your location is needed to clock in or out." : "Your phone or computer will be asked for its location.")</span>
+                <a href="#location-help" data-help-link hidden>how to turn it on</a>
+            </span>
+        </p>
+        <p class="small muted mb-0">
+            Location is reported by your phone or computer. Your location is saved only when you clock in or out.
+            @if (c.RequireLocation)
+            {
+                <text>Clocking in or out needs it.</text>
+            }
+        </p>
+        <partial name="_LocationHelp" model="Model.ShowLocationHelp" />
+    </section>
+}
+
+@foreach (var (title, week) in weeks)
+{
+    <section class="panel">
+        <div class="panel-head">
+            <h2>@title <span class="small muted">@TimeClockText.Day(week.Start) – @TimeClockText.Day(week.End)</span></h2>
+            <div class="week-total">
+                <strong>@Format.DecimalHours(week.Total) h</strong> <span class="muted">(@TimeClockText.HoursMinutes(week.Total))</span>
+                @if (week.InProgress > TimeSpan.Zero)
+                {
+                    <span class="small muted">+ @Format.Hours(week.InProgress) so far</span>
+                }
+            </div>
+        </div>
+        <div class="panel-body flush">
+            @if (week.ShiftCount == 0)
+            {
+                <p class="muted" style="padding:24px;">No shifts.</p>
+            }
+            else
+            {
+                <table class="table tc-cards shift-days">
+                    <thead><tr><th>Day</th><th>Shifts</th><th class="num">Hours</th></tr></thead>
+                    <tbody>
+                        @foreach (var day in week.Days)
+                        {
+                            <tr>
+                                <td class="nowrap"><strong>@day.Date.ToString("dddd", Format.Culture)</strong> <span class="muted">@day.Date.ToString("MMM d", Format.Culture)</span></td>
+                                <td>
+                                    <ul class="shift-lines">
+                                        @foreach (var shift in day.Shifts)
+                                        {
+                                            <li class="@(shift.IsVoided ? "voided" : null)">
+                                                <a href="@TimeClockUi.ShiftPath(shift.Id)">@TimeClockUi.Span(shift)</a>
+                                                <span class="muted">@Format.Hours(shift.Duration)@(shift.IsOpen ? " so far" : null)</span>
+                                                <partial name="_ShiftFlags" model="shift" />
+                                            </li>
+                                        }
+                                    </ul>
+                                </td>
+                                <td class="num" data-label="Day total"><strong>@Format.Hours(day.Total)</strong></td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            }
+        </div>
+    </section>
+}
+<p class="small muted mt-2">
+    Hours count from @c.ThisWeek.Start.ToString("dddd", CultureInfo.InvariantCulture) to @c.ThisWeek.End.ToString("dddd", CultureInfo.InvariantCulture).
+    Open shifts count once you clock out; a missed clock-out counts once a manager fixes it.
+</p>
+
+@section Scripts {
+    <script src="~/js/admin-timeclock.js" asp-append-version="true"></script>
+}

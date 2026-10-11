@@ -65,7 +65,7 @@ public sealed class SettingsCatalogTests
         Assert.Equal(slugs.Count, slugs.Distinct(Keys).Count());
         Assert.All(slugs, s => Assert.Matches("^[a-z][a-z0-9-]*$", s));
         Assert.Equal(
-            ["business", "ordering", "restaurants", "email", "website", "accounts", "spam-protection"],
+            ["business", "ordering", "restaurants", "email", "website", "accounts", "spam-protection", "time-clock"],
             slugs);
 
         foreach (var page in SettingsCatalog.Pages)
@@ -144,6 +144,8 @@ public sealed class SettingsCatalogTests
                 SettingKind.Money or SettingKind.Percent => underlying == typeof(decimal),
                 SettingKind.DaysOfWeek => SettingsFlattener.IsListType(type) && SettingsFlattener.ElementType(type) == typeof(DayOfWeek),
                 SettingKind.List => SettingsFlattener.IsListType(type) && SettingsFlattener.ElementType(type) == typeof(string),
+                // A select may also choose an enum value (e.g. the workweek's first day) when every choice is one of its names.
+                SettingKind.Select when underlying.IsEnum => field.Choices.All(c => Enum.IsDefined(underlying, c.Value)),
                 SettingKind.Text or SettingKind.Multiline or SettingKind.Email or SettingKind.Url or SettingKind.Phone
                     or SettingKind.Time or SettingKind.Select or SettingKind.Secret or SettingKind.TimeZone => type == typeof(string),
                 _ => false,

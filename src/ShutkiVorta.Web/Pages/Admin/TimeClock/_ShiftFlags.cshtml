@@ -1,0 +1,6 @@
+@* The marks on a shift (needs review, no location, edited…) as small pills; "on the clock" shows in the times instead. *@
+@model ShiftDto
+@foreach (var flag in Model.Flags.Where(f => f != ShiftFlag.Open))
+{
+    <span class="pill @TimeClockUi.FlagCss(flag)">@TimeClockText.Flag(flag)</span>
+}

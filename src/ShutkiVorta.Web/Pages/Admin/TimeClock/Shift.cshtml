@@ -1,0 +1,238 @@
+@page "/admin/time-clock/shifts/{id:int}"
+@model ShutkiVorta.Web.Pages.Admin.TimeClock.ShiftModel
+@{
+    var d = Model.Details;
+    var s = Model.Shift;
+    var back = d.CanSeeTeam && !d.IsOwnShift ? $"{TimeClockUi.TeamPath}?user={Uri.EscapeDataString(s.UserId)}" : TimeClockUi.TimeClockPath;
+}
+@section Head {
+    <link rel="stylesheet" href="~/css/admin-timeclock.css" asp-append-version="true" />
+}
+@section Actions {
+    <a class="btn btn-outline btn-sm" href="@back">&larr; @(back == TimeClockUi.TimeClockPath ? "Time clock" : "Team")</a>
+}
+
+<div asp-validation-summary="All" class="validation-summary-errors"></div>
+
+@if (s.IsVoided)
+{
+    <div class="alert alert-warn">
+        @Icons.Get("alert") This shift was voided by @s.VoidedBy on @Format.DateTime(s.VoidedAtLocal!.Value)@(string.IsNullOrWhiteSpace(s.VoidReason) ? null : $": {s.VoidReason}"). It doesn't count.
+    </div>
+}
+else if (s.IsMissedClockOut)
+{
+    <div class="alert alert-warn">@Icons.Get("alert") The clock-out time is unknown, so this shift doesn't count until a manager enters it.</div>
+}
+
+<div class="detail-grid">
+    <div>
+        <section class="panel">
+            <div class="panel-head">
+                <h2 class="@(s.IsVoided ? "shift-voided" : null)">@s.EmployeeName · @TimeClockText.Day(s.Date)</h2>
+                <div class="shift-flags"><partial name="_ShiftFlags" model="s" /></div>
+            </div>
+            <div class="panel-body">
+                <dl class="kv">
+                    <dt>Clocked in</dt>
+                    <dd>@Format.DateTime(s.ClockInLocal)</dd>
+                    <dt>Clocked out</dt>
+                    <dd>
+                        @if (s.IsOpen)
+                        {
+                            <strong>Still on the clock</strong>
+                        }
+                        else if (s.IsMissedClockOut)
+                        {
+                            <span>Unknown</span>
+                        }
+                        else
+                        {
+                            @Format.DateTime(s.ClockOutLocal!.Value)
+                        }
+                        <span class="small muted">(@TimeClockText.ClockOutSource(s.ClockOutSource))</span>
+                    </dd>
+                    <dt>Hours</dt>
+                    <dd>
+                        <strong>@TimeClockUi.Hours(s.Duration)</strong>
+                        @if (s.IsOpen)
+                        {
+                            <span class="muted">so far</span>
+                        }
+                        else if (!s.CountsTowardsHours)
+                        {
+                            <span class="muted">not counted</span>
+                        }
+                    </dd>
+                    @if (d.Email is { } email && d.CanSeeTeam)
+                    {
+                        <dt>Email</dt>
+                        <dd><a href="mailto:@email">@email</a></dd>
+                    }
+                </dl>
+            </div>
+        </section>
+
+        <div class="grid-2-even punch-grid">
+            <section class="panel">
+                <div class="panel-head"><h2>Clock-in</h2></div>
+                <div class="panel-body"><partial name="_Punch" model="(s.ClockIn, d)" /></div>
+            </section>
+            <section class="panel">
+                <div class="panel-head"><h2>Clock-out</h2></div>
+                <div class="panel-body">
+                    @if (s.ClockOut.Status is null)
+                    {
+                        <p class="muted mb-0">@(s.IsOpen ? "Not clocked out yet." : $"No device punch: {TimeClockText.ClockOutSource(s.ClockOutSource).ToLowerInvariant()}.")</p>
+                    }
+                    else
+                    {
+                        <partial name="_Punch" model="(s.ClockOut, d)" />
+                    }
+                </div>
+            </section>
+        </div>
+
+        <section class="panel">
+            <div class="panel-head"><h2>History</h2></div>
+            <div class="panel-body">
+                <dl class="kv">
+                    @if (s.WasCorrected)
+                    {
+                        <dt>Punched times</dt>
+                        <dd>
+                            @Format.DateTime(s.OriginalClockInLocal!.Value) –
+                            @(s.OriginalClockOutLocal is { } originalOut ? Format.DateTime(originalOut) : "still open")
+                        </dd>
+                    }
+                    @if (s.EditedBy is not null)
+                    {
+                        <dt>@(s.IsManualEntry ? "Added by" : "Last changed by")</dt>
+                        <dd>@s.EditedBy <span class="muted">on @Format.DateTime(s.EditedAtLocal!.Value)</span></dd>
+                        <dt>Reason</dt>
+                        <dd>@(s.EditReason ?? "—")</dd>
+                    }
+                    else
+                    {
+                        <dt>Changes</dt>
+                        <dd class="muted">None: these are the times punched on the device.</dd>
+                    }
+                </dl>
+                @if (d.History.Count > 0)
+                {
+                    <ul class="shift-history">
+                        @foreach (var entry in d.History)
+                        {
+                            <li>
+                                <strong>@entry.Action</strong> <span class="muted">by @entry.ChangedBy, @Format.DateTime(entry.ChangedAtLocal)</span>
+                                @if (entry.Details is { } details)
+                                {
+                                    <div class="small">@details</div>
+                                }
+                            </li>
+                        }
+                    </ul>
+                }
+            </div>
+        </section>
+    </div>
+
+    <div>
+        @if (d.CanManage)
+        {
+            @if (s.NeedsReview && !s.IsVoided)
+            {
+                <section class="panel">
+                    <div class="panel-head"><h2>Needs review</h2></div>
+                    <div class="panel-body">
+                        <p class="small muted">Check the times and locations. If something is wrong, correct the times below; if it is fine, mark it as reviewed.</p>
+                        <form method="post" asp-page-handler="Reviewed">
+                            <input type="hidden" name="Version" value="@Model.Version" />
+                            <button class="btn btn-green btn-sm" type="submit">@Icons.Get("check") Mark as reviewed</button>
+                        </form>
+                    </div>
+                </section>
+            }
+
+            @if (s.IsOpen)
+            {
+                <section class="panel">
+                    <div class="panel-head"><h2>Close this shift</h2></div>
+                    <div class="panel-body">
+                        <form method="post" asp-page-handler="Close" class="shift-form">
+                            <input type="hidden" name="Version" value="@Model.Version" />
+                            <div class="field">
+                                <label for="close-out">Left at</label>
+                                <input class="input" id="close-out" type="datetime-local" name="Closing.ClockOut" value="@TimeClockUi.LocalInput(Model.Closing.ClockOut)"
+                                       min="@TimeClockUi.LocalInput(s.ClockInLocal)" required />
+                            </div>
+                            <div class="field">
+                                <label for="close-reason">Reason</label>
+                                <input class="input" id="close-reason" name="Closing.Reason" value="@Model.Closing.Reason" maxlength="@TimeClockShift.MaxReasonLength"
+                                       placeholder="e.g. forgot to clock out" required />
+                            </div>
+                            <button class="btn btn-green btn-sm" type="submit">Close shift</button>
+                        </form>
+                    </div>
+                </section>
+            }
+
+            @if (!s.IsVoided)
+            {
+                <section class="panel">
+                    <div class="panel-head"><h2>Correct times</h2></div>
+                    <div class="panel-body">
+                        <form method="post" asp-page-handler="Correct" class="shift-form">
+                            <input type="hidden" name="Version" value="@Model.Version" />
+                            <div class="field">
+                                <label for="correct-in">Clocked in</label>
+                                <input class="input" id="correct-in" type="datetime-local" name="Times.ClockIn" value="@TimeClockUi.LocalInput(Model.Times.ClockIn)" required />
+                            </div>
+                            <div class="field">
+                                <label for="correct-out">Clocked out</label>
+                                <input class="input" id="correct-out" type="datetime-local" name="Times.ClockOut" value="@TimeClockUi.LocalInput(Model.Times.ClockOut)" required="@(!s.IsOpen)" />
+                                @if (s.IsOpen)
+                                {
+                                    <span class="hint">Leave empty to keep the shift open.</span>
+                                }
+                            </div>
+                            <div class="field">
+                                <label for="correct-reason">Reason</label>
+                                <input class="input" id="correct-reason" name="Times.Reason" value="@Model.Times.Reason" maxlength="@TimeClockShift.MaxReasonLength"
+                                       placeholder="e.g. forgot to clock in" required />
+                            </div>
+                            <p class="hint mb-0">Business time. Out after in, nothing in the future, at most 24 hours, not overlapping their other shifts.</p>
+                            <button class="btn btn-green btn-sm" type="submit">Save times</button>
+                        </form>
+                    </div>
+                </section>
+            }
+
+            @if (!s.IsVoided && !s.IsOpen)
+            {
+                <section class="panel">
+                    <div class="panel-head"><h2>Void this shift</h2></div>
+                    <div class="panel-body">
+                        <form method="post" asp-page-handler="Void" class="shift-form" data-confirm="Void this shift? It will be kept but won't count.">
+                            <input type="hidden" name="Version" value="@Model.Version" />
+                            <div class="field">
+                                <label for="void-reason">Reason</label>
+                                <input class="input" id="void-reason" name="Voiding.Reason" value="@Model.Voiding.Reason" maxlength="@TimeClockShift.MaxReasonLength"
+                                       placeholder="e.g. clocked in by mistake" required />
+                            </div>
+                            <button class="btn btn-danger btn-sm" type="submit">@Icons.Get("trash") Void shift</button>
+                        </form>
+                    </div>
+                </section>
+            }
+        }
+        else if (d.ManageRefusal is { } refusal)
+        {
+            <div class="alert alert-info read-only-note">@Icons.Get("lock") @refusal</div>
+        }
+        else if (d.IsOwnShift)
+        {
+            <div class="alert alert-info">If something about this shift is wrong, tell your manager.</div>
+        }
+    </div>
+</div>

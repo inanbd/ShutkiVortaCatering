@@ -177,6 +177,7 @@ internal sealed class TimeClockQueryHandlers(
             KitchenLocationSet = Settings.HasKitchenLocation,
             NearKitchenRadiusMeters = Settings.NearKitchenRadiusMeters,
             WorkweekStartsOn = Settings.WorkweekStartsOn,
+            NowLocal = clock.BusinessNow,
             Today = Today,
             ThisWeekStart = thisWeek,
             People =

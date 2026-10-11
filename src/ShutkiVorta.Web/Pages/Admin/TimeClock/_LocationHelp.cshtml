@@ -1,0 +1,20 @@
+@* How to let the browser share the location, on an iPhone and on Android. The model says whether it starts open. *@
+@model bool
+<details class="location-help" id="location-help" data-location-help open="@Model">
+    <summary>How to turn location on</summary>
+    <div class="location-help-body">
+        <h3>iPhone (Safari)</h3>
+        <ol>
+            <li>Open <strong>Settings → Privacy &amp; Security → Location Services</strong> and make sure it is on.</li>
+            <li>In that list tap <strong>Safari Websites</strong>, choose <strong>While Using the App</strong> and turn on <strong>Precise Location</strong>.</li>
+            <li>Back in Safari, tap <strong>aA</strong> next to the address → <strong>Settings for this website</strong> → <strong>Location</strong> → <strong>Allow</strong>.</li>
+        </ol>
+        <h3>Android (Chrome)</h3>
+        <ol>
+            <li>Tap the <strong>lock icon</strong> (or the settings icon) left of the web address.</li>
+            <li>Tap <strong>Permissions</strong> → <strong>Location</strong> → <strong>Allow</strong>.</li>
+            <li>Check that <strong>Location</strong> is on in your phone's quick settings.</li>
+        </ol>
+        <p class="small muted mb-0">Then reload this page and tap the button again.</p>
+    </div>
+</details>

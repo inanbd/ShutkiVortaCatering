@@ -1,0 +1,45 @@
+@* Where a clock-in or clock-out happened, as the device reported it, with a Google Maps link. *@
+@model (PunchDto Punch, ShiftDetailsDto Details)
+@{
+    var (punch, details) = Model;
+}
+<dl class="kv">
+    <dt>Status</dt>
+    <dd>
+        @TimeClockText.Location(punch.Status)
+        @if (punch.IsApproximate)
+        {
+            <span class="pill pill-warn">Approximate</span>
+        }
+    </dd>
+    @if (punch.HasCoordinates)
+    {
+        <dt>Where</dt>
+        <dd>
+            <span class="coordinates">@punch.Coordinates</span><br />
+            <a class="small" href="@punch.MapUrl" target="_blank" rel="noopener noreferrer">@Icons.Get("map") Open in Google Maps</a>
+        </dd>
+        <dt>Accuracy</dt>
+        <dd>@(punch.AccuracyMeters is { } accuracy ? $"within about {TimeClockText.Distance(accuracy)}" : "not reported")</dd>
+        <dt>From the kitchen</dt>
+        <dd>
+            @if (punch.DistanceMeters is { } meters)
+            {
+                @TimeClockText.Distance(meters)
+                @if (meters > details.NearKitchenRadiusMeters && details.KitchenLocationSet)
+                {
+                    <span class="pill pill-warn">Away from the kitchen</span>
+                }
+            }
+            else
+            {
+                <span class="muted">Not recorded (the kitchen location wasn't set)</span>
+            }
+        </dd>
+    }
+    @if (!string.IsNullOrWhiteSpace(punch.Note))
+    {
+        <dt>Note</dt>
+        <dd>@punch.Note</dd>
+    }
+</dl>

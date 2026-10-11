@@ -162,6 +162,7 @@ public sealed record TeamTimeClockDto
     public bool KitchenLocationSet { get; init; }
     public int NearKitchenRadiusMeters { get; init; }
     public DayOfWeek WorkweekStartsOn { get; init; }
+    public DateTime NowLocal { get; init; }
     public DateOnly Today { get; init; }
     public DateOnly ThisWeekStart { get; init; }
 

@@ -1,0 +1,60 @@
+@page "/admin/time-clock/add"
+@model ShutkiVorta.Web.Pages.Admin.TimeClock.AddModel
+@{
+    var current = Model.People.Where(p => !p.IsFormerStaff).ToList();
+    var former = Model.People.Where(p => p.IsFormerStaff).ToList();
+}
+@section Head {
+    <link rel="stylesheet" href="~/css/admin-timeclock.css" asp-append-version="true" />
+}
+@section Actions {
+    <a class="btn btn-outline btn-sm" href="@TimeClockUi.TeamPath">&larr; Team</a>
+}
+
+<section class="panel add-shift">
+    <div class="panel-head"><h2>A shift someone couldn't clock in for</h2></div>
+    <div class="panel-body">
+        <p class="muted">For a dead phone, no signal or no smartphone. The shift is marked "Added by hand" with your name and the reason. You can't add your own shifts unless you are an admin.</p>
+        <form method="post" class="form-grid">
+            <div asp-validation-summary="All" class="validation-summary-errors full"></div>
+            <div class="field full">
+                <label for="person">Person</label>
+                <select class="input" id="person" name="Input.UserId" required>
+                    <option value="">Choose…</option>
+                    @foreach (var p in current)
+                    {
+                        <option value="@p.UserId" selected="@(p.UserId == Model.Input.UserId)">@p.Name (@p.Email)</option>
+                    }
+                    @if (former.Count > 0)
+                    {
+                        <optgroup label="Former staff">
+                            @foreach (var p in former)
+                            {
+                                <option value="@p.UserId" selected="@(p.UserId == Model.Input.UserId)">@p.Name (@p.Email)</option>
+                            }
+                        </optgroup>
+                    }
+                </select>
+                <span asp-validation-for="Input.UserId" class="field-validation-error"></span>
+            </div>
+            <div class="field">
+                <label for="clock-in">Clocked in</label>
+                <input class="input" id="clock-in" type="datetime-local" name="Input.ClockIn" value="@TimeClockUi.LocalInput(Model.Input.ClockIn)" required />
+            </div>
+            <div class="field">
+                <label for="clock-out">Clocked out</label>
+                <input class="input" id="clock-out" type="datetime-local" name="Input.ClockOut" value="@TimeClockUi.LocalInput(Model.Input.ClockOut)" required />
+            </div>
+            <div class="field full">
+                <label for="reason">Reason</label>
+                <input class="input" id="reason" name="Input.Reason" value="@Model.Input.Reason" maxlength="@TimeClockShift.MaxReasonLength"
+                       placeholder="e.g. phone battery was dead" required />
+                <span asp-validation-for="Input.Reason" class="field-validation-error"></span>
+                <span class="hint">Business time. Out after in, nothing in the future, at most 24 hours, not overlapping their other shifts.</span>
+            </div>
+            <div class="full">
+                <button class="btn btn-primary" type="submit">@Icons.Get("plus") Add shift</button>
+            </div>
+        </form>
+    </div>
+</section>

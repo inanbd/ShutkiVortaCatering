@@ -1,0 +1,15 @@
+@* My shifts | Team | Weekly hours, for people who may see everyone's shifts (others only have their own page). The model is the active tab. *@
+@model string
+@{
+    var access = await Staff.GetAsync();
+    string? Active(string tab) => Model == tab ? "active" : null;
+    string? Current(string tab) => Model == tab ? "page" : null;
+}
+@if (access.Can(Permissions.TimeClockViewAll))
+{
+    <nav class="tabs" aria-label="Time clock">
+        <a class="@Active("mine")" href="@TimeClockUi.TimeClockPath" aria-current="@Current("mine")">My shifts</a>
+        <a class="@Active("team")" href="@TimeClockUi.TeamPath" aria-current="@Current("team")">Team</a>
+        <a class="@Active("weekly")" href="@(TimeClockUi.TeamPath)?tab=weekly" aria-current="@Current("weekly")">Weekly hours</a>
+    </nav>
+}
