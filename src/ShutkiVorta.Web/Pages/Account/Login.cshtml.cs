@@ -1,12 +1,15 @@
 using System.ComponentModel.DataAnnotations;
 using MediatR;
 using Microsoft.AspNetCore.Mvc;
+using ShutkiVorta.Application.Common.Interfaces;
+using ShutkiVorta.Application.Common.Security;
 using ShutkiVorta.Application.Features.Accounts;
 using ShutkiVorta.Web.Infrastructure;
+using ShutkiVorta.Web.Infrastructure.Security;
 
 namespace ShutkiVorta.Web.Pages.Account;
 
-public sealed class LoginModel(ISender sender) : AppPageModel(sender)
+public sealed class LoginModel(ISender sender, ICurrentStaff currentStaff, IStaffAccessService staffAccess) : AppPageModel(sender)
 {
     [BindProperty]
     public LoginInput Input { get; set; } = new();
@@ -16,10 +19,12 @@ public sealed class LoginModel(ISender sender) : AppPageModel(sender)
 
     public bool ShowResendLink { get; private set; }
 
-    public IActionResult OnGet()
+    public async Task<IActionResult> OnGetAsync(CancellationToken cancellationToken)
     {
         ViewData["Title"] = "Sign in";
-        return User.Identity?.IsAuthenticated == true ? LocalRedirect(SafeReturnUrl(ReturnUrl) ?? "/account/orders") : Page();
+        return User.Identity?.IsAuthenticated == true
+            ? LocalRedirect(SafeReturnUrl(ReturnUrl) ?? Landing(await currentStaff.GetAsync(cancellationToken)))
+            : Page();
     }
 
     public async Task<IActionResult> OnPostAsync(CancellationToken cancellationToken)
@@ -30,11 +35,12 @@ public sealed class LoginModel(ISender sender) : AppPageModel(sender)
             return Page();
         }
 
-        var outcome = await Sender.Send(new LoginCommand(Input.Email, Input.Password, Input.RememberMe), cancellationToken);
-        switch (outcome)
+        var result = await Sender.Send(new LoginCommand(Input.Email, Input.Password, Input.RememberMe), cancellationToken);
+        switch (result.Outcome)
         {
             case SignInOutcome.Succeeded:
-                return LocalRedirect(SafeReturnUrl(ReturnUrl) ?? "/account/orders");
+                // This request still sees an anonymous user, so the person's staff access is read by their id.
+                return LocalRedirect(SafeReturnUrl(ReturnUrl) ?? Landing(await staffAccess.GetAsync(result.UserId!, cancellationToken)));
             case SignInOutcome.LockedOut:
                 ModelState.AddModelError(string.Empty, "Too many failed attempts. Your account is locked for 15 minutes — or reset your password.");
                 break;
@@ -49,6 +55,9 @@ public sealed class LoginModel(ISender sender) : AppPageModel(sender)
 
         return Page();
     }
+
+    /// <summary>Staff start on their admin landing page (dashboard or time clock); customers on their orders.</summary>
+    private static string Landing(StaffAccess access) => access.IsStaff ? StaffLanding.For(access) : "/account/orders";
 
     public sealed class LoginInput
     {

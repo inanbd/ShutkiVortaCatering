@@ -1,4 +1,6 @@
+using Microsoft.AspNetCore.Html;
 using ShutkiVorta.Application.Common.Formatting;
+using ShutkiVorta.Application.Common.Security;
 using ShutkiVorta.Domain.Orders;
 
 namespace ShutkiVorta.Web.Services;
@@ -25,6 +27,15 @@ public static class Ui
         OrderStatus.Completed => "status-completed",
         OrderStatus.Cancelled => "status-cancelled",
         _ => string.Empty,
+    };
+
+    /// <summary>"Admin", "Manager" or "Employee" as a coloured pill; nothing for people without a staff role.</summary>
+    public static IHtmlContent RolePill(StaffRole? role) => role switch
+    {
+        StaffRole.Admin => new HtmlString("<span class=\"pill pill-admin\">Admin</span>"),
+        StaffRole.Manager => new HtmlString("<span class=\"pill pill-manager\">Manager</span>"),
+        StaffRole.Employee => new HtmlString("<span class=\"pill pill-employee\">Employee</span>"),
+        _ => HtmlString.Empty,
     };
 
     public static string SpiceLabel(int level) => level switch

@@ -25,7 +25,7 @@ public sealed class ManagedSettingsHandlerTests
     }
 
     private ManagedSettingsHandlers Handler() =>
-        new(_store, _diagnostics, Validators, new FakeCurrentUser { UserId = "admin-1", Email = "owner@shutki.test", IsAdmin = true }, _clock, _publisher);
+        new(_store, _diagnostics, Validators, new FakeCurrentUser { UserId = "admin-1", Email = "owner@shutki.test" }, _clock, _publisher);
 
     private async Task<SettingsPageDto> PageAsync(string slug) => (await Handler().Handle(new GetSettingsPageQuery(slug), CancellationToken.None))!;
 

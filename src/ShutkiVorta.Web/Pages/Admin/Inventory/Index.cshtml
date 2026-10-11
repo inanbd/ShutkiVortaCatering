@@ -6,7 +6,7 @@
     var purchases = o.Purchases.Purchases;
 }
 @section Actions {
-    <a class="btn btn-primary btn-sm" href="/admin/inventory/edit">@Icons.Get("plus") Add to inventory</a>
+    <a class="btn btn-primary btn-sm" requires-permission="@Permissions.InventoryManage" href="/admin/inventory/edit">@Icons.Get("plus") Add to inventory</a>
 }
 
 <partial name="_InventoryTabs" model="@("purchases")" />
@@ -58,7 +58,8 @@
                 }
                 else
                 {
-                    @:Nothing has been added yet. <a href="/admin/inventory/edit">Add your first purchase</a> with its receipt photo.
+                    <text>Nothing has been added yet.</text>
+                    <span requires-permission="@Permissions.InventoryManage"><a href="/admin/inventory/edit">Add your first purchase</a> with its receipt photo.</span>
                 }
             </p>
         }

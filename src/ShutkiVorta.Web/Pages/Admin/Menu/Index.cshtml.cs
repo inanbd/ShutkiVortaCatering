@@ -1,10 +1,12 @@
 using MediatR;
 using Microsoft.AspNetCore.Mvc;
+using ShutkiVorta.Application.Common.Security;
 using ShutkiVorta.Application.Features.Menu;
 using ShutkiVorta.Web.Infrastructure;
 
 namespace ShutkiVorta.Web.Pages.Admin.Menu;
 
+[RequirePermission(Permissions.MenuView)]
 public sealed class IndexModel(ISender sender) : AppPageModel(sender)
 {
     public IReadOnlyList<MenuItemDto> Items { get; private set; } = [];
@@ -15,6 +17,7 @@ public sealed class IndexModel(ISender sender) : AppPageModel(sender)
         Items = await Sender.Send(new GetAdminMenuQuery(), cancellationToken);
     }
 
+    [RequirePermission(Permissions.MenuManage)]
     public async Task<IActionResult> OnPostAvailabilityAsync(int id, bool isAvailable, CancellationToken cancellationToken)
     {
         await Sender.Send(new SetMenuItemAvailabilityCommand(id, isAvailable), cancellationToken);
@@ -22,6 +25,7 @@ public sealed class IndexModel(ISender sender) : AppPageModel(sender)
         return RedirectToPage();
     }
 
+    [RequirePermission(Permissions.MenuManage)]
     public async Task<IActionResult> OnPostDeleteAsync(int id, CancellationToken cancellationToken)
     {
         var ok = await TryExecuteAsync(() => Sender.Send(new DeleteMenuItemCommand(id), cancellationToken));

@@ -7,12 +7,14 @@ namespace ShutkiVorta.Application.Features.Menu;
 public sealed record GetMenuQuery : IRequest<IReadOnlyList<MenuItemDto>>;
 
 /// <summary>Full menu including unavailable items, for the admin panel.</summary>
-public sealed record GetAdminMenuQuery : IRequest<IReadOnlyList<MenuItemDto>>, IRequireAdmin;
+[RequirePermission(Permissions.MenuView)]
+public sealed record GetAdminMenuQuery : IRequest<IReadOnlyList<MenuItemDto>>;
 
 /// <summary>A single item by its URL slug. Unavailable items are returned too so their page can say "currently unavailable".</summary>
 public sealed record GetMenuItemBySlugQuery(string Slug) : IRequest<MenuItemDto?>;
 
-public sealed record GetMenuItemByIdQuery(int Id) : IRequest<MenuItemDto?>, IRequireAdmin;
+[RequirePermission(Permissions.MenuView)]
+public sealed record GetMenuItemByIdQuery(int Id) : IRequest<MenuItemDto?>;
 
 internal sealed class MenuQueryHandlers(IMenuItemRepository repository) :
     IRequestHandler<GetMenuQuery, IReadOnlyList<MenuItemDto>>,

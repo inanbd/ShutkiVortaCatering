@@ -1,11 +1,13 @@
 using MediatR;
 using Microsoft.AspNetCore.Mvc;
+using ShutkiVorta.Application.Common.Security;
 using ShutkiVorta.Application.Features.Orders;
 using ShutkiVorta.Domain.Orders;
 using ShutkiVorta.Web.Infrastructure;
 
 namespace ShutkiVorta.Web.Pages.Admin.Orders;
 
+[RequirePermission(Permissions.OrdersView)]
 public sealed class DetailsModel(ISender sender) : AppPageModel(sender)
 {
     public OrderDetailsDto Order { get; private set; } = null!;
@@ -23,6 +25,7 @@ public sealed class DetailsModel(ISender sender) : AppPageModel(sender)
         return Page();
     }
 
+    [RequirePermission(Permissions.OrdersManage)]
     public async Task<IActionResult> OnPostStatusAsync(string orderNumber, OrderStatus newStatus, string? note, bool notifyCustomer, CancellationToken cancellationToken)
     {
         var ok = await TryExecuteAsync(() => Sender.Send(new UpdateOrderStatusCommand(orderNumber, newStatus, note, notifyCustomer), cancellationToken));
@@ -38,6 +41,7 @@ public sealed class DetailsModel(ISender sender) : AppPageModel(sender)
         return Redirect($"/admin/orders/{Uri.EscapeDataString(orderNumber)}");
     }
 
+    [RequirePermission(Permissions.OrdersManage)]
     public async Task<IActionResult> OnPostNotesAsync(string orderNumber, string? adminNotes, CancellationToken cancellationToken)
     {
         var ok = await TryExecuteAsync(() => Sender.Send(new SaveOrderAdminNotesCommand(orderNumber, adminNotes), cancellationToken));

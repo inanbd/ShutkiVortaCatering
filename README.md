@@ -42,7 +42,8 @@ stitching, jamdani patterns, alpona motifs, Bengali typography)
 - "My orders" with a status timeline; customers can cancel while an order is still pending
 - Guest orders placed with the same, confirmed email address show up automatically in the account
 
-**Admin panel** (`/admin`, Admin role only)
+**Admin panel** (`/admin`, for staff: Admins see everything; Managers and Employees see the modules their permissions
+allow, and every staff member needs a confirmed email)
 - Dashboard: pending and in-progress orders, today's and this month's sales, 14-day chart, upcoming
   pickups/deliveries, best sellers
 - Orders: search and filter by status, type and date; detail view, status workflow
@@ -60,8 +61,8 @@ stitching, jamdani patterns, alpona motifs, Bengali typography)
   10 MB, 10 per purchase). Item names are **saved and suggested next time**, matched regardless of case and spacing, and
   the item's usual unit is filled in. Spending this month and last month, search by item, store or note and by date,
   and a **price history** per item. Saved names can be renamed (fixing every purchase) or deleted while unused.
-  Receipt photos are private: they are kept outside `wwwroot` and shown to admins only.
-- Catering and "join our kitchen" inquiries, customers (grant/revoke admin)
+  Receipt photos are private: they are kept outside `wwwroot` and shown only to staff who may view the inventory.
+- Catering and "join our kitchen" inquiries, registered customers
 - **Settings** (`/admin/settings`): every business setting editable in the browser, live without a restart,
   with validation, change history and email diagnostics (**Test connection**, **Send test email**); **Email log** with retry
 
@@ -246,8 +247,10 @@ tests/
   `PlaceOrderCommand` and `UpdateOrderStatusCommand`, queries such as `GetMenuQuery` and `GetSitemapQuery`.
   Side effects such as emails and cache refreshes run in `INotificationHandler`s (`OrderPlacedNotification`,
   `MenuChangedNotification`, …).
-- **Security in depth:** admin pages use an authorization policy, *and* admin commands implement
-  `IRequireAdmin`, which the MediatR `AuthorizationBehavior` enforces.
+- **Security in depth:** staff roles and permissions are read from the database on every request (never from the
+  sign-in cookie). The `/admin` folder requires staff access, every admin page and action handler states what it needs
+  (`[RequirePermission]`, `[AdminOnly]`, `[AnyStaff]`, checked by `PermissionPageFilter`), *and* every staff request carries
+  `[RequirePermission]`, `IRequireAdmin` or `IRequireStaff`, which the MediatR `AuthorizationBehavior` enforces.
 - **No Entity Framework:** data access is Dapper with a small `ISqlDialect` for the few SQL differences
   (identity retrieval and paging). ASP.NET Core Identity uses custom Dapper stores (`DapperUserStore`,
   `DapperRoleStore`).

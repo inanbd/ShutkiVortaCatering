@@ -1,169 +1,252 @@
 @page
 @model ShutkiVorta.Web.Pages.Admin.IndexModel
 @{
+    // Sections the person may not see are null or empty in the DTO and are not rendered at all (never as $0.00).
     var d = Model.Dashboard;
-    var maxRevenue = Math.Max(1m, d.Last14Days.Max(x => x.Revenue));
+    var maxRevenue = Math.Max(1m, d.Last14Days.Select(x => x.Revenue).DefaultIfEmpty().Max());
+    var showTodayCard = d.IncludesSales || d.IncludesOrders;
 }
 
-<div class="kpis">
-    <div class="kpi red"><a href="/admin/orders?status=Pending">
-        <div class="label">Awaiting confirmation</div>
-        <div class="value">@d.PendingOrders</div>
-        <div class="sub">pending orders</div></a>
-    </div>
-    <div class="kpi"><a href="/admin/orders">
-        <div class="label">In progress</div>
-        <div class="value">@d.ActiveOrders</div>
-        <div class="sub">confirmed, preparing or ready</div></a>
-    </div>
-    <div class="kpi gold">
-        <div class="label">Today</div>
-        <div class="value">@Ui.Money(d.RevenueToday)</div>
-        <div class="sub">@d.OrdersToday online order(s) placed today</div>
-    </div>
-    <div class="kpi maroon">
-        <div class="label">This month</div>
-        <div class="value">@Ui.Money(d.RevenueThisMonth)</div>
-        <div class="sub">@d.OrdersThisMonth online order(s) &middot; <a href="/admin/inquiries">@d.OpenInquiries open inquiries</a></div>
-    </div>
-</div>
+<section class="panel clock-card @(Model.OnClockSince is null ? "off" : "on")">
+    @if (Model.OnClockSince is { } since)
+    {
+        <p>@Icons.Get("clock") <span>You're on the clock since <strong>@since</strong>.</span></p>
+        <a class="btn btn-outline btn-sm" href="@StaffLanding.TimeClock">Clock out</a>
+    }
+    else
+    {
+        <p>@Icons.Get("clock") <span>You're not clocked in.</span></p>
+        <a class="btn btn-green btn-sm" href="@StaffLanding.TimeClock">Clock in</a>
+    }
+</section>
 
-<div class="kpis kpis-3">
-    <div class="kpi @(d.StandingOrdersAwaitingApproval > 0 ? "red attention" : null)"><a href="/admin/recurring?status=@StandingOrderStatus.PendingApproval">
-        <div class="label">Restaurant requests</div>
-        <div class="value">@d.StandingOrdersAwaitingApproval</div>
-        <div class="sub">awaiting approval</div></a>
-    </div>
-    <div class="kpi"><a href="/admin/recurring?status=@StandingOrderStatus.Active">
-        <div class="label">Standing orders</div>
-        <div class="value">@d.ActiveStandingOrders</div>
-        <div class="sub">active restaurant agreements</div></a>
-    </div>
-    <div class="kpi maroon"><a href="/admin/orders?source=@OrderSource.Restaurant&amp;from=@d.WeekStart.ToString("yyyy-MM-dd")&amp;to=@d.WeekEnd.ToString("yyyy-MM-dd")">
-        <div class="label">Restaurant deliveries this week</div>
-        <div class="value">@d.RestaurantDeliveriesThisWeek</div>
-        <div class="sub">@Ui.Money(d.RestaurantRevenueThisWeek) &middot; @d.WeekStart.ToString("MMM d", Format.Culture) – @d.WeekEnd.ToString("MMM d", Format.Culture)</div></a>
-    </div>
-</div>
-
-<div class="grid-2">
-    <div>
-        <section class="panel">
-            <div class="panel-head">
-                <h2>Upcoming pickups &amp; deliveries</h2>
-                <span class="muted small">Next 7 days</span>
+@if (d.IncludesOrders || showTodayCard || d.IncludesInquiries)
+{
+    <div class="kpis">
+        @if (d.IncludesOrders)
+        {
+            <div class="kpi red"><a href="/admin/orders?status=Pending">
+                <div class="label">Awaiting confirmation</div>
+                <div class="value">@d.PendingOrders</div>
+                <div class="sub">pending orders</div></a>
             </div>
-            <div class="panel-body flush table-wrap">
-                @if (d.UpcomingOrders.Count == 0)
+            <div class="kpi"><a href="/admin/orders">
+                <div class="label">In progress</div>
+                <div class="value">@d.ActiveOrders</div>
+                <div class="sub">confirmed, preparing or ready</div></a>
+            </div>
+        }
+        @if (showTodayCard)
+        {
+            <div class="kpi gold">
+                <div class="label">Today</div>
+                @if (d.RevenueToday is { } revenueToday)
                 {
-                    <p class="muted" style="padding:20px;">Nothing scheduled for the next 7 days.</p>
+                    <div class="value">@Ui.Money(revenueToday)</div>
+                    <div class="sub">@(d.OrdersToday is { } today ? $"{today} online order(s) placed today" : "online sales today")</div>
                 }
                 else
                 {
-                    <table class="table">
-                        <thead><tr><th>When</th><th>Order</th><th>Customer</th><th class="num">Total</th></tr></thead>
-                        <tbody>
-                            @foreach (var o in d.UpcomingOrders)
-                            {
-                                <tr>
-                                    <td class="nowrap"><strong>@o.ScheduledFor.ToString("ddd, MMM d", Format.Culture)</strong><br /><span class="small muted">@Format.Time(o.ScheduledFor) &middot; @o.FulfillmentName</span></td>
-                                    <td>
-                                        <a class="strong nowrap" href="/admin/orders/@o.OrderNumber">@o.OrderNumber</a> <partial name="_StatusBadge" model="o.Status" />
-                                        <div class="preview">@o.ItemsPreview</div>
-                                    </td>
-                                    <td>
-                                        @if (o.IsRestaurantOrder)
-                                        {
-                                            <span class="source-badge">@Icons.Get("repeat") Restaurant</span><br /><strong>@o.CompanyName</strong><br />
-                                        }
-                                        else
-                                        {
-                                            @o.CustomerName<br />
-                                        }
-                                        <span class="small muted nowrap">@o.Phone</span>
-                                    </td>
-                                    <td class="num">@Ui.Money(o.Total)</td>
-                                </tr>
-                            }
-                        </tbody>
-                    </table>
+                    <div class="value">@d.OrdersToday</div>
+                    <div class="sub">online order(s) placed today</div>
                 }
             </div>
-        </section>
-
-        <section class="panel">
-            <div class="panel-head">
-                <h2>Recent online orders</h2>
-                <a class="btn btn-outline btn-sm" href="/admin/orders">All orders</a>
-            </div>
-            <div class="panel-body flush table-wrap">
-                @if (d.RecentOrders.Count == 0)
+            <div class="kpi maroon">
+                <div class="label">This month</div>
+                @if (d.RevenueThisMonth is { } revenueThisMonth)
                 {
-                    <p class="muted" style="padding:20px;">No orders yet. Share your menu link to get started!</p>
+                    <div class="value">@Ui.Money(revenueThisMonth)</div>
                 }
                 else
                 {
-                    <table class="table">
-                        <thead><tr><th>Order</th><th>Placed</th><th>Customer</th><th>Status</th><th class="num">Total</th></tr></thead>
-                        <tbody>
-                            @foreach (var o in d.RecentOrders)
-                            {
-                                <tr>
-                                    <td><a class="strong" href="/admin/orders/@o.OrderNumber">@o.OrderNumber</a></td>
-                                    <td class="small">@o.CreatedAtUtc.ToString("MMM d", Format.Culture)</td>
-                                    <td>@o.CustomerName</td>
-                                    <td><partial name="_StatusBadge" model="o.Status" /></td>
-                                    <td class="num">@Ui.Money(o.Total)</td>
-                                </tr>
-                            }
-                        </tbody>
-                    </table>
+                    <div class="value">@d.OrdersThisMonth</div>
                 }
-            </div>
-        </section>
-    </div>
-
-    <div>
-        <section class="panel">
-            <div class="panel-head"><h2>Online sales &middot; last 14 days</h2></div>
-            <div class="panel-body">
-                <div class="chart" role="img" aria-label="Daily revenue for the last 14 days">
-                    @foreach (var day in d.Last14Days)
+                <div class="sub">
+                    @if (d.RevenueThisMonth is null)
                     {
-                        var pct = (int)Math.Round(day.Revenue / maxRevenue * 100);
-                        <div class="bar" title="@day.Date.ToString("MMM d", Format.Culture): @Ui.Money(day.Revenue) (@day.Orders orders)">
-                            <span class="fill" style="height:@(Math.Max(1, pct))%"></span>
-                            <small>@day.Date.Day</small>
-                        </div>
+                        <text>online order(s) this month</text>
+                    }
+                    else if (d.OrdersThisMonth is { } thisMonth)
+                    {
+                        <text>@thisMonth online order(s)</text>
+                    }
+                    else
+                    {
+                        <text>online sales</text>
+                    }
+                    @if (d.OpenInquiries is { } open)
+                    {
+                        <text> &middot; <a href="/admin/inquiries">@open open inquiries</a></text>
                     }
                 </div>
             </div>
-        </section>
-
-        <section class="panel">
-            <div class="panel-head"><h2>Most ordered online this month</h2></div>
-            <div class="panel-body">
-                @if (d.PopularItems.Count == 0)
-                {
-                    <p class="muted mb-0">No orders this month yet.</p>
-                }
-                else
-                {
-                    <ul class="list-plain">
-                        @foreach (var item in d.PopularItems)
-                        {
-                            <li><span><strong>@item.ItemName</strong><br /><span class="small muted">@Ui.Qty(item.TotalQuantity, item.Unit)</span></span><span>@Ui.Money(item.Revenue)</span></li>
-                        }
-                    </ul>
-                }
+        }
+        else if (d.OpenInquiries is { } openInquiries)
+        {
+            <div class="kpi maroon"><a href="/admin/inquiries">
+                <div class="label">Inquiries</div>
+                <div class="value">@openInquiries</div>
+                <div class="sub">open inquiries</div></a>
             </div>
-        </section>
+        }
+    </div>
+}
+
+@if (d.IncludesRestaurants)
+{
+    <div class="kpis kpis-3">
+        <div class="kpi @(d.StandingOrdersAwaitingApproval > 0 ? "red attention" : null)"><a href="/admin/recurring?status=@StandingOrderStatus.PendingApproval">
+            <div class="label">Restaurant requests</div>
+            <div class="value">@d.StandingOrdersAwaitingApproval</div>
+            <div class="sub">awaiting approval</div></a>
+        </div>
+        <div class="kpi"><a href="/admin/recurring?status=@StandingOrderStatus.Active">
+            <div class="label">Standing orders</div>
+            <div class="value">@d.ActiveStandingOrders</div>
+            <div class="sub">active restaurant agreements</div></a>
+        </div>
+        <div class="kpi maroon"><a link-permission="@Permissions.OrdersView" href="/admin/orders?source=@OrderSource.Restaurant&amp;from=@d.WeekStart.ToString("yyyy-MM-dd")&amp;to=@d.WeekEnd.ToString("yyyy-MM-dd")">
+            <div class="label">Restaurant deliveries this week</div>
+            <div class="value">@d.RestaurantDeliveriesThisWeek</div>
+            <div class="sub">@(d.RestaurantRevenueThisWeek is { } restaurantRevenue ? Ui.Money(restaurantRevenue) + " · " : string.Empty)@d.WeekStart.ToString("MMM d", Format.Culture) – @d.WeekEnd.ToString("MMM d", Format.Culture)</div></a>
+        </div>
+    </div>
+}
+
+<div class="grid-2">
+    <div>
+        @if (d.IncludesOrders)
+        {
+            <section class="panel">
+                <div class="panel-head">
+                    <h2>Upcoming pickups &amp; deliveries</h2>
+                    <span class="muted small">Next 7 days</span>
+                </div>
+                <div class="panel-body flush table-wrap">
+                    @if (d.UpcomingOrders.Count == 0)
+                    {
+                        <p class="muted" style="padding:20px;">Nothing scheduled for the next 7 days.</p>
+                    }
+                    else
+                    {
+                        <table class="table">
+                            <thead><tr><th>When</th><th>Order</th><th>Customer</th>@if (d.IncludesSales) {<th class="num">Total</th>}</tr></thead>
+                            <tbody>
+                                @foreach (var o in d.UpcomingOrders)
+                                {
+                                    <tr>
+                                        <td class="nowrap"><strong>@o.ScheduledFor.ToString("ddd, MMM d", Format.Culture)</strong><br /><span class="small muted">@Format.Time(o.ScheduledFor) &middot; @o.FulfillmentName</span></td>
+                                        <td>
+                                            <a class="strong nowrap" href="/admin/orders/@o.OrderNumber">@o.OrderNumber</a> <partial name="_StatusBadge" model="o.Status" />
+                                            <div class="preview">@o.ItemsPreview</div>
+                                        </td>
+                                        <td>
+                                            @if (o.IsRestaurantOrder)
+                                            {
+                                                <span class="source-badge">@Icons.Get("repeat") Restaurant</span><br /><strong>@o.CompanyName</strong><br />
+                                            }
+                                            else
+                                            {
+                                                @o.CustomerName<br />
+                                            }
+                                            <span class="small muted nowrap">@o.Phone</span>
+                                        </td>
+                                        @if (o.Total is { } total)
+                                        {
+                                            <td class="num">@Ui.Money(total)</td>
+                                        }
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    }
+                </div>
+            </section>
+
+            <section class="panel">
+                <div class="panel-head">
+                    <h2>Recent online orders</h2>
+                    <a class="btn btn-outline btn-sm" href="/admin/orders">All orders</a>
+                </div>
+                <div class="panel-body flush table-wrap">
+                    @if (d.RecentOrders.Count == 0)
+                    {
+                        <p class="muted" style="padding:20px;">No orders yet. Share your menu link to get started!</p>
+                    }
+                    else
+                    {
+                        <table class="table">
+                            <thead><tr><th>Order</th><th>Placed</th><th>Customer</th><th>Status</th>@if (d.IncludesSales) {<th class="num">Total</th>}</tr></thead>
+                            <tbody>
+                                @foreach (var o in d.RecentOrders)
+                                {
+                                    <tr>
+                                        <td><a class="strong" href="/admin/orders/@o.OrderNumber">@o.OrderNumber</a></td>
+                                        <td class="small">@o.CreatedAtUtc.ToString("MMM d", Format.Culture)</td>
+                                        <td>@o.CustomerName</td>
+                                        <td><partial name="_StatusBadge" model="o.Status" /></td>
+                                        @if (o.Total is { } total)
+                                        {
+                                            <td class="num">@Ui.Money(total)</td>
+                                        }
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    }
+                </div>
+            </section>
+        }
+    </div>
+
+    <div>
+        @if (d.IncludesSales)
+        {
+            <section class="panel">
+                <div class="panel-head"><h2>Online sales &middot; last 14 days</h2></div>
+                <div class="panel-body">
+                    <div class="chart" role="img" aria-label="Daily revenue for the last 14 days">
+                        @foreach (var day in d.Last14Days)
+                        {
+                            var pct = (int)Math.Round(day.Revenue / maxRevenue * 100);
+                            <div class="bar" title="@day.Date.ToString("MMM d", Format.Culture): @Ui.Money(day.Revenue) (@day.Orders orders)">
+                                <span class="fill" style="height:@(Math.Max(1, pct))%"></span>
+                                <small>@day.Date.Day</small>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </section>
+        }
+
+        @if (d.IncludesSales || d.IncludesOrders)
+        {
+            <section class="panel">
+                <div class="panel-head"><h2>Most ordered online this month</h2></div>
+                <div class="panel-body">
+                    @if (d.PopularItems.Count == 0)
+                    {
+                        <p class="muted mb-0">No orders this month yet.</p>
+                    }
+                    else
+                    {
+                        <ul class="list-plain">
+                            @foreach (var item in d.PopularItems)
+                            {
+                                <li><span><strong>@item.ItemName</strong><br /><span class="small muted">@Ui.Qty(item.TotalQuantity, item.Unit)</span></span>@if (item.Revenue is { } revenue) {<span>@Ui.Money(revenue)</span>}</li>
+                            }
+                        </ul>
+                    }
+                </div>
+            </section>
+        }
 
         <section class="panel">
             <div class="panel-head"><h2>Quick links</h2></div>
             <div class="panel-body flex wrap gap-1">
-                <a class="btn btn-green btn-sm" href="/admin/menu/edit">@Icons.Get("plus") New menu item</a>
-                <a class="btn btn-outline btn-sm" href="/admin/production">@Icons.Get("pot") Production plan</a>
+                <a class="btn btn-green btn-sm" href="@StaffLanding.TimeClock">@Icons.Get("clock") Time clock</a>
+                <a class="btn btn-outline btn-sm" requires-permission="@Permissions.MenuManage" href="/admin/menu/edit">@Icons.Get("plus") New menu item</a>
+                <a class="btn btn-outline btn-sm" requires-permission="@Permissions.ProductionView" href="/admin/production">@Icons.Get("pot") Production plan</a>
                 <a class="btn btn-outline btn-sm" href="/sitemap.xml" target="_blank">Sitemap</a>
                 <a class="btn btn-outline btn-sm" href="/robots.txt" target="_blank">robots.txt</a>
             </div>

@@ -1,7 +1,5 @@
 using System.Data.Common;
 using Dapper;
-using Microsoft.Data.SqlClient;
-using Microsoft.Data.Sqlite;
 using ShutkiVorta.Application.Common.Formatting;
 using ShutkiVorta.Application.Common.Models;
 using ShutkiVorta.Application.Features.Wholesale;
@@ -220,7 +218,7 @@ internal sealed class StandingOrderRepository(IDbConnectionFactory connections, 
             }, cancellationToken: cancellationToken));
             return inserted > 0;
         }
-        catch (DbException ex) when (IsDuplicateKey(ex))
+        catch (DbException ex) when (DbErrors.IsUniqueViolation(ex))
         {
             return false;
         }
@@ -382,13 +380,6 @@ internal sealed class StandingOrderRepository(IDbConnectionFactory connections, 
     private static string? Truncate(string? value) => value is { Length: > 500 } ? value[..500] : value;
 
     /// <summary>SQLite: UNIQUE/PRIMARY KEY constraint (19). SQL Server: duplicate key (2627, 2601).</summary>
-    private static bool IsDuplicateKey(DbException ex) => ex switch
-    {
-        SqliteException sqlite => sqlite.SqliteErrorCode == 19,
-        SqlException sql => sql.Number is 2627 or 2601,
-        _ => false,
-    };
-
     private sealed class PreviewLine
     {
         public int StandingOrderId { get; init; }

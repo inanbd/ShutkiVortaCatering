@@ -1,6 +1,13 @@
+@using ShutkiVorta.Application.Common.Interfaces
+@using ShutkiVorta.Application.Common.Security
 @using ShutkiVorta.Application.Features.Inquiries
 @using ShutkiVorta.Application.Features.Inventory
 @using ShutkiVorta.Application.Features.Wholesale
 @using ShutkiVorta.Application.Common.Formatting
 @using ShutkiVorta.Domain.Inventory
 @using ShutkiVorta.Domain.Wholesale
+@using ShutkiVorta.Web.Infrastructure.Security
+@* requires-permission="..." hides an element, link-permission="..." turns a link into plain text (see PermissionTagHelpers). *@
+@addTagHelper *, ShutkiVorta.Web
+@* The signed-in person's staff access, loaded once per request: var access = await Staff.GetAsync(); *@
+@inject ICurrentStaff Staff

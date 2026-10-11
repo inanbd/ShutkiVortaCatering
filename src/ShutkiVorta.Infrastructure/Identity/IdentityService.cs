@@ -42,27 +42,27 @@ internal sealed class IdentityService(
         return Result<string>.Success(user.Id);
     }
 
-    public async Task<SignInOutcome> PasswordSignInAsync(string email, string password, bool rememberMe)
+    public async Task<SignInResultDto> PasswordSignInAsync(string email, string password, bool rememberMe)
     {
         var user = await userManager.FindByEmailAsync(email);
         if (user is null)
         {
-            return SignInOutcome.Failed;
+            return SignInResultDto.Failed(SignInOutcome.Failed);
         }
 
         var result = await signInManager.PasswordSignInAsync(user, password, rememberMe, lockoutOnFailure: true);
         if (result.Succeeded)
         {
-            return SignInOutcome.Succeeded;
+            return new SignInResultDto(SignInOutcome.Succeeded, user.Id);
         }
 
         if (result.IsLockedOut)
         {
-            return SignInOutcome.LockedOut;
+            return SignInResultDto.Failed(SignInOutcome.LockedOut);
         }
 
         // IsNotAllowed is only returned after the password was verified, so this does not leak account existence.
-        return result.IsNotAllowed && !user.EmailConfirmed ? SignInOutcome.EmailNotConfirmed : SignInOutcome.Failed;
+        return SignInResultDto.Failed(result.IsNotAllowed && !user.EmailConfirmed ? SignInOutcome.EmailNotConfirmed : SignInOutcome.Failed);
     }
 
     public async Task SignInAsync(string userId, bool isPersistent)
@@ -208,7 +208,6 @@ internal sealed class IdentityService(
 
         parameters.Add("Skip", (page - 1) * pageSize);
         parameters.Add("Take", pageSize);
-        parameters.Add("AdminRole", Roles.Admin.ToUpperInvariant());
 
         await using var connection = await connections.OpenAsync(cancellationToken);
         var total = await connection.ExecuteScalarAsync<int>(new CommandDefinition(
@@ -220,9 +219,7 @@ internal sealed class IdentityService(
 
         var sql = dialect.Page($"""
             SELECT u.Id, u.Email, u.FullName, u.PhoneNumber, u.EmailConfirmed, u.AddressLine1, u.AddressLine2, u.City, u.State,
-                   u.PostalCode, u.CreatedAtUtc, u.LockoutEndUtc,
-                   (SELECT COUNT(*) FROM UserRoles ur INNER JOIN Roles r ON r.Id = ur.RoleId
-                    WHERE ur.UserId = u.Id AND r.NormalizedName = @AdminRole) AS AdminRoleCount
+                   u.PostalCode, u.CreatedAtUtc, u.LockoutEndUtc
             FROM Users u {where}
             ORDER BY u.CreatedAtUtc DESC
             """);
@@ -242,43 +239,10 @@ internal sealed class IdentityService(
             State = r.State,
             PostalCode = r.PostalCode,
             CreatedAtUtc = r.CreatedAtUtc,
-            IsAdmin = r.AdminRoleCount > 0,
             IsLockedOut = r.LockoutEndUtc is { } end && end > now,
         }).ToList();
 
         return new PagedResult<UserAccount>(items, total, page, pageSize);
-    }
-
-    public async Task<Result> SetAdminRoleAsync(string userId, bool isAdmin)
-    {
-        var user = await userManager.FindByIdAsync(userId);
-        if (user is null)
-        {
-            return Result.Failure("User not found.");
-        }
-
-        var inRole = await userManager.IsInRoleAsync(user, Roles.Admin);
-        IdentityResult result;
-        if (isAdmin && !inRole)
-        {
-            result = await userManager.AddToRoleAsync(user, Roles.Admin);
-        }
-        else if (!isAdmin && inRole)
-        {
-            result = await userManager.RemoveFromRoleAsync(user, Roles.Admin);
-        }
-        else
-        {
-            return Result.Success();
-        }
-
-        if (result.Succeeded)
-        {
-            // Invalidate existing cookies so the role change applies on the user's next request.
-            await userManager.UpdateSecurityStampAsync(user);
-        }
-
-        return result.Succeeded ? Result.Success() : Result.Failure(result.Errors.Select(e => e.Description));
     }
 
     private async Task<UserAccount> ToAccountAsync(ApplicationUser user) => new()
@@ -294,7 +258,6 @@ internal sealed class IdentityService(
         State = user.State,
         PostalCode = user.PostalCode,
         CreatedAtUtc = user.CreatedAtUtc,
-        IsAdmin = await userManager.IsInRoleAsync(user, Roles.Admin),
         IsLockedOut = await userManager.IsLockedOutAsync(user),
     };
 
@@ -331,6 +294,5 @@ internal sealed class IdentityService(
         public string? PostalCode { get; init; }
         public DateTime CreatedAtUtc { get; init; }
         public DateTime? LockoutEndUtc { get; init; }
-        public int AdminRoleCount { get; init; }
     }
 }

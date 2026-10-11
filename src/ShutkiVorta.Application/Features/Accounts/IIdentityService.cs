@@ -9,7 +9,11 @@ public interface IIdentityService
 
     Task<Result<string>> RegisterCustomerAsync(string fullName, string email, string phone, string password);
 
-    Task<SignInOutcome> PasswordSignInAsync(string email, string password, bool rememberMe);
+    /// <summary>
+    /// Signs in with a password. On success the result carries the user's id: the cookie is written, but the current
+    /// request still sees an anonymous user.
+    /// </summary>
+    Task<SignInResultDto> PasswordSignInAsync(string email, string password, bool rememberMe);
 
     Task SignInAsync(string userId, bool isPersistent);
 
@@ -36,8 +40,6 @@ public interface IIdentityService
     Task<Result> UpdateProfileAsync(string userId, UserProfileUpdate update);
 
     Task<PagedResult<UserAccount>> SearchUsersAsync(string? search, int page, int pageSize, CancellationToken cancellationToken = default);
-
-    Task<Result> SetAdminRoleAsync(string userId, bool isAdmin);
 }
 
 public enum SignInOutcome
@@ -46,6 +48,12 @@ public enum SignInOutcome
     Failed,
     LockedOut,
     EmailNotConfirmed,
+}
+
+/// <param name="UserId">The signed-in user's id when <paramref name="Outcome"/> is Succeeded, otherwise null.</param>
+public sealed record SignInResultDto(SignInOutcome Outcome, string? UserId)
+{
+    public static SignInResultDto Failed(SignInOutcome outcome) => new(outcome, null);
 }
 
 public sealed record UserAccount
@@ -61,7 +69,6 @@ public sealed record UserAccount
     public string? State { get; init; }
     public string? PostalCode { get; init; }
     public DateTime CreatedAtUtc { get; init; }
-    public bool IsAdmin { get; init; }
     public bool IsLockedOut { get; init; }
 }
 

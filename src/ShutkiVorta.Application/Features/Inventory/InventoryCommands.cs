@@ -11,13 +11,16 @@ using ValidationException = ShutkiVorta.Application.Common.Exceptions.Validation
 namespace ShutkiVorta.Application.Features.Inventory;
 
 /// <summary>Deletes a purchase with its receipt photos. Saved item names are kept.</summary>
-public sealed record DeleteInventoryPurchaseCommand(int Id) : IRequest, IRequireAdmin;
+[RequirePermission(Permissions.InventoryManage)]
+public sealed record DeleteInventoryPurchaseCommand(int Id) : IRequest;
 
 /// <summary>Saves a new item name (when <see cref="Id"/> is null), or renames an item and changes its usual unit. Returns the id.</summary>
-public sealed record SaveInventoryItemCommand(int? Id, string Name, string Unit) : IRequest<int>, IRequireAdmin;
+[RequirePermission(Permissions.InventoryManage)]
+public sealed record SaveInventoryItemCommand(int? Id, string Name, string Unit) : IRequest<int>;
 
 /// <summary>Deletes a saved item name that no purchase uses, e.g. one saved with a typo.</summary>
-public sealed record DeleteInventoryItemCommand(int Id) : IRequest, IRequireAdmin;
+[RequirePermission(Permissions.InventoryManage)]
+public sealed record DeleteInventoryItemCommand(int Id) : IRequest;
 
 public sealed class SaveInventoryItemCommandValidator : AbstractValidator<SaveInventoryItemCommand>
 {

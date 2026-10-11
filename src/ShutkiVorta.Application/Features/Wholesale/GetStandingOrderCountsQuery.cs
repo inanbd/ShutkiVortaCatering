@@ -5,7 +5,8 @@ using ShutkiVorta.Domain.Wholesale;
 namespace ShutkiVorta.Application.Features.Wholesale;
 
 /// <summary>Number of standing orders in each status, for the admin list tabs.</summary>
-public sealed record GetStandingOrderCountsQuery : IRequest<IReadOnlyDictionary<StandingOrderStatus, int>>, IRequireAdmin;
+[RequirePermission(Permissions.RestaurantsView)]
+public sealed record GetStandingOrderCountsQuery : IRequest<IReadOnlyDictionary<StandingOrderStatus, int>>;
 
 internal sealed class GetStandingOrderCountsQueryHandler(IStandingOrderRepository standingOrders)
     : IRequestHandler<GetStandingOrderCountsQuery, IReadOnlyDictionary<StandingOrderStatus, int>>

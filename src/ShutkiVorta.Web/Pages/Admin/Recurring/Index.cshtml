@@ -2,7 +2,7 @@
 @model ShutkiVorta.Web.Pages.Admin.Recurring.IndexModel
 @inject ShutkiVorta.Application.Common.Interfaces.IDateTimeProvider Clock
 @section Actions {
-    <a class="btn btn-outline btn-sm" href="/admin/production">@Icons.Get("pot") Production plan</a>
+    <a class="btn btn-outline btn-sm" requires-permission="@Permissions.ProductionView" href="/admin/production">@Icons.Get("pot") Production plan</a>
 }
 
 <div class="generate-bar">
@@ -10,10 +10,10 @@
         @Icons.Get("clock")
         <span>
             Orders for active standing orders are created @(Model.AutoGenerate ? "automatically every hour" : "when you press the button (automatic generation is off)"),
-            <strong>@Model.GenerateDaysAhead days ahead</strong>, and then appear in <a href="/admin/orders?source=@OrderSource.Restaurant">Orders</a> like any other order.
+            <strong>@Model.GenerateDaysAhead days ahead</strong>, and then appear in <a link-permission="@Permissions.OrdersView" href="/admin/orders?source=@OrderSource.Restaurant">Orders</a> like any other order.
         </span>
     </p>
-    <form method="post" asp-page-handler="Generate" asp-route-status="@Model.Tab" asp-route-q="@Model.Q">
+    <form method="post" asp-page-handler="Generate" asp-route-status="@Model.Tab" asp-route-q="@Model.Q" requires-permission="@Permissions.RestaurantsManage">
         <button class="btn btn-green btn-sm" type="submit">@Icons.Get("check-circle") Generate upcoming deliveries now</button>
     </form>
 </div>

@@ -57,21 +57,24 @@ public enum StandingOrderAction
 }
 
 /// <summary>Admin changes the status of a standing order.</summary>
+[RequirePermission(Permissions.RestaurantsManage)]
 public sealed record ChangeStandingOrderStatusCommand(int Id, StandingOrderAction Action, string? Note, bool NotifyRestaurant = true)
-    : IRequest<string>, IRequireAdmin;
+    : IRequest<string>;
 
 /// <summary>A restaurant pauses, resumes or cancels its own standing order.</summary>
 public sealed record ChangeMyStandingOrderCommand(string Reference, StandingOrderAction Action, string? Reason)
     : IRequest<string>, IRequireAuthenticatedUser;
 
-public sealed record SkipStandingOrderDateCommand(int Id, DateOnly Date, bool Skip) : IRequest, IRequireAdmin;
+[RequirePermission(Permissions.RestaurantsManage)]
+public sealed record SkipStandingOrderDateCommand(int Id, DateOnly Date, bool Skip) : IRequest;
 
 public sealed record SkipMyStandingOrderDateCommand(string Reference, DateOnly Date, bool Skip) : IRequest, IRequireAuthenticatedUser;
 
 public sealed record StandingOrderTermsLine(int MenuItemId, decimal Quantity, decimal UnitPrice);
 
 /// <summary>Admin edits the agreement (items, agreed prices, schedule, fee, tax status, notes).</summary>
-public sealed record UpdateStandingOrderTermsCommand : IRequest, IRequireAdmin
+[RequirePermission(Permissions.RestaurantsManage)]
+public sealed record UpdateStandingOrderTermsCommand : IRequest
 {
     public int Id { get; init; }
     public IReadOnlyList<StandingOrderTermsLine> Lines { get; init; } = [];
@@ -84,20 +87,25 @@ public sealed record UpdateStandingOrderTermsCommand : IRequest, IRequireAdmin
     public string? AdminNotes { get; init; }
 }
 
-public sealed record GenerateStandingOrderDeliveriesCommand : IRequest<GenerationReport>, IRequireAdmin;
+[RequirePermission(Permissions.RestaurantsManage)]
+public sealed record GenerateStandingOrderDeliveriesCommand : IRequest<GenerationReport>;
 
+[RequirePermission(Permissions.RestaurantsView)]
 public sealed record GetStandingOrdersQuery(StandingOrderStatus? Status, string? Search, int Page = 1, int PageSize = Paging.DefaultPageSize)
-    : IRequest<PagedResult<StandingOrderSummaryDto>>, IRequireAdmin;
+    : IRequest<PagedResult<StandingOrderSummaryDto>>;
 
-public sealed record GetStandingOrderQuery(int Id) : IRequest<StandingOrderDetailsDto?>, IRequireAdmin;
+[RequirePermission(Permissions.RestaurantsView)]
+public sealed record GetStandingOrderQuery(int Id) : IRequest<StandingOrderDetailsDto?>;
 
 public sealed record GetMyStandingOrdersQuery : IRequest<IReadOnlyList<StandingOrderSummaryDto>>, IRequireAuthenticatedUser;
 
 public sealed record GetMyStandingOrderQuery(string Reference) : IRequest<StandingOrderDetailsDto?>, IRequireAuthenticatedUser;
 
-public sealed record GetStandingOrderStatementQuery(int Id, DateOnly From, DateOnly To) : IRequest<StatementDto?>, IRequireAdmin;
+[RequirePermission(Permissions.RestaurantsView)]
+public sealed record GetStandingOrderStatementQuery(int Id, DateOnly From, DateOnly To) : IRequest<StatementDto?>;
 
-public sealed record GetProductionPlanQuery(DateOnly? From, int Days = 7) : IRequest<ProductionPlanDto>, IRequireAdmin;
+[RequirePermission(Permissions.ProductionView)]
+public sealed record GetProductionPlanQuery(DateOnly? From, int Days = 7) : IRequest<ProductionPlanDto>;
 
 public sealed record StandingOrderSubmittedNotification(int StandingOrderId) : INotification;
 

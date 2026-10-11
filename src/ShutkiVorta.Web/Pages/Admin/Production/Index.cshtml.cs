@@ -4,11 +4,13 @@ using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.Extensions.Options;
 using ShutkiVorta.Application.Common.Interfaces;
 using ShutkiVorta.Application.Common.Options;
+using ShutkiVorta.Application.Common.Security;
 using ShutkiVorta.Application.Features.Wholesale;
 using ShutkiVorta.Web.Services;
 
 namespace ShutkiVorta.Web.Pages.Admin.Production;
 
+[RequirePermission(Permissions.ProductionView)]
 public sealed class IndexModel(ISender sender, IDateTimeProvider clock, IOptions<WholesaleOptions> wholesale) : PageModel
 {
     public static readonly IReadOnlyList<int> PeriodOptions = [1, 3, 7, 14];

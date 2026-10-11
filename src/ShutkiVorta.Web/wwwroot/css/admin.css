@@ -35,7 +35,7 @@ body.admin { background: #f5efe2; font-size: 1rem; }
   position: sticky; top: 0; z-index: 20;
 }
 .admin-topbar h1 { font-size: 1.9rem; margin: 0; }
-.admin-topbar .who { color: var(--ink-500); font-size: .92rem; }
+.admin-topbar .who { color: var(--ink-500); font-size: .92rem; white-space: nowrap; }
 .admin-content { padding: 28px 32px 60px; }
 .admin-band { height: 4px; background: linear-gradient(90deg, var(--red-700) 0 33.3%, var(--gold-500) 33.3% 66.6%, var(--green-800) 66.6%); }
 
@@ -99,6 +99,8 @@ body.admin { background: #f5efe2; font-size: 1rem; }
 .pill-admin { background: var(--maroon-700); color: var(--cream-50); }
 .pill-warn { background: #fff4d6; color: #7a5600; border: 1px solid #f0d48a; }
 .pill-bad { background: #f6dede; color: var(--maroon-800); border: 1px solid #e3b1b1; }
+.pill-manager { background: var(--green-800); color: var(--cream-50); }
+.pill-employee { background: var(--gold-200); color: var(--ink-900); border: 1px solid var(--gold-500); }
 .email-summary { font-size: 1.05rem; padding: 12px 16px; border-radius: var(--radius); margin-bottom: 16px; }
 .email-summary.ok { background: var(--green-100); color: var(--green-900); }
 .email-summary.bad { background: #fff4d6; color: #7a5600; }
@@ -125,6 +127,21 @@ code.inline { background: var(--cream-100); border: 1px solid var(--line); paddi
 .kpis-3 { grid-template-columns: repeat(3, 1fr); }
 .kpi.attention { background: #fffaf3; border-color: #e7b5b5; }
 .kpi.attention .value { color: var(--red-700); }
+
+/* ---------- Staff: time clock status, read-only forms ---------- */
+.clock-status { display: inline-flex; align-items: center; gap: 6px; padding: 5px 12px; border-radius: 999px; font-size: .88rem; font-weight: 600; text-decoration: none; white-space: nowrap; }
+.clock-status svg.icon { width: 18px; height: 18px; }
+.clock-status.on { background: var(--green-100); color: var(--green-900); border: 1px solid #b6d4c3; }
+.clock-status.off { background: var(--white); color: var(--maroon-800); border: 1px solid #e3b1b1; }
+.clock-status:hover { border-color: var(--gold-500); }
+.clock-card { display: flex; align-items: center; justify-content: space-between; gap: 12px 20px; flex-wrap: wrap; margin-bottom: 24px; padding: 16px 20px; }
+.clock-card p { margin: 0; display: flex; align-items: center; gap: 10px; font-size: 1.05rem; }
+.clock-card svg.icon { width: 26px; height: 26px; color: var(--green-800); flex: none; }
+.clock-card.off svg.icon { color: var(--red-700); }
+/* <fieldset disabled> around a form shown to staff who may look but not change */
+fieldset.read-only { border: 0; margin: 0; padding: 0; min-width: 0; }
+.read-only-note { display: flex; align-items: center; gap: 8px; }
+.read-only-note svg.icon { width: 18px; height: 18px; flex: none; }
 
 /* ---------- Restaurant (standing) orders ---------- */
 .source-badge {
@@ -417,6 +434,7 @@ details.settings-history[open] > summary { border-bottom: 1px dashed var(--line)
   .kpi .label { font-size: .7rem; letter-spacing: .08em; }
   .kpi .value { font-size: 1.6rem; }
   .admin-topbar .who { display: none; }
+  .clock-status .clock-elapsed { display: none; }
   .kv { grid-template-columns: 1fr; gap: 2px; }
   .kv dd { margin-bottom: 10px; }
   .panel-body { padding: 16px; }

@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
 using ShutkiVorta.Application.Common.Interfaces;
 using ShutkiVorta.Application.Common.Options;
+using ShutkiVorta.Application.Common.Security;
 using ShutkiVorta.Application.Common.Settings;
 using ShutkiVorta.Application.Features.Emails;
 using ShutkiVorta.Application.Features.Settings;
@@ -13,6 +14,7 @@ using ShutkiVorta.Web.Services;
 namespace ShutkiVorta.Web.Pages.Admin.Settings;
 
 /// <summary>Admin → Settings: one card per settings page, anything that needs attention, and the email delivery check.</summary>
+[AdminOnly]
 public sealed class IndexModel(
     ISender sender,
     ICurrentUser currentUser,

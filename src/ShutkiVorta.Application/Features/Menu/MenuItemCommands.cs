@@ -6,12 +6,15 @@ using ShutkiVorta.Application.Common.Security;
 
 namespace ShutkiVorta.Application.Features.Menu;
 
-public sealed record SetMenuItemAvailabilityCommand(int Id, bool IsAvailable) : IRequest, IRequireAdmin;
+[RequirePermission(Permissions.MenuManage)]
+public sealed record SetMenuItemAvailabilityCommand(int Id, bool IsAvailable) : IRequest;
 
-public sealed record DeleteMenuItemCommand(int Id) : IRequest, IRequireAdmin;
+[RequirePermission(Permissions.MenuManage)]
+public sealed record DeleteMenuItemCommand(int Id) : IRequest;
 
 /// <summary>Validates and stores an uploaded menu photo; returns its public URL.</summary>
-public sealed record UploadMenuImageCommand(Stream Content, string FileName, long Length) : IRequest<string>, IRequireAdmin;
+[RequirePermission(Permissions.MenuManage)]
+public sealed record UploadMenuImageCommand(Stream Content, string FileName, long Length) : IRequest<string>;
 
 internal sealed class MenuItemCommandHandlers(
     IMenuItemRepository repository,

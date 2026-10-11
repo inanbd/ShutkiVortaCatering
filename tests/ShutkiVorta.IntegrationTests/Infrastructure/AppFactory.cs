@@ -1,7 +1,9 @@
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.AspNetCore.TestHost;
 using Microsoft.Data.SqlClient;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace ShutkiVorta.IntegrationTests.Infrastructure;
 
@@ -17,6 +19,7 @@ public sealed class AppFactory : WebApplicationFactory<Program>
 
     private readonly string _sqlServerDatabase = $"ShutkiVortaTests_{Guid.NewGuid():N}";
     private readonly IReadOnlyDictionary<string, string?> _overrides;
+    private readonly Action<IServiceCollection>? _configureServices;
 
     private readonly bool _ownsDirectory;
 
@@ -24,10 +27,16 @@ public sealed class AppFactory : WebApplicationFactory<Program>
     /// Run against the SQLite database (and data-protection keys) in this folder, e.g. to restart the "same" site with other
     /// configuration. The caller deletes it. By default every factory gets a new folder of its own.
     /// </param>
-    public AppFactory(string provider, IReadOnlyDictionary<string, string?>? overrides = null, string? directory = null)
+    /// <param name="configureServices">Replaces services after the app registered its own (e.g. a fake TimeProvider).</param>
+    public AppFactory(
+        string provider,
+        IReadOnlyDictionary<string, string?>? overrides = null,
+        string? directory = null,
+        Action<IServiceCollection>? configureServices = null)
     {
         Provider = provider;
         _overrides = overrides ?? new Dictionary<string, string?>();
+        _configureServices = configureServices;
         _ownsDirectory = directory is null;
         TempDirectory = directory ?? NewDirectory();
         Directory.CreateDirectory(TempDirectory);
@@ -83,6 +92,11 @@ public sealed class AppFactory : WebApplicationFactory<Program>
         }
 
         builder.ConfigureAppConfiguration((_, config) => config.AddInMemoryCollection(settings));
+
+        if (_configureServices is not null)
+        {
+            builder.ConfigureTestServices(_configureServices);
+        }
     }
 
     private string SqlServerConnectionString()

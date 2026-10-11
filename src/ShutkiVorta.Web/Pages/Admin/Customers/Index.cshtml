@@ -19,7 +19,7 @@
         else
         {
             <table class="table">
-                <thead><tr><th>Name</th><th>Contact</th><th>Joined</th><th class="num">Orders</th><th>Role</th><th></th></tr></thead>
+                <thead><tr><th>Name</th><th>Contact</th><th>Joined</th><th class="num">Orders</th></tr></thead>
                 <tbody>
                     @foreach (var u in Model.Users.Items)
                     {
@@ -29,15 +29,6 @@
                             <td>@a.Email<br /><span class="small muted">@a.PhoneNumber</span></td>
                             <td class="small">@a.CreatedAtUtc.ToString("MMM d, yyyy", Format.Culture)</td>
                             <td class="num"><a href="/admin/orders?q=@Uri.EscapeDataString(a.Email)">@u.OrderCount</a></td>
-                            <td>@if (a.IsAdmin) { <span class="pill pill-admin">Admin</span> } else { <span class="pill pill-off">Customer</span> }</td>
-                            <td class="num">
-                                <form method="post" asp-page-handler="Admin" asp-route-q="@Model.Q" class="toggle-form"
-                                      data-confirm="@(a.IsAdmin ? $"Remove admin access from {a.FullName}?" : $"Give {a.FullName} full admin access?")">
-                                    <input type="hidden" name="userId" value="@a.Id" />
-                                    <input type="hidden" name="isAdmin" value="@((!a.IsAdmin).ToString().ToLowerInvariant())" />
-                                    <button class="btn btn-outline btn-sm" type="submit">@(a.IsAdmin ? "Remove admin" : "Make admin")</button>
-                                </form>
-                            </td>
                         </tr>
                     }
                 </tbody>

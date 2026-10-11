@@ -10,10 +10,12 @@ using ShutkiVorta.Domain.Orders;
 namespace ShutkiVorta.Application.Features.Orders;
 
 /// <summary>Admin moves an order through its lifecycle (confirmed → preparing → ready → completed, or cancelled).</summary>
+[RequirePermission(Permissions.OrdersManage)]
 public sealed record UpdateOrderStatusCommand(string OrderNumber, OrderStatus NewStatus, string? Note, bool NotifyCustomer)
-    : IRequest, IRequireAdmin;
+    : IRequest;
 
-public sealed record SaveOrderAdminNotesCommand(string OrderNumber, string? Notes) : IRequest, IRequireAdmin;
+[RequirePermission(Permissions.OrdersManage)]
+public sealed record SaveOrderAdminNotesCommand(string OrderNumber, string? Notes) : IRequest;
 
 /// <summary>Customer cancels their own pending order, authorised either by account ownership or the order's tracking token.</summary>
 public sealed record CancelOrderByCustomerCommand(string OrderNumber, string? TrackingToken, string? Reason) : IRequest;

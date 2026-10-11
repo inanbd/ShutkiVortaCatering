@@ -1,7 +1,10 @@
 @page
 @model ShutkiVorta.Web.Pages.Admin.Menu.IndexModel
+@{
+    var canManage = (await Staff.GetAsync()).Can(Permissions.MenuManage);
+}
 @section Actions {
-    <a class="btn btn-primary btn-sm" href="/admin/menu/edit">@Icons.Get("plus") New item</a>
+    <a class="btn btn-primary btn-sm" requires-permission="@Permissions.MenuManage" href="/admin/menu/edit">@Icons.Get("plus") New item</a>
 }
 
 <section class="panel">
@@ -24,18 +27,25 @@
                         <td class="num"><strong>@Ui.Money(item.PricePerUnit)</strong> / @item.Unit</td>
                         <td class="small">@Ui.Qty(item.MinimumQuantity, item.Unit) / @Ui.Qty(item.QuantityStep, item.Unit)</td>
                         <td>
-                            <form method="post" asp-page-handler="Availability" class="toggle-form">
-                                <input type="hidden" name="id" value="@item.Id" />
-                                <input type="hidden" name="isAvailable" value="@((!item.IsAvailable).ToString().ToLowerInvariant())" />
-                                <button class="btn-link small" type="submit" title="Click to toggle">
-                                    <span class="pill @(item.IsAvailable ? "pill-on" : "pill-off")">@(item.IsAvailable ? "Available" : "Hidden")</span>
-                                </button>
-                            </form>
+                            @if (canManage)
+                            {
+                                <form method="post" asp-page-handler="Availability" class="toggle-form">
+                                    <input type="hidden" name="id" value="@item.Id" />
+                                    <input type="hidden" name="isAvailable" value="@((!item.IsAvailable).ToString().ToLowerInvariant())" />
+                                    <button class="btn-link small" type="submit" title="Click to toggle">
+                                        <span class="pill @(item.IsAvailable ? "pill-on" : "pill-off")">@(item.IsAvailable ? "Available" : "Hidden")</span>
+                                    </button>
+                                </form>
+                            }
+                            else
+                            {
+                                <span class="pill @(item.IsAvailable ? "pill-on" : "pill-off")">@(item.IsAvailable ? "Available" : "Hidden")</span>
+                            }
                         </td>
                         <td><a class="small" href="/menu/@item.Slug" target="_blank" rel="noopener">/menu/@item.Slug</a></td>
                         <td class="num">
-                            <a class="btn btn-outline btn-sm" href="/admin/menu/edit/@item.Id">@Icons.Get("edit") Edit</a>
-                            <form method="post" asp-page-handler="Delete" class="toggle-form" data-confirm="Delete @item.Name? This cannot be undone.">
+                            <a class="btn btn-outline btn-sm" href="/admin/menu/edit/@item.Id">@Icons.Get(canManage ? "edit" : "eye") @(canManage ? "Edit" : "View")</a>
+                            <form method="post" asp-page-handler="Delete" class="toggle-form" data-confirm="Delete @item.Name? This cannot be undone." requires-permission="@Permissions.MenuManage">
                                 <input type="hidden" name="id" value="@item.Id" />
                                 <button class="btn-link small" type="submit">@Icons.Get("trash")</button>
                             </form>

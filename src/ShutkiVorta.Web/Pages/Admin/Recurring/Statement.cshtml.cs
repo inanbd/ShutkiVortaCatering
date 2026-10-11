@@ -4,10 +4,12 @@ using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.Extensions.Options;
 using ShutkiVorta.Application.Common.Interfaces;
 using ShutkiVorta.Application.Common.Options;
+using ShutkiVorta.Application.Common.Security;
 using ShutkiVorta.Application.Features.Wholesale;
 
 namespace ShutkiVorta.Web.Pages.Admin.Recurring;
 
+[RequirePermission(Permissions.RestaurantsView)]
 public sealed class StatementModel(
     ISender sender,
     IDateTimeProvider clock,

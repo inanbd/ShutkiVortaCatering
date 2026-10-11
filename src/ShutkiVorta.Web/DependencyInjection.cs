@@ -1,18 +1,20 @@
 using System.Globalization;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Localization;
 using Microsoft.AspNetCore.ResponseCompression;
 using ShutkiVorta.Application.Common.Interfaces;
-using ShutkiVorta.Application.Common.Security;
 using ShutkiVorta.Web.Infrastructure;
+using ShutkiVorta.Web.Infrastructure.Security;
 using ShutkiVorta.Web.Services;
 
 namespace ShutkiVorta.Web;
 
 public static class DependencyInjection
 {
-    public const string AdminPolicy = "AdminOnly";
+    /// <summary>The /Admin folder's policy: staff access (a staff role and a confirmed email), read from the database.</summary>
+    public const string StaffPolicy = "Staff";
 
     public static IServiceCollection AddWebServices(this IServiceCollection services, IConfiguration configuration, IWebHostEnvironment environment)
     {
@@ -24,13 +26,16 @@ public static class DependencyInjection
         services.AddFormRateLimiting();
 
         services.AddRazorPages(options =>
-        {
-            options.Conventions.AuthorizeFolder("/Admin", AdminPolicy);
-            options.Conventions.AuthorizeFolder("/Account/Manage");
-            options.Conventions.AuthorizeFolder("/Account/Orders");
-            options.Conventions.AuthorizeFolder("/Account/RestaurantOrders");
-            options.Conventions.AuthorizePage("/Restaurants/Order");
-        });
+            {
+                options.Conventions.AuthorizeFolder("/Admin", StaffPolicy);
+                options.Conventions.AuthorizeFolder("/Account/Manage");
+                options.Conventions.AuthorizeFolder("/Account/Orders");
+                options.Conventions.AuthorizeFolder("/Account/RestaurantOrders");
+                options.Conventions.AuthorizePage("/Restaurants/Order");
+            })
+            // Each admin page and handler states who may use it ([RequirePermission], [AdminOnly], [AnyStaff]). The filter
+            // is added by type (a new instance per request, for the scoped ICurrentStaff) and runs before any page code.
+            .AddMvcOptions(options => options.Filters.Add<PermissionPageFilter>(int.MinValue));
 
         services.AddRouting(options =>
         {
@@ -39,7 +44,8 @@ public static class DependencyInjection
         });
 
         services.AddAuthorizationBuilder()
-            .AddPolicy(AdminPolicy, policy => policy.RequireRole(Roles.Admin));
+            .AddPolicy(StaffPolicy, policy => policy.RequireAuthenticatedUser().AddRequirements(new StaffRequirement()));
+        services.AddScoped<IAuthorizationHandler, StaffRequirementHandler>();
 
         services.ConfigureApplicationCookie(options =>
         {

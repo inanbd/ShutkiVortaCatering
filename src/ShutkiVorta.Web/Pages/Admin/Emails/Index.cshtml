@@ -1,11 +1,21 @@
 @page
 @model ShutkiVorta.Web.Pages.Admin.Emails.IndexModel
 @using ShutkiVorta.Application.Features.Emails
+@{
+    var access = await Staff.GetAsync();
+    var canRetry = access.Can(Permissions.EmailsManage);
+}
 @section Actions {
-    <form method="post" asp-page-handler="RetryFailed" asp-route-status="@Model.Status">
-        <button class="btn btn-outline btn-sm" type="submit">Retry all failed</button>
-    </form>
-    <a class="btn btn-outline btn-sm" href="/admin/settings">Email settings</a>
+    @if (canRetry)
+    {
+        <form method="post" asp-page-handler="RetryFailed" asp-route-status="@Model.Status">
+            <button class="btn btn-outline btn-sm" type="submit">Retry all failed</button>
+        </form>
+    }
+    @if (access.IsAdmin)
+    {
+        <a class="btn btn-outline btn-sm" href="/admin/settings">Email settings</a>
+    }
 }
 
 <div class="flex gap-1 wrap mb-2">
@@ -49,7 +59,7 @@
                                 }
                             </td>
                             <td class="num">
-                                @if (!e.IsSensitive && e.Status is EmailStatus.Failed or EmailStatus.SavedToFolder or EmailStatus.Disabled)
+                                @if (canRetry && !e.IsSensitive && e.Status is EmailStatus.Failed or EmailStatus.SavedToFolder or EmailStatus.Disabled)
                                 {
                                     <form method="post" asp-page-handler="Retry" asp-route-status="@Model.Status" class="toggle-form">
                                         <input type="hidden" name="id" value="@e.Id" />

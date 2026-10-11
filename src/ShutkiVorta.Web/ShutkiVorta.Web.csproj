@@ -3,6 +3,8 @@
   <PropertyGroup>
     <RootNamespace>ShutkiVorta.Web</RootNamespace>
     <UserSecretsId>shutkivorta-web-5d1c6f0e</UserSecretsId>
+    <!-- MVC1001: a filter attribute on a Razor Pages handler method is silently ignored, so it must never compile. -->
+    <WarningsAsErrors>$(WarningsAsErrors);MVC1001</WarningsAsErrors>
   </PropertyGroup>
 
   <ItemGroup>

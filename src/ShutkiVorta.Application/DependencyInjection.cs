@@ -4,7 +4,9 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using ShutkiVorta.Application.Common.Behaviors;
+using ShutkiVorta.Application.Common.Interfaces;
 using ShutkiVorta.Application.Common.Options;
+using ShutkiVorta.Application.Common.Security;
 using ShutkiVorta.Application.Features.Orders;
 using ShutkiVorta.Application.Features.Wholesale;
 
@@ -36,6 +38,9 @@ public static class DependencyInjection
         });
 
         services.AddValidatorsFromAssembly(typeof(DependencyInjection).Assembly, includeInternalTypes: true);
+
+        // Staff access is read from the database once per request (see IStaffAccessService in Infrastructure).
+        services.AddScoped<ICurrentStaff, CurrentStaff>();
         services.AddScoped<OrderSchedule>();
         services.AddScoped<StandingOrderScheduler>();
 

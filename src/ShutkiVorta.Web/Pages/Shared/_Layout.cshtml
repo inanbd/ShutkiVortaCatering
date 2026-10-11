@@ -1,6 +1,7 @@
 @using Microsoft.Extensions.Options
 @using ShutkiVorta.Application.Common.Options
 @using ShutkiVorta.Application.Common.Interfaces
+@using ShutkiVorta.Application.Common.Security
 @inject IOptions<BusinessOptions> BusinessOptions
 @inject ICurrentUser CurrentUser
 @{
@@ -65,9 +66,14 @@
             <div class="header-actions">
                 @if (CurrentUser.IsAuthenticated)
                 {
-                    @if (CurrentUser.IsAdmin)
+                    @* Display only, from the cookie's role claims: the admin area itself checks the database on every request. *@
+                    @if (User.IsInRole(Roles.Admin))
                     {
                         <a class="icon-link" href="/admin" title="Admin panel">@Icons.Get("dashboard") <span class="icon-label">Admin</span></a>
+                    }
+                    else if (User.IsInRole(Roles.Manager) || User.IsInRole(Roles.Employee))
+                    {
+                        <a class="icon-link" href="/admin" title="Staff area">@Icons.Get("dashboard") <span class="icon-label">Staff</span></a>
                     }
                     <a class="icon-link" href="/account/orders" title="My account">@Icons.Get("user") <span class="icon-label">My Orders</span></a>
                 }

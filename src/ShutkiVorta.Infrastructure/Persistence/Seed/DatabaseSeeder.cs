@@ -49,6 +49,10 @@ internal sealed class DatabaseSeeder(
         }
     }
 
+    /// <summary>
+    /// Creates the Seed:AdminEmail account as an Admin. An existing account only becomes Admin again when NO account holds
+    /// the Admin role (break-glass recovery): an admin who was deliberately demoted or removed must stay that way.
+    /// </summary>
     private async Task SeedAdministratorAsync()
     {
         var email = options.Value.AdminEmail;
@@ -78,12 +82,31 @@ internal sealed class DatabaseSeeder(
                 return;
             }
 
+            await users.AddToRoleAsync(user, Roles.Admin);
             logger.LogInformation("Created administrator account {Email}", email);
+            return;
         }
 
-        if (!await users.IsInRoleAsync(user, Roles.Admin))
+        if ((await users.GetUsersInRoleAsync(Roles.Admin)).Count > 0)
         {
-            await users.AddToRoleAsync(user, Roles.Admin);
+            return;
+        }
+
+        // Nobody can manage the site: restore the configured account as an Admin (and nothing else).
+        foreach (var other in Roles.Staff.Where(r => r != Roles.Admin))
+        {
+            if (await users.IsInRoleAsync(user, other))
+            {
+                await users.RemoveFromRoleAsync(user, other);
+            }
+        }
+
+        await users.AddToRoleAsync(user, Roles.Admin);
+        logger.LogWarning("No account held the Admin role, so {Email} (Seed:AdminEmail) was made an Admin again", email);
+        if (!user.EmailConfirmed)
+        {
+            // Not confirmed on purpose: whoever registered the address must prove they own it (a password reset does).
+            logger.LogWarning("{Email} has not confirmed its email address; use \"Forgot password\" to confirm it and get admin access", email);
         }
     }
 

@@ -2,11 +2,13 @@ using MediatR;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.WebUtilities;
 using ShutkiVorta.Application.Common.Models;
+using ShutkiVorta.Application.Common.Security;
 using ShutkiVorta.Application.Features.Inventory;
 using ShutkiVorta.Web.Infrastructure;
 
 namespace ShutkiVorta.Web.Pages.Admin.Inventory;
 
+[RequirePermission(Permissions.InventoryView)]
 public sealed class IndexModel(ISender sender) : AppPageModel(sender)
 {
     [BindProperty(SupportsGet = true)] public string? Q { get; set; }

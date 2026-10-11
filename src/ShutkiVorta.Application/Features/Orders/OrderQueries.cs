@@ -7,7 +7,8 @@ using ShutkiVorta.Domain.Orders;
 
 namespace ShutkiVorta.Application.Features.Orders;
 
-public sealed record GetOrdersQuery : IRequest<PagedResult<OrderSummaryDto>>, IRequireAdmin
+[RequirePermission(Permissions.OrdersView)]
+public sealed record GetOrdersQuery : IRequest<PagedResult<OrderSummaryDto>>
 {
     public string? Search { get; init; }
     public OrderStatus? Status { get; init; }
@@ -21,7 +22,8 @@ public sealed record GetOrdersQuery : IRequest<PagedResult<OrderSummaryDto>>, IR
     public int PageSize { get; init; } = Paging.DefaultPageSize;
 }
 
-public sealed record GetOrderDetailsQuery(string OrderNumber) : IRequest<OrderDetailsDto?>, IRequireAdmin;
+[RequirePermission(Permissions.OrdersView)]
+public sealed record GetOrderDetailsQuery(string OrderNumber) : IRequest<OrderDetailsDto?>;
 
 public sealed record GetMyOrdersQuery : IRequest<IReadOnlyList<OrderSummaryDto>>, IRequireAuthenticatedUser;
 

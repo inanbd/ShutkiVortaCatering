@@ -3,15 +3,18 @@ using MediatR;
 using Microsoft.AspNetCore.Mvc;
 using ShutkiVorta.Application.Common.Formatting;
 using ShutkiVorta.Application.Common.Interfaces;
+using ShutkiVorta.Application.Common.Security;
 using ShutkiVorta.Application.Features.Inventory;
 using ShutkiVorta.Domain.Inventory;
 using ShutkiVorta.Web.Infrastructure;
 
 namespace ShutkiVorta.Web.Pages.Admin.Inventory;
 
+/// <summary>Adds or edits a purchase. Staff who may only view the inventory see it read-only (and cannot open "add").</summary>
+[RequirePermission(Permissions.InventoryView)]
 [RequestSizeLimit(MaxRequestBytes)]
 [RequestFormLimits(MultipartBodyLengthLimit = MaxRequestBytes)]
-public sealed class EditModel(ISender sender, IDateTimeProvider clock) : AppPageModel(sender)
+public sealed class EditModel(ISender sender, ICurrentStaff currentStaff, IDateTimeProvider clock) : AppPageModel(sender)
 {
     // Room for every receipt photo a purchase can have at the largest allowed size, plus the form fields.
     private const long MaxRequestBytes = InventoryPurchase.MaxReceipts * SaveInventoryPurchaseCommand.MaxReceiptBytes + 1024 * 1024;
@@ -34,11 +37,20 @@ public sealed class EditModel(ISender sender, IDateTimeProvider clock) : AppPage
 
     public bool IsNew => Input.Id is null;
 
+    /// <summary>inventory.manage: otherwise the purchase is shown read-only.</summary>
+    public bool CanManage { get; private set; }
+
     /// <summary>Today at the business, the latest date a purchase can have.</summary>
     public DateOnly Today => DateOnly.FromDateTime(clock.BusinessNow);
 
     public async Task<IActionResult> OnGetAsync(int? id, CancellationToken cancellationToken)
     {
+        CanManage = (await currentStaff.GetAsync(cancellationToken)).Can(Permissions.InventoryManage);
+        if (id is null && !CanManage)
+        {
+            return StatusCode(StatusCodes.Status403Forbidden);
+        }
+
         if (id is { } existingId)
         {
             Purchase = await Sender.Send(new GetInventoryPurchaseQuery(existingId), cancellationToken);
@@ -48,7 +60,10 @@ public sealed class EditModel(ISender sender, IDateTimeProvider clock) : AppPage
             }
 
             Input = PurchaseInput.From(Purchase);
-            Input.Lines.Add(new LineInput());
+            if (CanManage)
+            {
+                Input.Lines.Add(new LineInput());
+            }
         }
         else
         {
@@ -59,8 +74,10 @@ public sealed class EditModel(ISender sender, IDateTimeProvider clock) : AppPage
         return await ShowAsync(cancellationToken);
     }
 
+    [RequirePermission(Permissions.InventoryManage)]
     public async Task<IActionResult> OnPostAsync(int? id, CancellationToken cancellationToken)
     {
+        CanManage = true;
         Input.Id = id;
         var uploads = ReceiptFiles.Where(f => f.Length > 0).ToList();
         if (!ModelState.IsValid)
@@ -103,6 +120,7 @@ public sealed class EditModel(ISender sender, IDateTimeProvider clock) : AppPage
         return Redirect($"/admin/inventory#purchase-{savedId}");
     }
 
+    [RequirePermission(Permissions.InventoryManage)]
     public async Task<IActionResult> OnPostDeleteAsync(int id, CancellationToken cancellationToken)
     {
         if (await TryExecuteAsync(() => Sender.Send(new DeleteInventoryPurchaseCommand(id), cancellationToken)))

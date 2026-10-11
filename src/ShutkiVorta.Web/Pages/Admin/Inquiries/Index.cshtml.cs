@@ -1,11 +1,13 @@
 using MediatR;
 using Microsoft.AspNetCore.Mvc;
 using ShutkiVorta.Application.Common.Models;
+using ShutkiVorta.Application.Common.Security;
 using ShutkiVorta.Application.Features.Inquiries;
 using ShutkiVorta.Web.Infrastructure;
 
 namespace ShutkiVorta.Web.Pages.Admin.Inquiries;
 
+[RequirePermission(Permissions.InquiriesView)]
 public sealed class IndexModel(ISender sender) : AppPageModel(sender)
 {
     [BindProperty(SupportsGet = true)] public bool All { get; set; }
@@ -19,6 +21,7 @@ public sealed class IndexModel(ISender sender) : AppPageModel(sender)
         Inquiries = await Sender.Send(new GetInquiriesQuery(!All, PageNumber), cancellationToken);
     }
 
+    [RequirePermission(Permissions.InquiriesManage)]
     public async Task<IActionResult> OnPostHandledAsync(int id, bool isHandled, CancellationToken cancellationToken)
     {
         await Sender.Send(new SetInquiryHandledCommand(id, isHandled), cancellationToken);

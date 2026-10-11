@@ -27,7 +27,7 @@
             <p style="white-space:pre-line;">@i.Message</p>
             <div class="flex gap-1 wrap">
                 <a class="btn btn-green btn-sm" href="mailto:@i.Email?subject=Your catering inquiry">@Icons.Get("mail") Reply by email</a>
-                <form method="post" asp-page-handler="Handled" asp-route-all="@Model.All" class="toggle-form">
+                <form method="post" asp-page-handler="Handled" asp-route-all="@Model.All" class="toggle-form" requires-permission="@Permissions.InquiriesManage">
                     <input type="hidden" name="id" value="@i.Id" />
                     <input type="hidden" name="isHandled" value="@((!i.IsHandled).ToString().ToLowerInvariant())" />
                     <button class="btn btn-outline btn-sm" type="submit">@(i.IsHandled ? "Re-open" : "Mark as handled")</button>

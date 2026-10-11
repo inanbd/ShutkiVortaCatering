@@ -3,12 +3,14 @@ using System.Globalization;
 using MediatR;
 using Microsoft.AspNetCore.Mvc;
 using ShutkiVorta.Application.Common.Formatting;
+using ShutkiVorta.Application.Common.Security;
 using ShutkiVorta.Application.Features.Wholesale;
 using ShutkiVorta.Domain.Wholesale;
 using ShutkiVorta.Web.Infrastructure;
 
 namespace ShutkiVorta.Web.Pages.Admin.Recurring;
 
+[RequirePermission(Permissions.RestaurantsView)]
 public sealed class DetailsModel(ISender sender) : AppPageModel(sender)
 {
     public StandingOrderDetailsDto Order { get; private set; } = null!;
@@ -39,6 +41,7 @@ public sealed class DetailsModel(ISender sender) : AppPageModel(sender)
         return Page();
     }
 
+    [RequirePermission(Permissions.RestaurantsManage)]
     public async Task<IActionResult> OnPostStatusAsync(int id, StandingOrderAction? change, string? note, bool notifyRestaurant, CancellationToken cancellationToken)
     {
         if (change is not { } action || !Enum.IsDefined(action))
@@ -62,6 +65,7 @@ public sealed class DetailsModel(ISender sender) : AppPageModel(sender)
         return Redirect($"/admin/recurring/{id}");
     }
 
+    [RequirePermission(Permissions.RestaurantsManage)]
     public async Task<IActionResult> OnPostSkipAsync(int id, DateOnly date, bool skip, CancellationToken cancellationToken)
     {
         var ok = await TryExecuteAsync(() => Sender.Send(new SkipStandingOrderDateCommand(id, date, skip), cancellationToken));
@@ -80,6 +84,7 @@ public sealed class DetailsModel(ISender sender) : AppPageModel(sender)
         return Redirect($"/admin/recurring/{id}");
     }
 
+    [RequirePermission(Permissions.RestaurantsManage)]
     public async Task<IActionResult> OnPostTermsAsync(int id, CancellationToken cancellationToken)
     {
         if (!TimeOnly.TryParseExact(Input.PreferredTime, "HH:mm", CultureInfo.InvariantCulture, DateTimeStyles.None, out var time))

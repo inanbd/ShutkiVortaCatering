@@ -1,14 +1,14 @@
 @page "/admin/inventory/items"
 @model ShutkiVorta.Web.Pages.Admin.Inventory.ItemsModel
 @section Actions {
-    <a class="btn btn-primary btn-sm" href="/admin/inventory/edit">@Icons.Get("plus") Add to inventory</a>
+    <a class="btn btn-primary btn-sm" requires-permission="@Permissions.InventoryManage" href="/admin/inventory/edit">@Icons.Get("plus") Add to inventory</a>
 }
 
 <partial name="_InventoryTabs" model="@("items")" />
 
 <div asp-validation-summary="All" class="validation-summary-errors"></div>
 <section class="panel">
-    <div class="panel-head">
+    <div class="panel-head" requires-permission="@Permissions.InventoryManage">
         <form method="post" asp-page-handler="Add" class="filters" style="width:100%;">
             <div class="field grow">
                 <label asp-for="NewItem.Name">Save a new item name</label>
@@ -30,7 +30,7 @@
     <div class="panel-body flush table-wrap">
         @if (Model.Items.Count == 0)
         {
-            <p class="muted" style="padding:24px;">No items saved yet. Names are saved automatically the first time you <a href="/admin/inventory/edit">add them to the inventory</a>.</p>
+            <p class="muted" style="padding:24px;">No items saved yet. Names are saved automatically the first time you <a link-permission="@Permissions.InventoryManage" href="/admin/inventory/edit">add them to the inventory</a>.</p>
         }
         else
         {

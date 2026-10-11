@@ -6,7 +6,8 @@ using ShutkiVorta.Application.Common.Security;
 namespace ShutkiVorta.Application.Features.Inventory;
 
 /// <summary>Purchases matching the filters (newest first) and the spending figures for this and last month.</summary>
-public sealed record GetInventoryOverviewQuery : IRequest<InventoryOverviewDto>, IRequireAdmin
+[RequirePermission(Permissions.InventoryView)]
+public sealed record GetInventoryOverviewQuery : IRequest<InventoryOverviewDto>
 {
     public string? Search { get; init; }
     public DateOnly? From { get; init; }
@@ -15,18 +16,23 @@ public sealed record GetInventoryOverviewQuery : IRequest<InventoryOverviewDto>,
     public int PageSize { get; init; } = 25;
 }
 
-public sealed record GetInventoryPurchaseQuery(int Id) : IRequest<InventoryPurchaseDto?>, IRequireAdmin;
+[RequirePermission(Permissions.InventoryView)]
+public sealed record GetInventoryPurchaseQuery(int Id) : IRequest<InventoryPurchaseDto?>;
 
 /// <summary>Saved item names (suggested while typing) and units for the add/edit form.</summary>
-public sealed record GetInventoryFormOptionsQuery : IRequest<InventoryFormOptionsDto>, IRequireAdmin;
+[RequirePermission(Permissions.InventoryView)]
+public sealed record GetInventoryFormOptionsQuery : IRequest<InventoryFormOptionsDto>;
 
-public sealed record GetInventoryItemsQuery : IRequest<IReadOnlyList<InventoryItemSummaryDto>>, IRequireAdmin;
+[RequirePermission(Permissions.InventoryView)]
+public sealed record GetInventoryItemsQuery : IRequest<IReadOnlyList<InventoryItemSummaryDto>>;
 
 /// <summary>A saved item with its totals and its most recent purchases (price history).</summary>
-public sealed record GetInventoryItemQuery(int Id) : IRequest<InventoryItemDetailsDto?>, IRequireAdmin;
+[RequirePermission(Permissions.InventoryView)]
+public sealed record GetInventoryItemQuery(int Id) : IRequest<InventoryItemDetailsDto?>;
 
 /// <summary>Opens a receipt photo; null when the receipt or its file no longer exists.</summary>
-public sealed record GetInventoryReceiptFileQuery(int Id) : IRequest<InventoryReceiptFile?>, IRequireAdmin;
+[RequirePermission(Permissions.InventoryView)]
+public sealed record GetInventoryReceiptFileQuery(int Id) : IRequest<InventoryReceiptFile?>;
 
 internal sealed class InventoryQueryHandlers(IInventoryRepository repository, IReceiptStorage receipts, IDateTimeProvider clock) :
     IRequestHandler<GetInventoryOverviewQuery, InventoryOverviewDto>,

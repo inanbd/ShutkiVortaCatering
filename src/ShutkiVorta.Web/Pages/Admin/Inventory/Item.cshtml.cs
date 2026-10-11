@@ -1,12 +1,14 @@
 using System.ComponentModel.DataAnnotations;
 using MediatR;
 using Microsoft.AspNetCore.Mvc;
+using ShutkiVorta.Application.Common.Security;
 using ShutkiVorta.Application.Features.Inventory;
 using ShutkiVorta.Domain.Inventory;
 using ShutkiVorta.Web.Infrastructure;
 
 namespace ShutkiVorta.Web.Pages.Admin.Inventory;
 
+[RequirePermission(Permissions.InventoryView)]
 public sealed class ItemModel(ISender sender) : AppPageModel(sender)
 {
     [BindProperty]
@@ -26,6 +28,7 @@ public sealed class ItemModel(ISender sender) : AppPageModel(sender)
         return Page();
     }
 
+    [RequirePermission(Permissions.InventoryManage)]
     public async Task<IActionResult> OnPostAsync(int id, CancellationToken cancellationToken)
     {
         if (ModelState.IsValid
@@ -38,6 +41,7 @@ public sealed class ItemModel(ISender sender) : AppPageModel(sender)
         return await LoadAsync(id, cancellationToken) ? Page() : NotFound();
     }
 
+    [RequirePermission(Permissions.InventoryManage)]
     public async Task<IActionResult> OnPostDeleteAsync(int id, CancellationToken cancellationToken)
     {
         if (await TryExecuteAsync(() => Sender.Send(new DeleteInventoryItemCommand(id), cancellationToken)))

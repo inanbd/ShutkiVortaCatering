@@ -1,9 +1,15 @@
 @using ShutkiVorta.Application.Common.Interfaces
+@using ShutkiVorta.Application.Common.Security
+@using ShutkiVorta.Web.Infrastructure.Security
 @inject ICurrentUser CurrentUser
+@inject ICurrentStaff Staff
 @{
     var path = Context.Request.Path.Value ?? "/admin";
     string? Active(string prefix, bool exact = false) =>
         (exact ? path.Equals(prefix, StringComparison.OrdinalIgnoreCase) : path.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)) ? "active" : null;
+
+    // Only modules the person may open are listed (each page checks again: this is for convenience, not security).
+    var access = await Staff.GetAsync();
 }
 <!DOCTYPE html>
 <html lang="en">
@@ -18,28 +24,68 @@
     <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@600;700&family=Hind+Siliguri:wght@400;500;600;700&family=Tiro+Bangla&display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
     <link rel="stylesheet" href="~/css/admin.css" asp-append-version="true" />
+    @await RenderSectionAsync("Head", required: false)
 </head>
 <body class="admin">
     <div class="admin-shell">
         <aside class="admin-sidebar">
-            <a class="brand" href="/admin">
+            <a class="brand" href="@StaffLanding.For(access)">
                 <img src="~/images/logo-mark.svg" alt="" width="42" height="42" />
                 <span class="brand-text">
                     <span class="brand-name">Shutki Vorta</span>
-                    <span class="brand-sub">Admin · পরিচালনা</span>
+                    <span class="brand-sub">@(access.IsAdmin ? "Admin" : "Staff") · পরিচালনা</span>
                 </span>
             </a>
             <ul class="admin-nav">
-                <li><a class="@Active("/admin", exact: true)" href="/admin">@Icons.Get("dashboard") Dashboard</a></li>
-                <li><a class="@Active("/admin/orders")" href="/admin/orders">@Icons.Get("receipt") Orders</a></li>
-                <li><a class="@Active("/admin/recurring")" href="/admin/recurring">@Icons.Get("repeat") Restaurant orders</a></li>
-                <li><a class="@Active("/admin/production")" href="/admin/production">@Icons.Get("pot") Production plan</a></li>
-                <li><a class="@Active("/admin/menu")" href="/admin/menu">@Icons.Get("bowl") Menu items</a></li>
-                <li><a class="@Active("/admin/inventory")" href="/admin/inventory">@Icons.Get("box") Inventory</a></li>
-                <li><a class="@Active("/admin/inquiries")" href="/admin/inquiries">@Icons.Get("chat") Inquiries</a></li>
-                <li><a class="@Active("/admin/customers")" href="/admin/customers">@Icons.Get("users") Customers</a></li>
-                <li><a class="@Active("/admin/emails")" href="/admin/emails">@Icons.Get("mail") Email log</a></li>
-                <li><a class="@Active("/admin/settings")" href="/admin/settings">@Icons.Get("settings") Settings</a></li>
+                <li><a class="@Active(StaffLanding.TimeClock)" href="@StaffLanding.TimeClock">@Icons.Get("clock") Time clock</a></li>
+                @if (access.Can(Permissions.DashboardView))
+                {
+                    <li><a class="@Active("/admin", exact: true)" href="/admin">@Icons.Get("dashboard") Dashboard</a></li>
+                }
+                @if (access.Can(Permissions.OrdersView))
+                {
+                    <li><a class="@Active("/admin/orders")" href="/admin/orders">@Icons.Get("receipt") Orders</a></li>
+                }
+                @if (access.Can(Permissions.RestaurantsView))
+                {
+                    <li><a class="@Active("/admin/recurring")" href="/admin/recurring">@Icons.Get("repeat") Restaurant orders</a></li>
+                }
+                @if (access.Can(Permissions.ProductionView))
+                {
+                    <li><a class="@Active("/admin/production")" href="/admin/production">@Icons.Get("pot") Production plan</a></li>
+                }
+                @if (access.Can(Permissions.MenuView))
+                {
+                    <li><a class="@Active("/admin/menu")" href="/admin/menu">@Icons.Get("bowl") Menu items</a></li>
+                }
+                @if (access.Can(Permissions.InventoryView))
+                {
+                    <li><a class="@Active("/admin/inventory")" href="/admin/inventory">@Icons.Get("box") Inventory</a></li>
+                }
+                @if (access.Can(Permissions.InquiriesView))
+                {
+                    <li><a class="@Active("/admin/inquiries")" href="/admin/inquiries">@Icons.Get("chat") Inquiries</a></li>
+                }
+                @if (access.Can(Permissions.CustomersView))
+                {
+                    <li><a class="@Active("/admin/customers")" href="/admin/customers">@Icons.Get("users") Customers</a></li>
+                }
+                @if (access.Can(Permissions.StaffView))
+                {
+                    <li><a class="@Active("/admin/users")" href="/admin/users">@Icons.Get("user-plus") Users</a></li>
+                }
+                @if (access.IsAdmin)
+                {
+                    <li><a class="@Active("/admin/permissions")" href="/admin/permissions">@Icons.Get("shield") Permissions</a></li>
+                }
+                @if (access.Can(Permissions.EmailsView))
+                {
+                    <li><a class="@Active("/admin/emails")" href="/admin/emails">@Icons.Get("mail") Email log</a></li>
+                }
+                @if (access.IsAdmin)
+                {
+                    <li><a class="@Active("/admin/settings")" href="/admin/settings">@Icons.Get("settings") Settings</a></li>
+                }
                 <li><a href="/" target="_blank" rel="noopener">@Icons.Get("external") View website</a></li>
             </ul>
             <div class="spacer"></div>
@@ -53,7 +99,9 @@
                 <h1>@ViewData["Title"]</h1>
                 <div class="flex items-center gap-2 no-print">
                     @RenderSection("Actions", required: false)
+                    <partial name="_ClockStatus" />
                     <span class="who">@CurrentUser.Name</span>
+                    @Ui.RolePill(access.Role)
                 </div>
             </header>
             <div class="admin-band" aria-hidden="true"></div>

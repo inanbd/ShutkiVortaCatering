@@ -1,11 +1,13 @@
 using MediatR;
 using Microsoft.AspNetCore.Mvc;
 using ShutkiVorta.Application.Common.Models;
+using ShutkiVorta.Application.Common.Security;
 using ShutkiVorta.Application.Features.Emails;
 using ShutkiVorta.Web.Infrastructure;
 
 namespace ShutkiVorta.Web.Pages.Admin.Emails;
 
+[RequirePermission(Permissions.EmailsView)]
 public sealed class IndexModel(ISender sender) : AppPageModel(sender)
 {
     [BindProperty(SupportsGet = true)] public EmailStatus? Status { get; set; }
@@ -19,6 +21,7 @@ public sealed class IndexModel(ISender sender) : AppPageModel(sender)
         Emails = await Sender.Send(new GetEmailLogQuery(Status, PageNumber), cancellationToken);
     }
 
+    [RequirePermission(Permissions.EmailsManage)]
     public async Task<IActionResult> OnPostRetryAsync(long id, CancellationToken cancellationToken)
     {
         StatusMessage = await Sender.Send(new RetryEmailCommand(id), cancellationToken)
@@ -27,6 +30,7 @@ public sealed class IndexModel(ISender sender) : AppPageModel(sender)
         return RedirectToPage(new { status = Status });
     }
 
+    [RequirePermission(Permissions.EmailsManage)]
     public async Task<IActionResult> OnPostRetryFailedAsync(CancellationToken cancellationToken)
     {
         var count = await Sender.Send(new RetryFailedEmailsCommand(), cancellationToken);

@@ -10,7 +10,8 @@ using ValidationException = ShutkiVorta.Application.Common.Exceptions.Validation
 namespace ShutkiVorta.Application.Features.Menu;
 
 /// <summary>Creates a menu item (when <see cref="Id"/> is null) or updates an existing one. Returns the item id.</summary>
-public sealed record SaveMenuItemCommand : IRequest<int>, IRequireAdmin
+[RequirePermission(Permissions.MenuManage)]
+public sealed record SaveMenuItemCommand : IRequest<int>
 {
     public int? Id { get; init; }
     public string Name { get; init; } = string.Empty;

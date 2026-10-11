@@ -4,6 +4,7 @@
     var (bn, title, text) = Model.Code switch
     {
         404 => ("খুঁজে পাওয়া যায়নি", "We couldn't find that page", "The page may have moved, or the vorta you're looking for is no longer on the menu."),
+        403 when Model.IsStaffRefusal => ("প্রবেশ নিষেধ", "Your account doesn't include this part of the admin", "Ask an admin if you need it."),
         401 or 403 => ("প্রবেশ নিষেধ", "You don't have access to this page", "Please sign in with an account that has permission to view it."),
         _ => ("দুঃখিত!", "Something went wrong", "Our kitchen had a hiccup. Please try again in a moment."),
     };
@@ -16,8 +17,16 @@
         <p class="muted">@text</p>
         <partial name="_AlponaDivider" />
         <div class="flex gap-2 wrap mt-3" style="justify-content:center;">
-            <a class="btn btn-primary" href="/menu">See the menu</a>
-            <a class="btn btn-outline" href="/">Go home</a>
+            @if (Model.IsStaffRefusal)
+            {
+                <a class="btn btn-primary" href="/admin/time-clock">Time clock</a>
+                <a class="btn btn-outline" href="/admin">Admin home</a>
+            }
+            else
+            {
+                <a class="btn btn-primary" href="/menu">See the menu</a>
+                <a class="btn btn-outline" href="/">Go home</a>
+            }
         </div>
         @if (Model.Code >= 500)
         {

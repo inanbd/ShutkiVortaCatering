@@ -35,10 +35,12 @@ public sealed record SubmitCateringInquiryCommand(
 
 public sealed record CateringInquirySubmittedNotification(int InquiryId) : INotification;
 
+[RequirePermission(Permissions.InquiriesView)]
 public sealed record GetInquiriesQuery(bool OnlyOpen, int Page = 1, int PageSize = Paging.DefaultPageSize)
-    : IRequest<PagedResult<CateringInquiryDto>>, IRequireAdmin;
+    : IRequest<PagedResult<CateringInquiryDto>>;
 
-public sealed record SetInquiryHandledCommand(int Id, bool IsHandled) : IRequest, IRequireAdmin;
+[RequirePermission(Permissions.InquiriesManage)]
+public sealed record SetInquiryHandledCommand(int Id, bool IsHandled) : IRequest;
 
 public sealed record CateringInquiryDto(
     int Id,

@@ -4,12 +4,14 @@ using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.Extensions.Options;
 using ShutkiVorta.Application.Common.Models;
 using ShutkiVorta.Application.Common.Options;
+using ShutkiVorta.Application.Common.Security;
 using ShutkiVorta.Application.Features.Wholesale;
 using ShutkiVorta.Domain.Wholesale;
 using ShutkiVorta.Web.Infrastructure;
 
 namespace ShutkiVorta.Web.Pages.Admin.Recurring;
 
+[RequirePermission(Permissions.RestaurantsView)]
 public sealed class IndexModel(ISender sender, IOptions<WholesaleOptions> wholesale) : AppPageModel(sender)
 {
     public const string AllTab = "All";
@@ -46,6 +48,7 @@ public sealed class IndexModel(ISender sender, IOptions<WholesaleOptions> wholes
         StandingOrders = await Sender.Send(new GetStandingOrdersQuery(status, Q, PageNumber, 20), cancellationToken);
     }
 
+    [RequirePermission(Permissions.RestaurantsManage)]
     public async Task<IActionResult> OnPostGenerateAsync(CancellationToken cancellationToken)
     {
         var report = await Sender.Send(new GenerateStandingOrderDeliveriesCommand(), cancellationToken);

@@ -2,11 +2,13 @@ using MediatR;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using ShutkiVorta.Application.Common.Models;
+using ShutkiVorta.Application.Common.Security;
 using ShutkiVorta.Application.Features.Orders;
 using ShutkiVorta.Domain.Orders;
 
 namespace ShutkiVorta.Web.Pages.Admin.Orders;
 
+[RequirePermission(Permissions.OrdersView)]
 public sealed class IndexModel(ISender sender) : PageModel
 {
     [BindProperty(SupportsGet = true)] public string? Q { get; set; }

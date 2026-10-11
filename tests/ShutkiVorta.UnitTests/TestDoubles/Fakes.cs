@@ -37,5 +37,4 @@ internal sealed class FakeCurrentUser : ICurrentUser
     public string? Email { get; set; }
     public string? Name { get; set; }
     public bool IsAuthenticated => UserId is not null;
-    public bool IsAdmin { get; set; }
 }

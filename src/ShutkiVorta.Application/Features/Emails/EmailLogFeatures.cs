@@ -83,13 +83,17 @@ public sealed record EmailConfigurationReport(
     public bool SendsRealEmail => Enabled && EffectiveMethod == Common.Options.EmailDeliveryMethods.Smtp;
 }
 
-public sealed record GetEmailLogQuery(EmailStatus? Status, int Page = 1, int PageSize = 25) : IRequest<PagedResult<EmailLogEntryDto>>, IRequireAdmin;
+[RequirePermission(Permissions.EmailsView)]
+public sealed record GetEmailLogQuery(EmailStatus? Status, int Page = 1, int PageSize = 25) : IRequest<PagedResult<EmailLogEntryDto>>;
 
-public sealed record GetEmailLogEntryQuery(long Id) : IRequest<EmailLogEntryDto?>, IRequireAdmin;
+[RequirePermission(Permissions.EmailsView)]
+public sealed record GetEmailLogEntryQuery(long Id) : IRequest<EmailLogEntryDto?>;
 
-public sealed record RetryEmailCommand(long Id) : IRequest<bool>, IRequireAdmin;
+[RequirePermission(Permissions.EmailsManage)]
+public sealed record RetryEmailCommand(long Id) : IRequest<bool>;
 
-public sealed record RetryFailedEmailsCommand : IRequest<int>, IRequireAdmin;
+[RequirePermission(Permissions.EmailsManage)]
+public sealed record RetryFailedEmailsCommand : IRequest<int>;
 
 public sealed record TestSmtpConnectionCommand : IRequest<SmtpConnectionTestResult>, IRequireAdmin;
 

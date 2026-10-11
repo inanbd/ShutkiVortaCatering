@@ -8,7 +8,7 @@
     <a class="btn btn-outline btn-sm" href="/admin/emails">&larr; Email log</a>
     @if (!e.IsSensitive && e.Status is EmailStatus.Failed or EmailStatus.SavedToFolder or EmailStatus.Disabled)
     {
-        <form method="post" asp-page-handler="Retry" asp-route-id="@e.Id">
+        <form method="post" asp-page-handler="Retry" asp-route-id="@e.Id" requires-permission="@Permissions.EmailsManage">
             <button class="btn btn-primary btn-sm" type="submit">Send again</button>
         </form>
     }

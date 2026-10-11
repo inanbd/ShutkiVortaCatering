@@ -5,6 +5,8 @@
     var so = Model.Order;
     var phoneHref = "tel:" + new string(so.Phone.Where(c => char.IsDigit(c) || c == '+').ToArray());
     var estimate = so.EstimatePerDelivery;
+    var canManage = (await Staff.GetAsync()).Can(Permissions.RestaurantsManage);
+    var canEditTerms = Model.CanEditTerms && canManage;
 
     // Once cancelled or declined, only dates that actually had an order (or a recorded reason) are worth listing.
     var upcoming = so.Status.IsFinal()
@@ -127,7 +129,7 @@
                                         @switch (d.State)
                                         {
                                             case DeliveryState.OrderCreated:
-                                                <a class="strong nowrap" href="/admin/orders/@d.OrderNumber">@d.OrderNumber</a>
+                                                <a class="strong nowrap" link-permission="@Permissions.OrdersView" href="/admin/orders/@d.OrderNumber">@d.OrderNumber</a>
                                                 if (d.OrderStatus is { } orderStatus)
                                                 {
                                                     <text> </text><partial name="_StatusBadge" model="orderStatus" />
@@ -152,7 +154,7 @@
                                     </td>
                                     <td class="small muted">@d.Reason</td>
                                     <td class="num no-print">
-                                        @if (d.CanSkip)
+                                        @if (canManage && d.CanSkip)
                                         {
                                             <form method="post" asp-page-handler="Skip" class="toggle-form"
                                                   data-confirm="Skip the delivery on @d.ScheduledFor.ToString("dddd, MMM d", Format.Culture)?@(d.OrderNumber is null ? string.Empty : $" Order {d.OrderNumber} will be cancelled.")">
@@ -161,7 +163,7 @@
                                                 <button class="btn btn-outline btn-sm" type="submit">Skip</button>
                                             </form>
                                         }
-                                        else if (d.CanUnskip)
+                                        else if (canManage && d.CanUnskip)
                                         {
                                             <form method="post" asp-page-handler="Skip" class="toggle-form">
                                                 <input type="hidden" name="date" value="@d.Date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)" />
@@ -181,7 +183,7 @@
         <section class="panel" id="terms">
             <div class="panel-head">
                 <h2>Terms</h2>
-                @if (Model.CanEditTerms)
+                @if (canEditTerms)
                 {
                     <span class="muted small">Items, agreed prices, schedule and fees</span>
                 }
@@ -191,9 +193,18 @@
                 }
             </div>
             <div class="panel-body">
-                @if (!Model.CanEditTerms)
+                @if (!canEditTerms)
                 {
-                    <p class="muted">A @so.StatusName.ToLowerInvariant() standing order can no longer be changed.</p>
+                    <p class="muted">
+                        @if (Model.CanEditTerms)
+                        {
+                            <text>Changing the terms needs "Restaurant orders: View &amp; change". Ask an admin.</text>
+                        }
+                        else
+                        {
+                            <text>A @so.StatusName.ToLowerInvariant() standing order can no longer be changed.</text>
+                        }
+                    </p>
                     <dl class="kv mb-0">
                         <dt>Delivery fee</dt><dd>@Ui.Money(so.DeliveryFee)</dd>
                         <dt>Sales tax</dt><dd>@(so.TaxExempt ? "Tax exempt" : "Charged")</dd>
@@ -367,6 +378,10 @@
                 {
                     <p class="muted mb-0">This standing order is @so.StatusName.ToLowerInvariant(). No further changes are possible.</p>
                 }
+                else if (!canManage)
+                {
+                    <p class="muted mb-0">This standing order is @so.StatusName.ToLowerInvariant(). Approving, pausing or cancelling it needs "Restaurant orders: View &amp; change".</p>
+                }
                 else
                 {
                     @if (so.Status == StandingOrderStatus.PendingApproval)
@@ -440,7 +455,7 @@
             </div>
         </section>
 
-        @if (!string.IsNullOrWhiteSpace(so.AdminNotes) && Model.CanEditTerms)
+        @if (!string.IsNullOrWhiteSpace(so.AdminNotes) && canEditTerms)
         {
             <section class="panel">
                 <div class="panel-head"><h2>Private notes</h2></div>
@@ -453,7 +468,7 @@
             <div class="panel-body small">
                 <p>Payment terms: @Model.Catalog.PaymentTerms</p>
                 <a class="btn btn-outline btn-sm" href="/admin/recurring/@so.Id/statement">@Icons.Get("receipt") Statement for this month</a>
-                <a class="btn btn-outline btn-sm" href="/admin/orders?source=Restaurant&amp;q=@Uri.EscapeDataString(so.BusinessName)">All orders</a>
+                <a class="btn btn-outline btn-sm" requires-permission="@Permissions.OrdersView" href="/admin/orders?source=Restaurant&amp;q=@Uri.EscapeDataString(so.BusinessName)">All orders</a>
             </div>
         </section>
     </div>

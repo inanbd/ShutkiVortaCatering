@@ -35,17 +35,17 @@
 <h2 class="print-only">Production plan &middot; @Format.ShortDate(plan.From.ToDateTime(TimeOnly.MinValue)) – @Format.ShortDate(plan.To.ToDateTime(TimeOnly.MinValue))</h2>
 
 <div class="kpis">
-    <div class="kpi"><a href="/admin/orders?source=Online&amp;from=@plan.From.ToString("yyyy-MM-dd")&amp;to=@plan.To.ToString("yyyy-MM-dd")">
+    <div class="kpi"><a link-permission="@Permissions.OrdersView" href="/admin/orders?source=Online&amp;from=@plan.From.ToString("yyyy-MM-dd")&amp;to=@plan.To.ToString("yyyy-MM-dd")">
         <div class="label">Online orders</div>
         <div class="value">@plan.Days.Sum(d => d.OnlineOrders)</div>
         <div class="sub">pickups &amp; deliveries</div></a>
     </div>
-    <div class="kpi maroon"><a href="/admin/orders?source=Restaurant&amp;from=@plan.From.ToString("yyyy-MM-dd")&amp;to=@plan.To.ToString("yyyy-MM-dd")">
+    <div class="kpi maroon"><a link-permission="@Permissions.OrdersView" href="/admin/orders?source=Restaurant&amp;from=@plan.From.ToString("yyyy-MM-dd")&amp;to=@plan.To.ToString("yyyy-MM-dd")">
         <div class="label">Restaurant deliveries</div>
         <div class="value">@plan.Days.Sum(d => d.RestaurantDeliveries)</div>
         <div class="sub">orders already created</div></a>
     </div>
-    <div class="kpi gold"><a href="/admin/recurring?status=Active">
+    <div class="kpi gold"><a link-permission="@Permissions.RestaurantsView" href="/admin/recurring?status=Active">
         <div class="label">Projected deliveries</div>
         <div class="value">@plan.Days.Sum(d => d.ProjectedDeliveries)</div>
         <div class="sub">standing orders not yet generated</div></a>
@@ -107,7 +107,7 @@
                     {
                         <span><strong>@day.ProjectedDeliveries</strong> projected</span>
                     }
-                    <a class="no-print" href="/admin/orders?from=@day.Date.ToString("yyyy-MM-dd")&amp;to=@day.Date.ToString("yyyy-MM-dd")">View orders</a>
+                    <a class="no-print" requires-permission="@Permissions.OrdersView" href="/admin/orders?from=@day.Date.ToString("yyyy-MM-dd")&amp;to=@day.Date.ToString("yyyy-MM-dd")">View orders</a>
                 </div>
                 <div class="panel-body flush table-wrap">
                     <partial name="_ProductionTable" model="day.Items" />

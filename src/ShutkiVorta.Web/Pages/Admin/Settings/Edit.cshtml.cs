@@ -3,6 +3,7 @@ using MediatR;
 using Microsoft.AspNetCore.Mvc;
 using ShutkiVorta.Application.Common.Exceptions;
 using ShutkiVorta.Application.Common.Interfaces;
+using ShutkiVorta.Application.Common.Security;
 using ShutkiVorta.Application.Common.Settings;
 using ShutkiVorta.Application.Features.Settings;
 using ShutkiVorta.Domain.Common;
@@ -14,6 +15,7 @@ namespace ShutkiVorta.Web.Pages.Admin.Settings;
 /// Editor for one settings page (Admin → Settings → {slug}). The form is generated from <see cref="SettingsCatalog"/>: every input
 /// is named by its setting key (e.g. "Email:Smtp:Port"), so values are read from <c>Request.Form</c> rather than model binding.
 /// </summary>
+[AdminOnly]
 public sealed class EditModel(ISender sender, ICurrentUser currentUser) : AppPageModel(sender)
 {
     public const string EmailSlug = "email";

@@ -2,7 +2,9 @@ using System.ComponentModel.DataAnnotations;
 using MediatR;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
+using ShutkiVorta.Application.Common.Interfaces;
 using ShutkiVorta.Application.Common.Options;
+using ShutkiVorta.Application.Common.Security;
 using ShutkiVorta.Application.Features.Menu;
 using ShutkiVorta.Domain.Common;
 using ShutkiVorta.Domain.Menu;
@@ -10,7 +12,9 @@ using ShutkiVorta.Web.Infrastructure;
 
 namespace ShutkiVorta.Web.Pages.Admin.Menu;
 
-public sealed class EditModel(ISender sender, IOptions<WholesaleOptions> wholesale) : AppPageModel(sender)
+/// <summary>Adds or edits a menu item. Staff who may only view menu items see the form read-only (and cannot open "new").</summary>
+[RequirePermission(Permissions.MenuView)]
+public sealed class EditModel(ISender sender, ICurrentStaff currentStaff, IOptions<WholesaleOptions> wholesale) : AppPageModel(sender)
 {
     [BindProperty]
     public MenuItemInput Input { get; set; } = new();
@@ -20,6 +24,9 @@ public sealed class EditModel(ISender sender, IOptions<WholesaleOptions> wholesa
 
     public bool IsNew => Input.Id is null;
 
+    /// <summary>menu.manage: otherwise the item is shown read-only.</summary>
+    public bool CanManage { get; private set; }
+
     /// <summary>Discount off the retail price used when no wholesale price is set (Wholesale:DiscountPercent).</summary>
     public decimal WholesaleDiscountPercent => Math.Clamp(wholesale.Value.DiscountPercent, 0, 90);
 
@@ -28,6 +35,12 @@ public sealed class EditModel(ISender sender, IOptions<WholesaleOptions> wholesa
 
     public async Task<IActionResult> OnGetAsync(int? id, CancellationToken cancellationToken)
     {
+        CanManage = (await currentStaff.GetAsync(cancellationToken)).Can(Permissions.MenuManage);
+        if (id is null && !CanManage)
+        {
+            return StatusCode(StatusCodes.Status403Forbidden);
+        }
+
         if (id is { } existingId)
         {
             var item = await Sender.Send(new GetMenuItemByIdQuery(existingId), cancellationToken);
@@ -43,8 +56,10 @@ public sealed class EditModel(ISender sender, IOptions<WholesaleOptions> wholesa
         return Page();
     }
 
+    [RequirePermission(Permissions.MenuManage)]
     public async Task<IActionResult> OnPostAsync(int? id, CancellationToken cancellationToken)
     {
+        CanManage = true;
         Input.Id = id;
         ViewData["Title"] = IsNew ? "New menu item" : $"Edit {Input.Name}";
         if (!ModelState.IsValid)

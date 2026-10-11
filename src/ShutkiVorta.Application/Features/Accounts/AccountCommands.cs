@@ -12,7 +12,8 @@ public sealed record RegisterCustomerCommand(string FullName, string Email, stri
 
 public sealed record RegisterResult(bool Succeeded, bool RequiresEmailConfirmation, IReadOnlyList<string> Errors);
 
-public sealed record LoginCommand(string Email, string Password, bool RememberMe) : IRequest<SignInOutcome>;
+/// <summary>Signs in; the result carries the user id so the page can send staff to their landing page.</summary>
+public sealed record LoginCommand(string Email, string Password, bool RememberMe) : IRequest<SignInResultDto>;
 
 public sealed record LogoutCommand : IRequest;
 
@@ -93,7 +94,7 @@ internal sealed class AccountCommandHandlers(
     IAppUrls urls,
     ILogger<AccountCommandHandlers> logger) :
     IRequestHandler<RegisterCustomerCommand, RegisterResult>,
-    IRequestHandler<LoginCommand, SignInOutcome>,
+    IRequestHandler<LoginCommand, SignInResultDto>,
     IRequestHandler<LogoutCommand>,
     IRequestHandler<ConfirmEmailCommand, Result>,
     IRequestHandler<ResendConfirmationEmailCommand>,
@@ -123,7 +124,7 @@ internal sealed class AccountCommandHandlers(
         return new RegisterResult(true, false, []);
     }
 
-    public Task<SignInOutcome> Handle(LoginCommand request, CancellationToken cancellationToken) =>
+    public Task<SignInResultDto> Handle(LoginCommand request, CancellationToken cancellationToken) =>
         identity.PasswordSignInAsync(request.Email.Trim(), request.Password, request.RememberMe);
 
     public Task Handle(LogoutCommand request, CancellationToken cancellationToken) => identity.SignOutAsync();

@@ -1,10 +1,12 @@
 using MediatR;
 using Microsoft.AspNetCore.Mvc;
+using ShutkiVorta.Application.Common.Security;
 using ShutkiVorta.Application.Features.Emails;
 using ShutkiVorta.Web.Infrastructure;
 
 namespace ShutkiVorta.Web.Pages.Admin.Emails;
 
+[RequirePermission(Permissions.EmailsView)]
 public sealed class DetailsModel(ISender sender) : AppPageModel(sender)
 {
     public EmailLogEntryDto Email { get; private set; } = null!;
@@ -22,6 +24,7 @@ public sealed class DetailsModel(ISender sender) : AppPageModel(sender)
         return Page();
     }
 
+    [RequirePermission(Permissions.EmailsManage)]
     public async Task<IActionResult> OnPostRetryAsync(long id, CancellationToken cancellationToken)
     {
         StatusMessage = await Sender.Send(new RetryEmailCommand(id), cancellationToken)

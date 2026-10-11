@@ -14,6 +14,8 @@ using ShutkiVorta.Application.Features.Inventory;
 using ShutkiVorta.Application.Features.Menu;
 using ShutkiVorta.Application.Features.Orders;
 using ShutkiVorta.Application.Features.Settings;
+using ShutkiVorta.Application.Features.Staff;
+using ShutkiVorta.Application.Features.TimeClock;
 using ShutkiVorta.Application.Features.Wholesale;
 using ShutkiVorta.Infrastructure.Email;
 using ShutkiVorta.Infrastructure.Identity;
@@ -77,6 +79,14 @@ public static class DependencyInjection
 
         services.AddScoped<IUserConfirmation<ApplicationUser>, SettingsUserConfirmation>();
         services.AddScoped<IIdentityService, IdentityService>();
+
+        // ---- Staff: roles, permissions and the audit log (read per request, never cached between requests) ----
+        services.AddSingleton<IStaffAccessService, StaffAccessService>();
+        services.AddScoped<StaffRepository>();
+        services.AddScoped<IStaffDirectory>(sp => sp.GetRequiredService<StaffRepository>());
+        services.AddScoped<IStaffPermissionStore>(sp => sp.GetRequiredService<StaffRepository>());
+        services.AddScoped<IStaffAuditLog, StaffAuditLogRepository>();
+        services.AddScoped<ITimeClockStatusReader, TimeClockStatusReader>();
 
         // ---- Email (durable outbox + background dispatcher) ----
         services.AddSingleton<EmailDispatchSignal>();

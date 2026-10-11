@@ -3,6 +3,7 @@
 @{
     var summary = Model.Details!.Summary;
     var history = Model.Details.History;
+    var canManage = (await Staff.GetAsync()).Can(Permissions.InventoryManage);
 }
 @section Actions {
     <a class="btn btn-outline btn-sm" href="/admin/inventory/items">&larr; Saved items</a>
@@ -20,7 +21,7 @@
         <div class="panel-body flush table-wrap">
             @if (history.Count == 0)
             {
-                <p class="muted" style="padding:24px;">Not bought yet. It is suggested when you <a href="/admin/inventory/edit">add to the inventory</a>.</p>
+                <p class="muted" style="padding:24px;">Not bought yet. It is suggested when you <a link-permission="@Permissions.InventoryManage" href="/admin/inventory/edit">add to the inventory</a>.</p>
             }
             else
             {
@@ -63,26 +64,31 @@
             <div class="panel-head"><h2>Name &amp; unit</h2></div>
             <div class="panel-body">
                 <form method="post">
-                    <div asp-validation-summary="All" class="validation-summary-errors"></div>
-                    <div class="field mb-2">
-                        <label asp-for="Input.Name"></label>
-                        <input asp-for="Input.Name" autocomplete="off" />
-                        <span class="hint">Fix a typo here and every purchase shows the new name.</span>
-                    </div>
-                    <div class="field mb-3">
-                        <label asp-for="Input.Unit"></label>
-                        <input asp-for="Input.Unit" list="inventory-units" autocomplete="off" />
-                        <span class="hint">Filled in when the item is picked again.</span>
-                        <datalist id="inventory-units">
-                            @foreach (var unit in Model.Units)
-                            {
-                                <option value="@unit"></option>
-                            }
-                        </datalist>
-                    </div>
-                    <button class="btn btn-green btn-block" type="submit">Save</button>
+                    <fieldset class="read-only" disabled="@(canManage ? null : "disabled")">
+                        <div asp-validation-summary="All" class="validation-summary-errors"></div>
+                        <div class="field mb-2">
+                            <label asp-for="Input.Name"></label>
+                            <input asp-for="Input.Name" autocomplete="off" />
+                            <span class="hint">Fix a typo here and every purchase shows the new name.</span>
+                        </div>
+                        <div class="field mb-3">
+                            <label asp-for="Input.Unit"></label>
+                            <input asp-for="Input.Unit" list="inventory-units" autocomplete="off" />
+                            <span class="hint">Filled in when the item is picked again.</span>
+                            <datalist id="inventory-units">
+                                @foreach (var unit in Model.Units)
+                                {
+                                    <option value="@unit"></option>
+                                }
+                            </datalist>
+                        </div>
+                        @if (canManage)
+                        {
+                            <button class="btn btn-green btn-block" type="submit">Save</button>
+                        }
+                    </fieldset>
                 </form>
-                @if (summary.TimesBought == 0)
+                @if (canManage && summary.TimesBought == 0)
                 {
                     <form method="post" asp-page-handler="Delete" class="mt-2" data-confirm="Delete @summary.Name? It will no longer be suggested.">
                         <button class="btn btn-danger btn-block btn-sm" type="submit">@Icons.Get("trash") Delete this item</button>

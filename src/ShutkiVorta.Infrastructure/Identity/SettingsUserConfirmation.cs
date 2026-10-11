@@ -8,7 +8,8 @@ namespace ShutkiVorta.Infrastructure.Identity;
 /// <summary>
 /// Applies Admin → Settings → Customer accounts → "Require email confirmation" at sign-in time, so changing it needs no restart.
 /// (Identity is configured with RequireConfirmedAccount, which defers to this check.) Administrators are never locked out by it,
-/// so turning the setting on cannot block the people who would have to turn it off again.
+/// so turning the setting on cannot block the people who would have to turn it off again. Only Admins: Managers and Employees
+/// need a confirmed email for staff access anyway, and exempting them would let an unconfirmed account in.
 /// </summary>
 internal sealed class SettingsUserConfirmation(IOptionsMonitor<AccountOptions> account) : IUserConfirmation<ApplicationUser>
 {

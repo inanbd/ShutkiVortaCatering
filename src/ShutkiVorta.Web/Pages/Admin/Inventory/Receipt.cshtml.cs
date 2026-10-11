@@ -2,11 +2,13 @@ using MediatR;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.Net.Http.Headers;
+using ShutkiVorta.Application.Common.Security;
 using ShutkiVorta.Application.Features.Inventory;
 
 namespace ShutkiVorta.Web.Pages.Admin.Inventory;
 
-/// <summary>Streams a receipt photo from private storage. Admin only, like every page under /admin.</summary>
+/// <summary>Streams a receipt photo from private storage, for staff who may view the inventory.</summary>
+[RequirePermission(Permissions.InventoryView)]
 public sealed class ReceiptModel(ISender sender) : PageModel
 {
     public async Task<IActionResult> OnGetAsync(int id, CancellationToken cancellationToken)

@@ -78,7 +78,7 @@
                         {
                             <tr>
                                 <td class="nowrap"><strong>@o.ScheduledFor.ToString("ddd, MMM d", Format.Culture)</strong></td>
-                                <td class="nowrap"><a class="strong" href="/admin/orders/@o.OrderNumber">@o.OrderNumber</a></td>
+                                <td class="nowrap"><a class="strong" link-permission="@Permissions.OrdersView" href="/admin/orders/@o.OrderNumber">@o.OrderNumber</a></td>
                                 <td><div class="preview">@o.ItemsPreview</div></td>
                                 <td>@o.StatusName</td>
                                 <td class="num">@Ui.Money(o.Subtotal)</td>

@@ -18,7 +18,8 @@ public sealed record ReceiptUpload(Stream Content, string FileName, long Length)
 /// Records what was added to the inventory (when <see cref="Id"/> is null) or corrects an earlier entry. Item names are
 /// saved for suggestions the first time they are used. Returns the purchase id.
 /// </summary>
-public sealed record SaveInventoryPurchaseCommand : IRequest<int>, IRequireAdmin
+[RequirePermission(Permissions.InventoryManage)]
+public sealed record SaveInventoryPurchaseCommand : IRequest<int>
 {
     public const long MaxReceiptBytes = 10 * 1024 * 1024;
 

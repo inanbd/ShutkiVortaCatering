@@ -1,0 +1,25 @@
+@* The topbar's time clock status: "On the clock since 9:02 AM · 3 h 12 min" or a "Clock in" link (also on phones). *@
+@using ShutkiVorta.Application.Common.Formatting
+@using ShutkiVorta.Application.Common.Interfaces
+@using ShutkiVorta.Application.Features.TimeClock
+@using ShutkiVorta.Web.Infrastructure.Security
+@inject ICurrentUser CurrentUser
+@inject ITimeClockStatusReader TimeClock
+@inject IDateTimeProvider Clock
+@{
+    var since = CurrentUser.UserId is { } userId ? await TimeClock.GetOpenShiftStartAsync(userId) : null;
+}
+@if (since is { } startUtc)
+{
+    var start = Clock.ToBusinessTime(startUtc);
+    var startText = DateOnly.FromDateTime(start) == DateOnly.FromDateTime(Clock.BusinessNow)
+        ? Format.Time(start)
+        : start.ToString("ddd h:mm tt", Format.Culture);
+    <a class="clock-status on" href="@StaffLanding.TimeClock" title="Open the time clock">
+        @Icons.Get("clock") <span>On the clock since @startText<span class="clock-elapsed"> · @Format.Hours(Clock.UtcNow - startUtc)</span></span>
+    </a>
+}
+else
+{
+    <a class="clock-status off" href="@StaffLanding.TimeClock">@Icons.Get("clock") <span>Clock in</span></a>
+}

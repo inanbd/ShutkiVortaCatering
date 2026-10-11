@@ -17,7 +17,7 @@ public sealed class SaveInventoryPurchaseCommandHandlerTests
 
     private readonly IInventoryRepository _repository = Substitute.For<IInventoryRepository>();
     private readonly IReceiptStorage _storage = Substitute.For<IReceiptStorage>();
-    private readonly FakeCurrentUser _user = new() { UserId = "u1", Email = "admin@test.local", IsAdmin = true };
+    private readonly FakeCurrentUser _user = new() { UserId = "u1", Email = "admin@test.local" };
 
     public SaveInventoryPurchaseCommandHandlerTests()
     {

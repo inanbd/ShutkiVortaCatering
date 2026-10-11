@@ -41,6 +41,13 @@ public static class Icons
         ["box"] = "<path d=\"M3 7.5 12 3l9 4.5v9L12 21l-9-4.5v-9z\"/><path d=\"m3 7.5 9 4.5 9-4.5M12 12v9\"/>",
         ["image"] = "<rect x=\"3\" y=\"4\" width=\"18\" height=\"16\" rx=\"2\"/><circle cx=\"9\" cy=\"10\" r=\"2\"/><path d=\"m21 16-5-5-9 9\"/>",
         ["eye"] = "<path d=\"M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z\"/><circle cx=\"12\" cy=\"12\" r=\"3\"/>",
+        ["shield"] = "<path d=\"M12 3 4.5 6v5.5c0 4.6 3.2 8.4 7.5 9.5 4.3-1.1 7.5-4.9 7.5-9.5V6L12 3z\"/><path d=\"m9 12 2 2 4-4\"/>",
+        ["lock"] = "<rect x=\"5\" y=\"11\" width=\"14\" height=\"10\" rx=\"2\"/><path d=\"M8 11V7a4 4 0 0 1 8 0v4\"/>",
+        ["download"] = "<path d=\"M12 4v11M7 10l5 5 5-5M5 20h14\"/>",
+        ["map"] = "<path d=\"m3 6 6-2 6 2 6-2v14l-6 2-6-2-6 2V6z\"/><path d=\"M9 4v14M15 6v14\"/>",
+        ["user-plus"] = "<circle cx=\"10\" cy=\"8\" r=\"4\"/><path d=\"M3 21c1.3-3.8 4-6 7-6s5.7 2.2 7 6M19 8v6M16 11h6\"/>",
+        ["alert"] = "<path d=\"M12 3 2 20h20L12 3z\"/><path d=\"M12 10v4M12 17.5v.01\"/>",
+        ["refresh"] = "<path d=\"M20 11a8 8 0 0 0-14.5-4.5L4 8M4 3v5h5M4 13a8 8 0 0 0 14.5 4.5L20 16M20 21v-5h-5\"/>",
     };
 
     public static IHtmlContent Get(string name, string? cssClass = null) =>
