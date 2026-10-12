@@ -93,9 +93,16 @@ internal sealed class ShiftManagementHandlers(
             throw new ValidationException("This shift was voided, so its times can't be changed.");
         }
 
+        // The form shows the saved times to the minute, in business time, without the UTC offset. A time left as shown keeps
+        // the saved one exactly (its seconds, and which 1:30 it was on the night the clocks go back): only what the manager
+        // changed changes, and an untouched form is recognised as such.
         var now = TimeClockTime.Now(clock);
-        var clockIn = ToUtc(request.ClockInLocal, nameof(CorrectShiftCommand.ClockInLocal));
-        DateTime? clockOut = request.ClockOutLocal is { } local ? ToUtc(local, nameof(CorrectShiftCommand.ClockOutLocal)) : null;
+        var clockIn = ShowsAs(shift.ClockInUtc, request.ClockInLocal)
+            ? shift.ClockInUtc
+            : ToUtc(request.ClockInLocal, nameof(CorrectShiftCommand.ClockInLocal));
+        DateTime? clockOut = request.ClockOutLocal is not { } local ? null
+            : shift.ClockOutUtc is { } savedOut && ShowsAs(savedOut, local) ? savedOut
+            : ToUtc(local, nameof(CorrectShiftCommand.ClockOutLocal), after: clockIn);
         if (clockOut is null && !shift.IsOpen)
         {
             throw new ValidationException(nameof(CorrectShiftCommand.ClockOutLocal), "Enter when the shift ended.");
@@ -126,7 +133,7 @@ internal sealed class ShiftManagementHandlers(
         }
 
         var now = TimeClockTime.Now(clock);
-        var clockOut = ToUtc(request.ClockOutLocal, nameof(CloseShiftCommand.ClockOutLocal));
+        var clockOut = ToUtc(request.ClockOutLocal, nameof(CloseShiftCommand.ClockOutLocal), after: shift.ClockInUtc);
         CheckTimes(shift.ClockInUtc, clockOut, now);
 
         await SaveTimesAsync(
@@ -146,7 +153,7 @@ internal sealed class ShiftManagementHandlers(
 
         var now = TimeClockTime.Now(clock);
         var clockIn = ToUtc(request.ClockInLocal, nameof(AddShiftCommand.ClockInLocal));
-        var clockOut = ToUtc(request.ClockOutLocal, nameof(AddShiftCommand.ClockOutLocal));
+        var clockOut = ToUtc(request.ClockOutLocal, nameof(AddShiftCommand.ClockOutLocal), after: clockIn);
 
         TimeClockShift shift;
         try
@@ -252,11 +259,19 @@ internal sealed class ShiftManagementHandlers(
             new StaffAuditEntry(shift.UserId, shift.EmployeeName, action, ShiftAudit.Details(shift.Id, clock.ToBusinessTime(shift.ClockInUtc), what), By),
             cancellationToken);
 
-    private DateTime ToUtc(DateTime local, string field)
+    /// <summary>The saved time, as the form shows it (business-local, to the minute), is <paramref name="local"/>.</summary>
+    private bool ShowsAs(DateTime savedUtc, DateTime local) => ToMinute(clock.ToBusinessTime(savedUtc)) == ToMinute(local);
+
+    private static DateTime ToMinute(DateTime value) => new(value.Ticks - value.Ticks % TimeSpan.TicksPerMinute);
+
+    /// <param name="after">For a clock-out: its clock-in (picks the right one of a time that happened twice).</param>
+    private DateTime ToUtc(DateTime local, string field, DateTime? after = null)
     {
         try
         {
-            return BusinessTime.FromLocalInput(local, clock.BusinessTimeZone);
+            return after is { } clockIn
+                ? BusinessTime.FromLocalInput(local, clock.BusinessTimeZone, clockIn)
+                : BusinessTime.FromLocalInput(local, clock.BusinessTimeZone);
         }
         catch (DomainException ex)
         {

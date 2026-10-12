@@ -26,6 +26,24 @@ public static class BusinessTime
     }
 
     /// <summary>
+    /// A clock-out a person typed, which comes after <paramref name="afterUtc"/> (its clock-in). Like
+    /// <see cref="FromLocalInput(DateTime, TimeZoneInfo)"/>, except that a time which happened twice when the clocks moved back
+    /// means the second one when only that one is after <paramref name="afterUtc"/> (e.g. in at the first 1:45, out at 1:15).
+    /// </summary>
+    public static DateTime FromLocalInput(DateTime local, TimeZoneInfo zone, DateTime afterUtc)
+    {
+        var first = FromLocalInput(local, zone);
+        var wallClock = DateTime.SpecifyKind(local, DateTimeKind.Unspecified);
+        if (first > afterUtc || !zone.IsAmbiguousTime(wallClock))
+        {
+            return first;
+        }
+
+        var second = DateTime.SpecifyKind(wallClock - zone.GetAmbiguousTimeOffsets(wallClock).Min(), DateTimeKind.Utc);
+        return second > afterUtc ? second : first;
+    }
+
+    /// <summary>
     /// When a business-local day starts, in UTC. Never throws: if midnight was skipped the day starts when the clocks jumped,
     /// and if it happened twice it starts at the first one.
     /// </summary>

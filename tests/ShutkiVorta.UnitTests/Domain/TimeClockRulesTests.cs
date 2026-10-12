@@ -172,6 +172,23 @@ public sealed class TimeClockRulesTests
         Assert.Equal(DateTimeKind.Utc, utc.Kind);
     }
 
+    [Fact]
+    public void AClockOutThatHappenedTwice_IsTheSecondOne_OnlyWhenTheFirstIsNotAfterTheClockIn()
+    {
+        // In at the first 1:45 AM (CDT, 06:45 UTC), out at 1:15 AM: that can only be the second 1:15 (CST, 07:15 UTC).
+        var firstOneFortyFive = new DateTime(2026, 11, 1, 6, 45, 0, DateTimeKind.Utc);
+        var out1 = BusinessTime.FromLocalInput(new DateTime(2026, 11, 1, 1, 15, 0), Dallas, firstOneFortyFive);
+        Assert.Equal((new DateTime(2026, 11, 1, 7, 15, 0), DateTimeKind.Utc), (out1, out1.Kind));
+
+        // In at 10:00 PM the evening before: both 1:30s are possible, so it stays the first one.
+        var evening = new DateTime(2026, 11, 1, 3, 0, 0, DateTimeKind.Utc);
+        Assert.Equal(new DateTime(2026, 11, 1, 6, 30, 0), BusinessTime.FromLocalInput(new DateTime(2026, 11, 1, 1, 30, 0), Dallas, evening));
+
+        // Times that happened once are unchanged, even before the clock-in (the caller refuses those).
+        Assert.Equal(new DateTime(2026, 10, 5, 13, 0, 0), BusinessTime.FromLocalInput(new DateTime(2026, 10, 5, 8, 0, 0), Dallas, evening.AddDays(30)));
+        Assert.Throws<DomainException>(() => BusinessTime.FromLocalInput(new DateTime(2027, 3, 14, 2, 30, 0), Dallas, evening));
+    }
+
     // ---- Hours in a period ----
 
     [Fact]

@@ -378,6 +378,84 @@ public sealed class TimeClockHandlerTests
     }
 
     [Fact]
+    public async Task CorrectingOnlyTheClockIn_KeepsTheSavedClockOut_EvenInTheHourThatHappensTwice()
+    {
+        _staff.Access = StaffAccessFor.Admin(Me);
+        _clock.At(2026, 11, 2, 10, 0);
+        // Sat 10:00 PM (CDT) to the SECOND 1:30 AM on the night the clocks go back (CST): 4 h 30 min.
+        var night = Punched(5, Colleague, new DateTime(2026, 11, 1, 3, 0, 0, DateTimeKind.Utc), new DateTime(2026, 11, 1, 7, 30, 0, DateTimeKind.Utc));
+        _repository.GetAsync(5, Arg.Any<CancellationToken>()).Returns(night);
+        ShiftTimesChange? change = null;
+        await _repository.ChangeTimesAsync(Arg.Do<ShiftTimesChange>(c => change = c), Arg.Any<CancellationToken>());
+
+        // The form shows the clock-out as 1:30; the manager changes only the clock-in.
+        await Manage().Handle(new CorrectShiftCommand(5, 0, new DateTime(2026, 10, 31, 22, 15, 0), new DateTime(2026, 11, 1, 1, 30, 0), "came at 10:15"), CancellationToken.None);
+
+        Assert.Equal(new DateTime(2026, 11, 1, 3, 15, 0, DateTimeKind.Utc), change!.ClockInUtc);
+        Assert.Equal(new DateTime(2026, 11, 1, 7, 30, 0, DateTimeKind.Utc), change.ClockOutUtc); // still the second 1:30: 4 h 15 min
+        Assert.Equal(ClockOutSource.Self, change.ClockOutSource);
+    }
+
+    [Fact]
+    public async Task CorrectingOnlyTheClockIn_KeepsTheFirstOneThirty_Too()
+    {
+        _staff.Access = StaffAccessFor.Admin(Me);
+        _clock.At(2026, 11, 2, 10, 0);
+        // To the FIRST 1:30 AM (still CDT): 3 h 30 min.
+        _repository.GetAsync(5, Arg.Any<CancellationToken>())
+            .Returns(Punched(5, Colleague, new DateTime(2026, 11, 1, 3, 0, 0, DateTimeKind.Utc), new DateTime(2026, 11, 1, 6, 30, 0, DateTimeKind.Utc)));
+        ShiftTimesChange? change = null;
+        await _repository.ChangeTimesAsync(Arg.Do<ShiftTimesChange>(c => change = c), Arg.Any<CancellationToken>());
+
+        await Manage().Handle(new CorrectShiftCommand(5, 0, new DateTime(2026, 10, 31, 22, 15, 0), new DateTime(2026, 11, 1, 1, 30, 0), "came at 10:15"), CancellationToken.None);
+
+        Assert.Equal((new DateTime(2026, 11, 1, 3, 15, 0, DateTimeKind.Utc), new DateTime(2026, 11, 1, 6, 30, 0, DateTimeKind.Utc)), (change!.ClockInUtc, change.ClockOutUtc));
+    }
+
+    [Fact]
+    public async Task ATimeInTheSecondOneOClockHour_CanBeEntered_WhenOnlyThatOneFits()
+    {
+        _staff.Access = StaffAccessFor.Admin(Me);
+        _clock.At(2026, 11, 2, 10, 0);
+        var firstOneFortyFive = new DateTime(2026, 11, 1, 6, 45, 0, DateTimeKind.Utc); // 1:45 AM CDT
+        TimeClockShift? added = null;
+        await _repository.AddClosedShiftAsync(Arg.Do<TimeClockShift>(s => added = s), Arg.Any<CancellationToken>());
+
+        // Add shift: 1:45 AM to 1:15 AM is 30 minutes across the change, not a clock-out before the clock-in.
+        await Manage().Handle(new AddShiftCommand(Colleague, new DateTime(2026, 11, 1, 1, 45, 0), new DateTime(2026, 11, 1, 1, 15, 0), "dead phone"), CancellationToken.None);
+        Assert.Equal((firstOneFortyFive, new DateTime(2026, 11, 1, 7, 15, 0, DateTimeKind.Utc)), (added!.ClockInUtc, added.ClockOutUtc));
+
+        // "When did you leave?" for a shift forgotten from the first 1:45 AM.
+        _repository.GetOpenShiftAsync(Me, Arg.Any<CancellationToken>()).Returns(Punched(5, Me, firstOneFortyFive));
+        ForgottenClockOut? fix = null;
+        await _repository.CloseForgottenShiftAsync(Arg.Do<ForgottenClockOut>(f => fix = f), Arg.Any<CancellationToken>());
+        await Clock().Handle(new FixMyForgottenClockOutCommand(new DateTime(2026, 11, 1, 1, 15, 0)), CancellationToken.None);
+        Assert.Equal(new DateTime(2026, 11, 1, 7, 15, 0, DateTimeKind.Utc), fix!.ClockOutUtc);
+    }
+
+    [Fact]
+    public async Task AnUntouchedCorrectionForm_SavesNothing_AndAChangedClockInKeepsTheClockOutsSeconds()
+    {
+        _staff.Access = StaffAccessFor.Admin(Me);
+        var punched = Punched(5, Colleague, Utc(2026, 10, 5, 9, 0).AddSeconds(37), Utc(2026, 10, 5, 10, 30).AddSeconds(12));
+        _repository.GetAsync(5, Arg.Any<CancellationToken>()).Returns(punched);
+        ShiftTimesChange? change = null;
+        await _repository.ChangeTimesAsync(Arg.Do<ShiftTimesChange>(c => change = c), Arg.Any<CancellationToken>());
+
+        // The form's own values (to the minute) and only a reason: nothing to save, nothing relabelled as a manager's.
+        var same = await Assert.ThrowsAsync<ValidationException>(() => Manage().Handle(
+            new CorrectShiftCommand(5, 0, new DateTime(2026, 10, 5, 9, 0, 0), new DateTime(2026, 10, 5, 10, 30, 0), "checked"), CancellationToken.None));
+        Assert.Equal("Those are the times already saved.", same.Message);
+        await _repository.DidNotReceiveWithAnyArgs().ChangeTimesAsync(default!, default);
+        await _audit.DidNotReceiveWithAnyArgs().WriteAsync(default!, default);
+
+        // Changing the clock-in leaves the punched clock-out exactly as it was, still the person's own.
+        await Manage().Handle(new CorrectShiftCommand(5, 0, new DateTime(2026, 10, 5, 8, 45, 0), new DateTime(2026, 10, 5, 10, 30, 0), "came early"), CancellationToken.None);
+        Assert.Equal((Utc(2026, 10, 5, 8, 45), Utc(2026, 10, 5, 10, 30).AddSeconds(12), ClockOutSource.Self),
+            (change!.ClockInUtc, change.ClockOutUtc, change.ClockOutSource));
+    }
+
+    [Fact]
     public async Task CorrectingAMissedClockOut_MakesItCount_EvenWhenTheClockOutStaysAtThePlaceholder()
     {
         _staff.Access = StaffAccessFor.Custom(StaffRole.Manager, [Permissions.TimeClockManage], Me);

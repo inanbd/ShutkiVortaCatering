@@ -189,7 +189,7 @@ internal sealed class TimeClockCommandHandlers(
         DateTime leftAtUtc;
         try
         {
-            leftAtUtc = request.LeftAtLocal is { } leftAt ? BusinessTime.FromLocalInput(leftAt, zone) : open.ClockInUtc;
+            leftAtUtc = request.LeftAtLocal is { } leftAt ? BusinessTime.FromLocalInput(leftAt, zone, open.ClockInUtc) : open.ClockInUtc;
             if (remembered)
             {
                 ShiftRules.CheckForgottenClockOut(open.ClockInUtc, leftAtUtc, now);
