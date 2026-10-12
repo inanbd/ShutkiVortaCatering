@@ -9,6 +9,11 @@
     var path = Context.Request.Path.Value ?? "/";
     string? Current(string prefix) => (prefix == "/" ? path == "/" : path.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)) ? "page" : null;
     var phoneHref = "tel:" + new string(business.Phone.Where(c => char.IsDigit(c) || c == '+').ToArray());
+    // Display only, from the cookie's role claims: the admin area itself checks the database on every request.
+    var staffArea = !CurrentUser.IsAuthenticated ? null
+        : User.IsInRole(Roles.Admin) ? "Admin panel"
+        : User.IsInRole(Roles.Manager) || User.IsInRole(Roles.Employee) ? "Staff area"
+        : null;
 }
 <!DOCTYPE html>
 <html lang="en">
@@ -60,20 +65,20 @@
                     <li><a href="/kitchen" aria-current="@Current("/kitchen")">Our Kitchen</a></li>
                     <li><a href="/about" aria-current="@Current("/about")">Our Story</a></li>
                     <li><a href="/contact" aria-current="@Current("/contact")">Contact</a></li>
+                    @if (CurrentUser.IsAuthenticated && staffArea is not null)
+                    {
+                        @* On phones the staff link moves here from the header icons, which have no room for it. *@
+                        <li class="nav-staff"><a href="/admin">@staffArea</a></li>
+                    }
                 </ul>
             </nav>
 
             <div class="header-actions">
                 @if (CurrentUser.IsAuthenticated)
                 {
-                    @* Display only, from the cookie's role claims: the admin area itself checks the database on every request. *@
-                    @if (User.IsInRole(Roles.Admin))
+                    @if (staffArea is not null)
                     {
-                        <a class="icon-link" href="/admin" title="Admin panel">@Icons.Get("dashboard") <span class="icon-label">Admin</span></a>
-                    }
-                    else if (User.IsInRole(Roles.Manager) || User.IsInRole(Roles.Employee))
-                    {
-                        <a class="icon-link" href="/admin" title="Staff area">@Icons.Get("dashboard") <span class="icon-label">Staff</span></a>
+                        <a class="icon-link staff-link" href="/admin" title="@staffArea">@Icons.Get("dashboard") <span class="icon-label">@(User.IsInRole(Roles.Admin) ? "Admin" : "Staff")</span></a>
                     }
                     <a class="icon-link" href="/account/orders" title="My account">@Icons.Get("user") <span class="icon-label">My Orders</span></a>
                 }
