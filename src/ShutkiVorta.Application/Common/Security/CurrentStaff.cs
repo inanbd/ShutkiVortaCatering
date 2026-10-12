@@ -15,6 +15,6 @@ internal sealed class CurrentStaff(ICurrentUser currentUser, IStaffAccessService
         }
 
         var userId = currentUser.UserId;
-        return _access = userId is null ? StaffAccess.None : await staffAccess.GetAsync(userId, cancellationToken);
+        return _access = userId is null ? StaffAccess.None : await staffAccess.GetForSignInAsync(userId, currentUser.SecurityStamp, cancellationToken);
     }
 }

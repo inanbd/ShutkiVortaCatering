@@ -10,4 +10,10 @@ namespace ShutkiVorta.Application.Common.Interfaces;
 public interface IStaffAccessService
 {
     Task<StaffAccess> GetAsync(string userId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// The access of a signed-in person: none when the sign-in was issued before the account's security stamp last
+    /// changed (e.g. an admin took the account over), without waiting for the cookie's periodic stamp check.
+    /// </summary>
+    Task<StaffAccess> GetForSignInAsync(string userId, string? securityStamp, CancellationToken cancellationToken = default);
 }

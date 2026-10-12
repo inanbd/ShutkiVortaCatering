@@ -137,6 +137,28 @@ public sealed partial class StaffAccessTests(TestServers servers)
 
     [Theory]
     [MemberData(nameof(TestServers.Providers), MemberType = typeof(TestServers))]
+    public async Task ASignInFromBeforeTheAccountWasReset_LosesStaffAccessAtOnce(string provider)
+    {
+        // An admin taking an account over (or a password reset) rotates its stamp; the cookie's own stamp check runs only
+        // every few minutes, so staff access compares the stamp on every request.
+        var app = servers.Get(provider);
+        var manager = await CreateStaffAsync(app, StaffRole.Manager);
+        var before = await SignInAsync(app, manager.Email);
+        Assert.Equal(HttpStatusCode.OK, (await before.GetAsync("/admin/orders")).StatusCode);
+
+        using (var scope = app.Services.CreateScope())
+        {
+            var users = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
+            Assert.True((await users.UpdateSecurityStampAsync((await users.FindByIdAsync(manager.UserId))!)).Succeeded);
+        }
+
+        AssertNotStaff(await before.GetAsync("/admin/orders"));
+        var after = await SignInAsync(app, manager.Email);
+        Assert.Equal(HttpStatusCode.OK, (await after.GetAsync("/admin/orders")).StatusCode);
+    }
+
+    [Theory]
+    [MemberData(nameof(TestServers.Providers), MemberType = typeof(TestServers))]
     public async Task AnEmployeesDashboard_ShowsNoMoney(string provider)
     {
         var app = servers.Get(provider);

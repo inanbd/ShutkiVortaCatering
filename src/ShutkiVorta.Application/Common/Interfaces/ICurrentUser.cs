@@ -9,5 +9,8 @@ public interface ICurrentUser
     string? UserId { get; }
     string? Email { get; }
     string? Name { get; }
+
+    /// <summary>The account's security stamp when the sign-in was issued; it changes when the account is reset or taken over.</summary>
+    string? SecurityStamp { get; }
     bool IsAuthenticated { get; }
 }

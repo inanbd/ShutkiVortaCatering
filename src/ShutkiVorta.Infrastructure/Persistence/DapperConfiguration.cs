@@ -19,6 +19,12 @@ internal static class DapperConfiguration
         // SQLite has no decimal type: NUMERIC columns come back as Int64 for whole numbers (2 lb) and
         // Double for fractions (1.5 lb), even within one result set. This handler reads either safely.
         SqlMapper.AddTypeHandler(new FlexibleDecimalHandler());
+
+        // Every SQL Server date column is DATETIME2, but Dapper sends DateTime as DATETIME (1/300 s steps). Compared with
+        // a DATETIME2 column, "now" could then land a few milliseconds before a value stored a moment earlier, so an email
+        // queued just now was not yet due. SQLite stores dates as text either way.
+        SqlMapper.AddTypeMap(typeof(DateTime), DbType.DateTime2);
+        SqlMapper.AddTypeMap(typeof(DateTime?), DbType.DateTime2);
     }
 
     private sealed class FlexibleDecimalHandler : SqlMapper.TypeHandler<decimal>

@@ -16,14 +16,20 @@ internal sealed class StaffAccessService(IDbConnectionFactory connections, ILogg
     private const string Sql = """
         SELECT r.NormalizedName FROM UserRoles ur INNER JOIN Roles r ON r.Id = ur.RoleId
          WHERE ur.UserId = @UserId AND r.NormalizedName IN ('ADMIN', 'MANAGER', 'EMPLOYEE');
-        SELECT u.EmailConfirmed, sp.UsesCustomPermissions
+        SELECT u.EmailConfirmed, u.SecurityStamp, sp.UsesCustomPermissions
           FROM Users u LEFT JOIN StaffProfiles sp ON sp.UserId = u.Id
          WHERE u.Id = @UserId;
         SELECT Permission FROM UserPermissions WHERE UserId = @UserId;
         SELECT Role, Permission, IsGranted FROM RolePermissions;
         """;
 
-    public async Task<StaffAccess> GetAsync(string userId, CancellationToken cancellationToken = default)
+    public Task<StaffAccess> GetAsync(string userId, CancellationToken cancellationToken = default) =>
+        ReadAsync(userId, checkStamp: false, null, cancellationToken);
+
+    public Task<StaffAccess> GetForSignInAsync(string userId, string? securityStamp, CancellationToken cancellationToken = default) =>
+        ReadAsync(userId, checkStamp: true, securityStamp, cancellationToken);
+
+    private async Task<StaffAccess> ReadAsync(string userId, bool checkStamp, string? securityStamp, CancellationToken cancellationToken)
     {
         await using var connection = await connections.OpenAsync(cancellationToken);
         await using var results = await connection.QueryMultipleAsync(new CommandDefinition(Sql, new { UserId = userId }, cancellationToken: cancellationToken));
@@ -43,7 +49,8 @@ internal sealed class StaffAccessService(IDbConnectionFactory connections, ILogg
                 g => g.Key,
                 g => (IReadOnlyDictionary<string, bool>)g.ToDictionary(r => r.Permission, r => r.IsGranted, StringComparer.Ordinal));
 
-        if (user is null)
+        // Compared as Identity's own stamp validator does, which would otherwise notice only at its next check.
+        if (user is null || (checkStamp && !string.Equals(user.SecurityStamp, securityStamp, StringComparison.Ordinal)))
         {
             return StaffAccess.None;
         }
@@ -60,6 +67,7 @@ internal sealed class StaffAccessService(IDbConnectionFactory connections, ILogg
     private sealed class UserRow
     {
         public bool EmailConfirmed { get; init; }
+        public string? SecurityStamp { get; init; }
         public bool? UsesCustomPermissions { get; init; }
     }
 

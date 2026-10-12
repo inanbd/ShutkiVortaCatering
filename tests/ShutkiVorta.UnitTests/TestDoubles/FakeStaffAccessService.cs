@@ -16,4 +16,7 @@ internal sealed class FakeStaffAccessService : IStaffAccessService
         Reads++;
         return Task.FromResult(Users.TryGetValue(userId, out var access) ? access : StaffAccess.None);
     }
+
+    public Task<StaffAccess> GetForSignInAsync(string userId, string? securityStamp, CancellationToken cancellationToken = default) =>
+        GetAsync(userId, cancellationToken);
 }
