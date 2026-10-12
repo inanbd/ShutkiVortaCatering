@@ -296,9 +296,12 @@ internal sealed class TimeClockCommandHandlers(
             LocationStatus.PermissionDenied => "location is blocked for this site on your device. See \"How to turn location on\" below, then try again.",
             LocationStatus.Unavailable or LocationStatus.Timeout => "your device couldn't find it. Check that Location is on, move near a window or outside, and try again.",
             LocationStatus.NotSupported => "this browser can't share it. Try your phone's own browser (Safari or Chrome).",
-            _ => "allow location when your device asks, then try again.",
+            _ => "your device didn't send it. Tap the button again and choose Allow when your device asks.",
         };
-        return $"Your location is needed to {action}, but {why} If it still doesn't work, ask a manager to add your shift.";
+
+        // Clocking in, the shift doesn't exist yet; clocking out, it does and stays open until someone closes it.
+        var fallback = action == "clock in" ? "ask a manager to add your shift" : "ask a manager to close your shift";
+        return $"Your location is needed to {action}, but {why} If it still doesn't work, {fallback}.";
     }
 }
 

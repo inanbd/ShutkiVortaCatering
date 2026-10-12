@@ -129,6 +129,28 @@ public sealed class TimeClockHandlerTests
     }
 
     [Fact]
+    public async Task WhenLocationIsRequired_SkippingIt_SaysWhatToDo_AndWhoFixesWhichShift()
+    {
+        _options.RequireLocation = true;
+
+        var clockIn = await Assert.ThrowsAsync<ValidationException>(() =>
+            Clock().Handle(new ClockInCommand(PunchLocationInput.NotProvided), CancellationToken.None));
+        Assert.Equal(
+            "Your location is needed to clock in, but your device didn't send it. Tap the button again and choose Allow when your device asks. "
+            + "If it still doesn't work, ask a manager to add your shift.",
+            clockIn.Message);
+
+        // Clocking out, the shift already exists: a manager closes it.
+        _repository.GetOpenShiftAsync(Me, Arg.Any<CancellationToken>()).Returns(Punched(5, Me, _clock.UtcNow.AddHours(-2)));
+        var clockOut = await Assert.ThrowsAsync<ValidationException>(() =>
+            Clock().Handle(new ClockOutCommand(PunchLocationInput.NotProvided), CancellationToken.None));
+        Assert.Equal(
+            "Your location is needed to clock out, but your device didn't send it. Tap the button again and choose Allow when your device asks. "
+            + "If it still doesn't work, ask a manager to close your shift.",
+            clockOut.Message);
+    }
+
+    [Fact]
     public async Task ASecondTapWithinTwoMinutes_ShowsTheFirstClockIn_LaterItIsAFriendlyError()
     {
         var open = Punched(5, Me, _clock.UtcNow.AddSeconds(-90));
