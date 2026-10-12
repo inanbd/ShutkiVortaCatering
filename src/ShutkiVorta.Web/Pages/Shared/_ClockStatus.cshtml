@@ -16,7 +16,7 @@
         ? Format.Time(start)
         : start.ToString("ddd h:mm tt", Format.Culture);
     <a class="clock-status on" href="@StaffLanding.TimeClock" title="Open the time clock">
-        @Icons.Get("clock") <span>On the clock since @startText<span class="clock-elapsed"> · @Format.Hours(Clock.UtcNow - startUtc)</span></span>
+        @Icons.Get("clock") <span>On the clock since @startText<span class="clock-elapsed"> · <span data-elapsed-minutes="@((long)Math.Max(0, (Clock.UtcNow - startUtc).TotalMinutes))">@Format.Hours(Clock.UtcNow - startUtc)</span></span></span>
     </a>
 }
 else

@@ -60,13 +60,29 @@
   if (target) target.addEventListener('input', refresh);
   refresh();
 
-  // Settings editor: show when there are unsaved changes and warn before leaving the page with them.
+  // "On the clock · 3 h 12 min" (the time clock's card and the topbar on every page) keeps counting, from the server's
+  // figure, so a wrong phone clock doesn't matter.
+  document.querySelectorAll('[data-elapsed-minutes]').forEach((element) => {
+    const start = Number(element.dataset.elapsedMinutes);
+    const loaded = Date.now();
+    if (!Number.isFinite(start)) return;
+    window.setInterval(() => {
+      const minutes = start + Math.floor((Date.now() - loaded) / 60000);
+      const hours = Math.floor(minutes / 60);
+      const rest = minutes % 60;
+      element.textContent = hours === 0 ? `${rest} min` : rest === 0 ? `${hours} h` : `${hours} h ${rest} min`;
+    }, 30000);
+  });
+
+  // Settings editor: show when there are unsaved changes and warn before leaving the page with them. Only
+  // data-dirty="true" counts: the page renders an empty data-dirty attribute when there is nothing to save.
   const settingsForm = document.querySelector('form[data-settings-form]');
   if (settingsForm) {
     const status = settingsForm.querySelector('[data-dirty-status]');
     let submitting = false;
+    const isDirty = () => settingsForm.dataset.dirty === 'true';
     const markDirty = () => {
-      if (settingsForm.hasAttribute('data-dirty') && status && status.textContent) return;
+      if (isDirty() && status && status.textContent) return;
       settingsForm.setAttribute('data-dirty', 'true');
       if (status) status.textContent = 'You have unsaved changes.';
     };
@@ -74,7 +90,7 @@
     settingsForm.addEventListener('change', markDirty);
     settingsForm.addEventListener('submit', () => { submitting = true; });
     window.addEventListener('beforeunload', (event) => {
-      if (submitting || !settingsForm.hasAttribute('data-dirty')) return;
+      if (submitting || !isDirty()) return;
       event.preventDefault();
       event.returnValue = '';
     });

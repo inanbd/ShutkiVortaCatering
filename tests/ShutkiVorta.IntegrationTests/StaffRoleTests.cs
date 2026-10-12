@@ -320,6 +320,10 @@ public sealed class StaffRoleTests
 
         Assert.Contains("On the clock since", html);
         Assert.Contains("3 h 12 min", html);
+
+        // The topbar's figure keeps counting (admin.js updates every [data-elapsed-minutes], on every admin page).
+        Assert.Contains("<span class=\"clock-elapsed\"> · <span data-elapsed-minutes=\"192\">3 h 12 min</span>", html);
+        Assert.Contains("data-elapsed-minutes", System.Net.WebUtility.HtmlDecode(await admin.GetStringAsync("/admin/orders")));
         Assert.Contains("You're on the clock since", html);
         Assert.Contains(">Clock out</a>", html);
     }

@@ -105,7 +105,18 @@
       });
     });
 
-    document.querySelectorAll('form[data-role-save]').forEach((form) => form.addEventListener('submit', () => { submitting = true; }));
+    // Each role saves through its own form: say so before the other role's changes are lost with the reload.
+    document.querySelectorAll('form[data-role-save]').forEach((form) => form.addEventListener('submit', (event) => {
+      const role = form.dataset.roleSave;
+      const others = [...new Set(changed().map((select) => select.dataset.role).filter((other) => other !== role))];
+      if (others.length > 0 && !window.confirm(
+        `You also changed the ${others.join(' and ')} permissions. Only the ${role} changes will be saved; the others will be lost. Continue?`)) {
+        event.preventDefault();
+        return;
+      }
+
+      submitting = true;
+    }));
     window.addEventListener('beforeunload', (event) => {
       if (submitting || changed().length === 0) return;
       event.preventDefault();

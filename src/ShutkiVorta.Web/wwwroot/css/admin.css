@@ -355,8 +355,8 @@ details.settings-advanced[open] > summary { border-bottom: 1px dashed var(--line
 }
 .settings-savebar-status { margin-right: auto; color: var(--ink-500); font-size: .92rem; font-weight: 600; }
 .settings-savebar-status:empty { display: none; }
-.settings-form[data-dirty] .settings-savebar { border-color: var(--gold-500); }
-.settings-form[data-dirty] .settings-savebar-status { color: var(--maroon-700); }
+.settings-form[data-dirty="true"] .settings-savebar { border-color: var(--gold-500); }
+.settings-form[data-dirty="true"] .settings-savebar-status { color: var(--maroon-700); }
 .settings-savebar svg.icon { width: 18px; height: 18px; }
 
 .alert-warn { background: #fff4d6; border: 1px solid #f0d48a; color: #5c4100; }

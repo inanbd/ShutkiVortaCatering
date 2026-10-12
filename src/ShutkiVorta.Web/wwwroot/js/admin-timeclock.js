@@ -151,19 +151,6 @@
     });
   });
 
-  // ---- "On the clock · 3 h 12 min" keeps counting (from the server's figure, so a wrong phone clock doesn't matter) ----
-  document.querySelectorAll('[data-elapsed-minutes]').forEach((element) => {
-    const start = Number(element.dataset.elapsedMinutes);
-    const loaded = Date.now();
-    if (!Number.isFinite(start)) return;
-    window.setInterval(() => {
-      const minutes = start + Math.floor((Date.now() - loaded) / 60000);
-      const hours = Math.floor(minutes / 60);
-      const rest = minutes % 60;
-      element.textContent = hours === 0 ? `${rest} min` : rest === 0 ? `${hours} h` : `${hours} h ${rest} min`;
-    }, 30000);
-  });
-
   // A page restored from the back/forward cache after posting would show an old state and a disabled button.
   window.addEventListener('pageshow', (event) => {
     if (event.persisted && document.querySelector('form[data-clock-form], form[data-kitchen-form]')) window.location.reload();
