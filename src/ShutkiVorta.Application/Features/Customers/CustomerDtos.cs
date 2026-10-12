@@ -158,7 +158,7 @@ public sealed class CustomerSummaryDto
     public string? UnconfirmedAccountId { get; init; }
 
     public int CancelledCount => AllOrderCount - OrderCount;
-    public decimal AverageOrder => OrderCount == 0 ? 0m : Math.Round(OrderValue / OrderCount, 2);
+    public decimal AverageOrder => OrderCount == 0 ? 0m : Math.Round(OrderValue / OrderCount, 2, MidpointRounding.AwayFromZero);
 }
 
 /// <summary>Who an order belongs to in the customer list.</summary>

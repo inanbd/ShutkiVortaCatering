@@ -121,6 +121,7 @@ public sealed class CustomerQueryTests
         var customer = new CustomerSummaryDto { AllOrderCount = 5, OrderCount = 3, OrderValue = 100m };
         Assert.Equal((2, 33.33m), (customer.CancelledCount, customer.AverageOrder));
         Assert.Equal(0m, new CustomerSummaryDto { AllOrderCount = 2 }.AverageOrder);
+        Assert.Equal(53.13m, new CustomerSummaryDto { AllOrderCount = 2, OrderCount = 2, OrderValue = 106.25m }.AverageOrder); // half a cent rounds up
     }
 
     private CustomerQueryHandlers Handlers(FakeCurrentStaff staff) => new(_customers, _standingOrders, _inquiries, staff, _clock);

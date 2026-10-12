@@ -99,9 +99,9 @@
                                 <td data-label="Type">@CustomersUi.TypePill(c.Type)</td>
                                 <td class="num" data-label="Orders">@c.OrderCount</td>
                                 <td class="num" data-label="Order value">@Ui.Money(c.OrderValue)</td>
-                                <td data-label="Last order">@(lastOrder is { } last ? Format.ShortDate(last) : "—")</td>
+                                <td class="nowrap" data-label="Last order">@(lastOrder is { } last ? Format.ShortDate(last) : "—")</td>
                                 <td data-label="@(guest ? "First order" : "Joined")">
-                                    @Format.ShortDate(Model.Local(c.JoinedUtc)!.Value)
+                                    <span class="nowrap">@Format.ShortDate(Model.Local(c.JoinedUtc)!.Value)</span>
                                     @if (guest)
                                     {
                                         <span class="customer-joined-note small muted">first order</span>

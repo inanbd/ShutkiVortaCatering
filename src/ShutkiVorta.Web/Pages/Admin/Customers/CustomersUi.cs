@@ -28,12 +28,16 @@ public static class CustomersUi
     public const string InquiriesPath = "/admin/inquiries";
 
     /// <summary>"Account", "Guest" or "Restaurant" as a coloured pill.</summary>
-    public static IHtmlContent TypePill(CustomerType type) => new HtmlString(type switch
+    public static IHtmlContent TypePill(CustomerType type)
     {
-        CustomerType.Guest => "<span class=\"pill pill-guest\">Guest</span>",
-        CustomerType.Restaurant => "<span class=\"pill pill-restaurant\">Restaurant</span>",
-        _ => "<span class=\"pill pill-account\">Account</span>",
-    });
+        var css = type switch
+        {
+            CustomerType.Guest => "pill-guest",
+            CustomerType.Restaurant => "pill-restaurant",
+            _ => "pill-account",
+        };
+        return new HtmlString($"<span class=\"pill {css}\">{type.DisplayName()}</span>");
+    }
 
     /// <summary>The list's tabs: everyone, then each type.</summary>
     public static IReadOnlyList<(CustomerType? Type, string Label)> Tabs { get; } =

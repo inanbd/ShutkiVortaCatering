@@ -46,7 +46,7 @@
     <div class="kpi">
         <div class="label">Orders</div>
         <div class="value">@c.OrderCount</div>
-        <div class="sub">@(c.CancelledCount > 0 ? $"and {c.CancelledCount} cancelled" : "not counting cancelled ones")</div>
+        <div class="sub">@(c.CancelledCount > 0 ? $"and {c.CancelledCount} cancelled" : "none cancelled")</div>
     </div>
     <div class="kpi gold">
         <div class="label">Order value</div>
@@ -100,7 +100,7 @@
                                             <div class="preview">@o.ItemsPreview</div>
                                         </td>
                                         <td class="nowrap" data-label="Placed">@Day(o.CreatedAtUtc)</td>
-                                        <td data-label="Scheduled">@o.ScheduledFor.ToString("ddd, MMM d, yyyy", Format.Culture) <span class="small muted">@Format.Time(o.ScheduledFor)</span></td>
+                                        <td data-label="Scheduled"><span class="nowrap">@o.ScheduledFor.ToString("ddd, MMM d, yyyy", Format.Culture)</span> <span class="customer-time small muted">@Format.Time(o.ScheduledFor)</span></td>
                                         <td data-label="Status"><partial name="_StatusBadge" model="o.Status" /></td>
                                         <td class="num" data-label="Total">@Ui.Money(o.Total)</td>
                                     </tr>

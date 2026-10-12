@@ -23,6 +23,7 @@
 .customer-list-head { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
 .customer-message { color: var(--ink-700); font-size: .92rem; }
 .customer-orders .source-badge { margin-left: 6px; }
+.customer-orders .customer-time { display: block; }
 @media (min-width: 561px) { .customer-grid .kv { grid-template-columns: 110px minmax(0, 1fr); } }
 
 @media (max-width: 560px) {
@@ -35,7 +36,8 @@
   .customer-cards td.num, .customer-orders td.num { text-align: left; }
   .customer-cards td[data-label]::before, .customer-orders td[data-label]::before { content: attr(data-label) ": "; color: var(--ink-400); font-size: .8rem; font-weight: 600; }
   .customer-cards td.customer-contact::before { display: none; }
-  .customer-cards .customer-joined-note { display: inline; }
+  .customer-cards .customer-joined-note { display: none; } /* the label already says "First order" */
+  .customer-orders .customer-time { display: inline; }
   .customer-cards tr:hover td, .customer-orders tr:hover td { background: none; }
   .customer-orders tr.row-muted { background: #fcf8ef; }
   .customer-orders .preview { max-width: none; }
