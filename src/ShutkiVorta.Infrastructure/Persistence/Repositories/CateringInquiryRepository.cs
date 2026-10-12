@@ -44,6 +44,7 @@ internal sealed class CateringInquiryRepository(IDbConnectionFactory connections
 
         var total = await connection.ExecuteScalarAsync<int>(new CommandDefinition(
             $"SELECT COUNT(*) FROM CateringInquiries {where}", cancellationToken: cancellationToken));
+        page = Paging.Within(page, total, pageSize);
         if (total == 0)
         {
             return PagedResult<CateringInquiry>.Empty(page, pageSize);
@@ -51,7 +52,7 @@ internal sealed class CateringInquiryRepository(IDbConnectionFactory connections
 
         var items = await connection.QueryAsync<CateringInquiry>(new CommandDefinition(
             dialect.Page($"SELECT {Columns} FROM CateringInquiries {where} ORDER BY IsHandled, CreatedAtUtc DESC"),
-            new { Skip = (page - 1) * pageSize, Take = pageSize },
+            new { Skip = Paging.Skip(page, pageSize), Take = pageSize },
             cancellationToken: cancellationToken));
 
         return new PagedResult<CateringInquiry>(items.AsList(), total, page, pageSize);

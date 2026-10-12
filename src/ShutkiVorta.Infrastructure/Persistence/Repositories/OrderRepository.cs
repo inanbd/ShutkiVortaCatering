@@ -112,9 +112,11 @@ internal sealed class OrderRepository(IDbConnectionFactory connections, ISqlDial
 
         if (!string.IsNullOrWhiteSpace(criteria.Search))
         {
-            var term = criteria.Search.Replace("%", string.Empty).Replace("_", string.Empty).Replace("[", string.Empty).Trim();
-            conditions.Add("(o.OrderNumber LIKE @Pattern OR o.CustomerName LIKE @Pattern OR o.CompanyName LIKE @Pattern OR o.Email LIKE @Pattern OR o.Phone LIKE @Pattern)");
-            parameters.Add("Pattern", $"%{term}%");
+            conditions.Add("""
+                (o.OrderNumber LIKE @Pattern ESCAPE '\' OR o.CustomerName LIKE @Pattern ESCAPE '\' OR o.CompanyName LIKE @Pattern ESCAPE '\'
+                 OR o.Email LIKE @Pattern ESCAPE '\' OR o.Phone LIKE @Pattern ESCAPE '\')
+                """);
+            parameters.Add("Pattern", SqlLike.Contains(criteria.Search));
         }
 
         if (criteria.Status is { } status)
@@ -147,23 +149,25 @@ internal sealed class OrderRepository(IDbConnectionFactory connections, ISqlDial
         }
 
         var where = conditions.Count == 0 ? string.Empty : "WHERE " + string.Join(" AND ", conditions);
-        parameters.Add("Skip", (criteria.Page - 1) * criteria.PageSize);
-        parameters.Add("Take", criteria.PageSize);
 
         await using var connection = await connections.OpenAsync(cancellationToken);
         var total = await connection.ExecuteScalarAsync<int>(new CommandDefinition(
             $"SELECT COUNT(*) FROM Orders o {where}", parameters, cancellationToken: cancellationToken));
 
+        var page = Paging.Within(criteria.Page, total, criteria.PageSize);
         if (total == 0)
         {
-            return PagedResult<OrderSummaryDto>.Empty(criteria.Page, criteria.PageSize);
+            return PagedResult<OrderSummaryDto>.Empty(page, criteria.PageSize);
         }
+
+        parameters.Add("Skip", Paging.Skip(page, criteria.PageSize));
+        parameters.Add("Take", criteria.PageSize);
 
         var sql = dialect.Page($"SELECT {SummaryColumns} FROM Orders o {where} ORDER BY o.CreatedAtUtc DESC, o.Id DESC");
         var items = (await connection.QueryAsync<OrderSummaryDto>(new CommandDefinition(sql, parameters, cancellationToken: cancellationToken))).AsList();
         await AttachPreviewsAsync(connection, items, cancellationToken);
 
-        return new PagedResult<OrderSummaryDto>(items, total, criteria.Page, criteria.PageSize);
+        return new PagedResult<OrderSummaryDto>(items, total, page, criteria.PageSize);
     }
 
     public async Task<IReadOnlyList<OrderSummaryDto>> GetForCustomerAsync(string customerId, string? verifiedEmail, CancellationToken cancellationToken = default)

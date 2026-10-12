@@ -104,7 +104,7 @@ internal sealed class CustomerRepository(IDbConnectionFactory connections, ISqlD
                 (c.Name LIKE @Pattern ESCAPE '\' OR c.Email LIKE @Pattern ESCAPE '\' OR c.Phone LIKE @Pattern ESCAPE '\'
                  OR c.BusinessName LIKE @Pattern ESCAPE '\')
                 """);
-            parameters.Add("Pattern", $"%{EscapeLike(search.Search.Trim())}%");
+            parameters.Add("Pattern", SqlLike.Contains(search.Search));
         }
 
         await using var connection = await connections.OpenAsync(cancellationToken);
@@ -122,8 +122,7 @@ internal sealed class CustomerRepository(IDbConnectionFactory connections, ISqlD
         var total = search.Type is { } only ? CountOf(only) : accounts + guests + restaurants;
 
         // A page past the end (an old link, or customers who no longer match) shows the last page instead.
-        var lastPage = Math.Max(1, (int)Math.Ceiling(total / (double)search.PageSize));
-        var pageNumber = Math.Clamp(search.Page, 1, lastPage);
+        var pageNumber = Paging.Within(search.Page, total, search.PageSize);
         var page = PagedResult<CustomerListItemDto>.Empty(pageNumber, search.PageSize);
         if (total > 0)
         {
@@ -149,7 +148,7 @@ internal sealed class CustomerRepository(IDbConnectionFactory connections, ISqlD
                 _ => "c.LastOrderUtc DESC",
             };
 
-            parameters.Add("Skip", (pageNumber - 1) * search.PageSize);
+            parameters.Add("Skip", Paging.Skip(pageNumber, search.PageSize));
             parameters.Add("Take", search.PageSize);
             var rows = await connection.QueryAsync<CustomerRow>(new CommandDefinition(
                 dialect.Page($"SELECT {ListColumns} FROM ({Customers}) c {Where(conditions)} ORDER BY {order}, c.AccountId, c.GuestEmail"),
@@ -302,12 +301,6 @@ internal sealed class CustomerRepository(IDbConnectionFactory connections, ISqlD
 
     private static string Where(IReadOnlyCollection<string> conditions) =>
         conditions.Count == 0 ? string.Empty : "WHERE " + string.Join(" AND ", conditions);
-
-    /// <summary>
-    /// The text with LIKE's wildcards made literal for <c>ESCAPE '\'</c>: % and _ on both providers, and SQL Server's [.
-    /// </summary>
-    private static string EscapeLike(string text) =>
-        text.Replace(@"\", @"\\").Replace("%", @"\%").Replace("_", @"\_").Replace("[", @"\[");
 
     private static CustomerType ToType(string kind, int isRestaurant) =>
         kind == "G" ? CustomerType.Guest : isRestaurant != 0 ? CustomerType.Restaurant : CustomerType.Account;

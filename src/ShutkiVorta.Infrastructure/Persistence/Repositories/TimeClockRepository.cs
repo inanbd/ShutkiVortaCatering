@@ -295,20 +295,21 @@ internal sealed class TimeClockRepository(IDbConnectionFactory connections, ISql
         });
 
         var where = "WHERE " + string.Join(" AND ", conditions);
-        parameters.Add("Skip", (search.Page - 1L) * search.PageSize); // a long: a page far past the end must not wrap around
-        parameters.Add("Take", search.PageSize);
 
         await using var connection = await connections.OpenAsync(cancellationToken);
         var total = await connection.ExecuteScalarAsync<int>(new CommandDefinition(
             $"SELECT COUNT(*) FROM TimeClockShifts {where}", parameters, cancellationToken: cancellationToken));
+        var page = Paging.Within(search.Page, total, search.PageSize);
         if (total == 0)
         {
-            return PagedResult<TimeClockShift>.Empty(search.Page, search.PageSize);
+            return PagedResult<TimeClockShift>.Empty(page, search.PageSize);
         }
 
+        parameters.Add("Skip", Paging.Skip(page, search.PageSize));
+        parameters.Add("Take", search.PageSize);
         var shifts = await connection.QueryAsync<TimeClockShift>(new CommandDefinition(
             dialect.Page($"SELECT {Columns} FROM TimeClockShifts {where} ORDER BY ClockInUtc DESC, Id DESC"), parameters, cancellationToken: cancellationToken));
-        return new PagedResult<TimeClockShift>(shifts.AsList(), total, search.Page, search.PageSize);
+        return new PagedResult<TimeClockShift>(shifts.AsList(), total, page, search.PageSize);
     }
 
     public async Task<IReadOnlyList<TimeClockShift>> ListOpenShiftsAsync(CancellationToken cancellationToken = default)

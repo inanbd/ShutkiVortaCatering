@@ -54,9 +54,8 @@ internal sealed class StaffRepository(IDbConnectionFactory connections, IDateTim
 
         if (!string.IsNullOrWhiteSpace(filter.Search))
         {
-            var term = filter.Search.Replace("%", string.Empty).Replace("_", string.Empty).Replace("[", string.Empty).Trim();
-            conditions.Add("(u.FullName LIKE @Pattern OR u.Email LIKE @Pattern OR u.PhoneNumber LIKE @Pattern)");
-            parameters.Add("Pattern", $"%{term}%");
+            conditions.Add(@"(u.FullName LIKE @Pattern ESCAPE '\' OR u.Email LIKE @Pattern ESCAPE '\' OR u.PhoneNumber LIKE @Pattern ESCAPE '\')");
+            parameters.Add("Pattern", SqlLike.Contains(filter.Search));
         }
 
         return await QueryMembersAsync($"{MemberSelect} WHERE {string.Join(" AND ", conditions)} {MemberOrder}", parameters, cancellationToken);

@@ -117,14 +117,13 @@ internal sealed class InventoryRepository(IDbConnectionFactory connections, ISql
 
         if (!string.IsNullOrWhiteSpace(search.Search))
         {
-            var term = search.Search.Replace("%", string.Empty).Replace("_", string.Empty).Replace("[", string.Empty).Trim();
             conditions.Add("""
-                (p.Store LIKE @Pattern OR p.Notes LIKE @Pattern OR EXISTS (
+                (p.Store LIKE @Pattern ESCAPE '\' OR p.Notes LIKE @Pattern ESCAPE '\' OR EXISTS (
                     SELECT 1 FROM InventoryPurchaseLines sl JOIN InventoryItems si ON si.Id = sl.InventoryItemId
-                    WHERE sl.PurchaseId = p.Id AND si.NormalizedName LIKE @NamePattern))
+                    WHERE sl.PurchaseId = p.Id AND si.NormalizedName LIKE @NamePattern ESCAPE '\'))
                 """);
-            parameters.Add("Pattern", $"%{term}%");
-            parameters.Add("NamePattern", $"%{term.ToUpperInvariant()}%");
+            parameters.Add("Pattern", SqlLike.Contains(search.Search));
+            parameters.Add("NamePattern", SqlLike.Contains(search.Search.ToUpperInvariant()));
         }
 
         if (search.From is { } from)
@@ -140,17 +139,19 @@ internal sealed class InventoryRepository(IDbConnectionFactory connections, ISql
         }
 
         var where = conditions.Count == 0 ? string.Empty : "WHERE " + string.Join(" AND ", conditions);
-        parameters.Add("Skip", (search.Page - 1) * search.PageSize);
-        parameters.Add("Take", search.PageSize);
 
         await using var connection = await connections.OpenAsync(cancellationToken);
         var totals = await connection.QuerySingleAsync<Totals>(new CommandDefinition(
             $"SELECT COUNT(*) AS PurchaseCount, COALESCE(SUM(p.Total), 0) AS Amount FROM InventoryPurchases p {where}", parameters, cancellationToken: cancellationToken));
 
+        var page = Paging.Within(search.Page, totals.PurchaseCount, search.PageSize);
         if (totals.PurchaseCount == 0)
         {
-            return new InventoryPurchaseList(PagedResult<InventoryPurchaseSummaryDto>.Empty(search.Page, search.PageSize), 0m);
+            return new InventoryPurchaseList(PagedResult<InventoryPurchaseSummaryDto>.Empty(page, search.PageSize), 0m);
         }
+
+        parameters.Add("Skip", Paging.Skip(page, search.PageSize));
+        parameters.Add("Take", search.PageSize);
 
         var sql = dialect.Page($"""
             SELECT p.Id, p.PurchasedOn, p.Store, p.Notes, p.Total, p.CreatedBy,
@@ -174,7 +175,7 @@ internal sealed class InventoryRepository(IDbConnectionFactory connections, ISql
         }
 
         return new InventoryPurchaseList(
-            new PagedResult<InventoryPurchaseSummaryDto>(purchases, totals.PurchaseCount, search.Page, search.PageSize), totals.Amount);
+            new PagedResult<InventoryPurchaseSummaryDto>(purchases, totals.PurchaseCount, page, search.PageSize), totals.Amount);
     }
 
     public async Task<decimal> GetSpentAsync(DateTime from, DateTime toExclusive, CancellationToken cancellationToken = default)

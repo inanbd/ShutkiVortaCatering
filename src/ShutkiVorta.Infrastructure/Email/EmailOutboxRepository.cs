@@ -136,6 +136,7 @@ internal sealed class EmailOutboxRepository(IDbConnectionFactory connections, IS
         await using var connection = await connections.OpenAsync(cancellationToken);
         var total = await connection.ExecuteScalarAsync<int>(new CommandDefinition(
             $"SELECT COUNT(*) FROM EmailOutbox {where}", new { Status = (int?)status }, cancellationToken: cancellationToken));
+        page = Paging.Within(page, total, pageSize);
         if (total == 0)
         {
             return PagedResult<EmailLogEntryDto>.Empty(page, pageSize);
@@ -143,7 +144,7 @@ internal sealed class EmailOutboxRepository(IDbConnectionFactory connections, IS
 
         var items = await connection.QueryAsync<EmailLogEntryDto>(new CommandDefinition(
             dialect.Page($"SELECT {SummaryColumns} FROM EmailOutbox {where} ORDER BY Id DESC"),
-            new { Status = (int?)status, Skip = (page - 1) * pageSize, Take = pageSize },
+            new { Status = (int?)status, Skip = Paging.Skip(page, pageSize), Take = pageSize },
             cancellationToken: cancellationToken));
         return new PagedResult<EmailLogEntryDto>(items.AsList(), total, page, pageSize);
     }

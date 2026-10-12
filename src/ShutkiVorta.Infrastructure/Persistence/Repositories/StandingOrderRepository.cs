@@ -131,22 +131,26 @@ internal sealed class StandingOrderRepository(IDbConnectionFactory connections, 
 
         if (!string.IsNullOrWhiteSpace(search))
         {
-            var term = search.Replace("%", string.Empty).Replace("_", string.Empty).Replace("[", string.Empty).Trim();
-            conditions.Add("(s.Reference LIKE @Pattern OR s.BusinessName LIKE @Pattern OR s.ContactName LIKE @Pattern OR s.Email LIKE @Pattern OR s.Phone LIKE @Pattern)");
-            parameters.Add("Pattern", $"%{term}%");
+            conditions.Add("""
+                (s.Reference LIKE @Pattern ESCAPE '\' OR s.BusinessName LIKE @Pattern ESCAPE '\' OR s.ContactName LIKE @Pattern ESCAPE '\'
+                 OR s.Email LIKE @Pattern ESCAPE '\' OR s.Phone LIKE @Pattern ESCAPE '\')
+                """);
+            parameters.Add("Pattern", SqlLike.Contains(search));
         }
 
         var where = conditions.Count == 0 ? string.Empty : "WHERE " + string.Join(" AND ", conditions);
-        parameters.Add("Skip", (page - 1) * pageSize);
-        parameters.Add("Take", pageSize);
 
         await using var connection = await connections.OpenAsync(cancellationToken);
         var total = await connection.ExecuteScalarAsync<int>(new CommandDefinition(
             $"SELECT COUNT(*) FROM StandingOrders s {where}", parameters, cancellationToken: cancellationToken));
+        page = Paging.Within(page, total, pageSize);
         if (total == 0)
         {
             return PagedResult<StandingOrderSummaryDto>.Empty(page, pageSize);
         }
+
+        parameters.Add("Skip", Paging.Skip(page, pageSize));
+        parameters.Add("Take", pageSize);
 
         // Awaiting approval first, then active, then the rest; newest first within each group.
         var sql = dialect.Page($"""
