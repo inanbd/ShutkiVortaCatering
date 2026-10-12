@@ -42,7 +42,7 @@
         </div>
 
         <div class="flex gap-2 wrap mt-4" style="justify-content:center;">
-            <a class="btn btn-green" href="/order/@o.OrderNumber?token=@Uri.EscapeDataString(o.TrackingToken)">Track this order</a>
+            <a class="btn btn-green" href="/order/@o.OrderNumber?token=@Uri.EscapeDataString(o.TrackingToken ?? string.Empty)">Track this order</a>
             <a class="btn btn-outline" href="/menu">Back to the menu</a>
         </div>
     </div>

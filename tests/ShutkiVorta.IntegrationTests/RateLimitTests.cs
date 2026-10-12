@@ -26,6 +26,11 @@ public sealed class RateLimitTests : IAsyncLifetime
         Assert.Contains("try again", await limited.Content.ReadAsStringAsync());
 
         Assert.NotEqual(HttpStatusCode.TooManyRequests, Post("/contact").StatusCode); // each form has its own allowance
+
+        // The order lookup too, so order numbers and emails cannot be tried endlessly.
+        Assert.NotEqual(HttpStatusCode.TooManyRequests, Post("/track-order").StatusCode);
+        Assert.NotEqual(HttpStatusCode.TooManyRequests, Post("/track-order").StatusCode);
+        Assert.Equal(HttpStatusCode.TooManyRequests, Post("/track-order").StatusCode);
         Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/kitchen")).StatusCode); // reading pages is never limited
     }
 }

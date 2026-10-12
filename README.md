@@ -19,6 +19,7 @@ stitching, jamdani patterns, alpona motifs, Bengali typography)
 - Cart → checkout with **Pickup** or **Delivery**, date and time-slot picker (lead time, closed days and
   slots are configurable), Dallas sales tax, delivery fee, free-delivery threshold, delivery-ZIP check
 - Thank-you page, private order-status page (emailed link, no account needed), guest "track my order"
+  (read-only status by order number + email; changes need the emailed link or the customer's account)
 - Catering inquiry and contact forms (with honeypot spam protection), FAQ, About, Privacy
 - **Our Kitchen** (`/kitchen`): our vortas are made by Bangladeshi mothers and homemakers in an inspected
   Dallas kitchen, with a "Join our kitchen" form for homemakers who want to cook with us. The same story

@@ -56,7 +56,8 @@ public sealed record OrderDetailsDto
 {
     public int Id { get; init; }
     public required string OrderNumber { get; init; }
-    public required string TrackingToken { get; init; }
+    /// <summary>The secret of the customer's private status link (which can cancel the order); null where it must not be shown.</summary>
+    public string? TrackingToken { get; init; }
     public string? CustomerId { get; init; }
     public required string CustomerName { get; init; }
     public required string Email { get; init; }

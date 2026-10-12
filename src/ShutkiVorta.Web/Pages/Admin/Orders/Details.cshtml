@@ -160,13 +160,16 @@
                 </div>
             </section>
 
-            <section class="panel">
-                <div class="panel-head"><h2>Customer link</h2></div>
-                <div class="panel-body small">
-                    <p>Share this private status page with the customer:</p>
-                    <input class="input" readonly value="@Urls.OrderStatus(o.OrderNumber, o.TrackingToken)" onclick="this.select()" />
-                </div>
-            </section>
+            @if (o.TrackingToken is { } token)
+            {
+                <section class="panel">
+                    <div class="panel-head"><h2>Customer link</h2></div>
+                    <div class="panel-body small">
+                        <p>Share this private status page with the customer:</p>
+                        <input class="input" readonly value="@Urls.OrderStatus(o.OrderNumber, token)" onclick="this.select()" />
+                    </div>
+                </section>
+            }
         }
     </div>
 </div>

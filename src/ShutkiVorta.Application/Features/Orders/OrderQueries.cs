@@ -32,20 +32,25 @@ public sealed record GetMyOrderQuery(string OrderNumber) : IRequest<OrderDetails
 /// <summary>Order status page reached from the link in confirmation emails (no account needed).</summary>
 public sealed record GetOrderByTrackingTokenQuery(string OrderNumber, string TrackingToken) : IRequest<OrderDetailsDto?>;
 
-/// <summary>Guest "track my order" lookup by order number + email. Returns the tracking token when they match.</summary>
-public sealed record FindGuestOrderQuery(string OrderNumber, string Email) : IRequest<string?>;
+/// <summary>
+/// Public "track my order" lookup by order number + email: a read-only view of the order when they match. Never the private
+/// tracking link: that link can cancel the order, and the number and email are no secret (staff who may only see orders,
+/// customers or the email log see both). Changing or cancelling needs the emailed link or the customer's own account.
+/// </summary>
+public sealed record FindGuestOrderQuery(string OrderNumber, string Email) : IRequest<OrderDetailsDto?>;
 
 internal sealed class OrderQueryHandlers(
     IOrderRepository orders,
     IIdentityService identity,
     ICurrentUser currentUser,
+    ICurrentStaff currentStaff,
     IDateTimeProvider clock) :
     IRequestHandler<GetOrdersQuery, PagedResult<OrderSummaryDto>>,
     IRequestHandler<GetOrderDetailsQuery, OrderDetailsDto?>,
     IRequestHandler<GetMyOrdersQuery, IReadOnlyList<OrderSummaryDto>>,
     IRequestHandler<GetMyOrderQuery, OrderDetailsDto?>,
     IRequestHandler<GetOrderByTrackingTokenQuery, OrderDetailsDto?>,
-    IRequestHandler<FindGuestOrderQuery, string?>
+    IRequestHandler<FindGuestOrderQuery, OrderDetailsDto?>
 {
     public Task<PagedResult<OrderSummaryDto>> Handle(GetOrdersQuery request, CancellationToken cancellationToken)
     {
@@ -63,8 +68,15 @@ internal sealed class OrderQueryHandlers(
         }, cancellationToken);
     }
 
-    public async Task<OrderDetailsDto?> Handle(GetOrderDetailsQuery request, CancellationToken cancellationToken) =>
-        (await orders.GetByNumberAsync(Normalize(request.OrderNumber), cancellationToken))?.ToDetailsDto(clock);
+    public async Task<OrderDetailsDto?> Handle(GetOrderDetailsQuery request, CancellationToken cancellationToken)
+    {
+        var order = (await orders.GetByNumberAsync(Normalize(request.OrderNumber), cancellationToken))?.ToDetailsDto(clock);
+
+        // The customer's private link can cancel the order: only staff who may change orders get it.
+        return order is not null && !(await currentStaff.GetAsync(cancellationToken)).Can(Permissions.OrdersManage)
+            ? order with { TrackingToken = null }
+            : order;
+    }
 
     public async Task<IReadOnlyList<OrderSummaryDto>> Handle(GetMyOrdersQuery request, CancellationToken cancellationToken)
     {
@@ -102,7 +114,7 @@ internal sealed class OrderQueryHandlers(
             : null;
     }
 
-    public async Task<string?> Handle(FindGuestOrderQuery request, CancellationToken cancellationToken)
+    public async Task<OrderDetailsDto?> Handle(FindGuestOrderQuery request, CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(request.OrderNumber) || string.IsNullOrWhiteSpace(request.Email))
         {
@@ -111,7 +123,7 @@ internal sealed class OrderQueryHandlers(
 
         var order = await orders.GetByNumberAsync(Normalize(request.OrderNumber), cancellationToken);
         return order is not null && string.Equals(order.Email, request.Email.Trim(), StringComparison.OrdinalIgnoreCase)
-            ? order.TrackingToken
+            ? order.ToDetailsDto(clock) with { TrackingToken = null, CanCustomerCancel = false }
             : null;
     }
 

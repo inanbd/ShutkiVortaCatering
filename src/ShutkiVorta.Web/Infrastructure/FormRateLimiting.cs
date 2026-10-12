@@ -7,8 +7,9 @@ namespace ShutkiVorta.Web.Infrastructure;
 
 /// <summary>
 /// Limits how often one IP address can submit the public forms that send emails or create accounts, so they cannot be
-/// used to spam the kitchen or third parties through our mail server. The limits are set in Admin → Settings → Spam protection
-/// (default: 10 submissions per form per 10 minutes) and apply immediately.
+/// used to spam the kitchen or third parties through our mail server, and the order lookup, so order numbers and emails
+/// cannot be tried endlessly. The limits are set in Admin → Settings → Spam protection (default: 10 submissions per form
+/// per 10 minutes) and apply immediately.
 /// </summary>
 public static class FormRateLimiting
 {
@@ -21,6 +22,7 @@ public static class FormRateLimiting
         "/account/register",
         "/account/forgot-password",
         "/account/resend-confirmation",
+        "/track-order",
     ];
 
     public static IServiceCollection AddFormRateLimiting(this IServiceCollection services)

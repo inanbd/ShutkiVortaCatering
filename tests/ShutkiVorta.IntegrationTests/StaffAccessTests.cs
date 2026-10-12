@@ -262,6 +262,67 @@ public sealed partial class StaffAccessTests(TestServers servers)
         Assert.Contains("handler=Status", managerPage);
     }
 
+    [Theory]
+    [MemberData(nameof(TestServers.Providers), MemberType = typeof(TestServers))]
+    public async Task TrackOrder_ShowsTheStatusReadOnly_SoADefaultEmployeeCannotGetALinkThatCancels(string provider)
+    {
+        var app = servers.Get(provider);
+        var email = $"tracked-{Guid.NewGuid():N}@test.local";
+        var order = await PlaceOrderAsync(app, email);
+
+        // A default Employee (orders: View) sees the order number and the customer's email, but not the private link.
+        var employee = await SignInAsync(app, (await CreateStaffAsync(app, StaffRole.Employee)).Email);
+        var adminPage = await employee.GetStringAsync($"/admin/orders/{order.OrderNumber}");
+        Assert.Contains(email, adminPage);
+        Assert.DoesNotContain(order.TrackingToken, adminPage);
+
+        // The public lookup with those two shows the order, read-only: no private link and no way to cancel. The same for
+        // anyone, signed in or not.
+        foreach (var client in new[] { employee, CreateClient(app) })
+        {
+            var form = await client.GetStringAsync("/track-order");
+            var tracked = await PostFormAsync(client, "/track-order", form, new Dictionary<string, string>
+            {
+                ["Input.OrderNumber"] = order.OrderNumber.ToLowerInvariant(),
+                ["Input.Email"] = email.ToUpperInvariant(),
+            });
+            Assert.Equal(HttpStatusCode.OK, tracked.StatusCode);
+            Assert.Null(tracked.Headers.Location);
+            var html = WebUtility.HtmlDecode(await tracked.Content.ReadAsStringAsync());
+            Assert.Contains(order.OrderNumber, html);
+            Assert.Contains("Pending", html);
+            Assert.Contains("Staff Test Customer", html);
+            Assert.Contains("use the link in your order confirmation email", html);
+            Assert.DoesNotContain(order.TrackingToken, html);
+            Assert.DoesNotContain("token=", html);
+            Assert.DoesNotContain("name=\"token\"", html);
+            Assert.DoesNotContain("handler=Cancel", html);
+            Assert.DoesNotContain("Cancel order", html);
+
+            // Without the link, a cancel goes nowhere.
+            await PostFormAsync(client, $"/order/{order.OrderNumber}?handler=Cancel", form, new Dictionary<string, string> { ["reason"] = "x" });
+            Assert.Equal(OrderStatus.Pending, await StatusAsync(app, order.OrderNumber));
+        }
+
+        // A wrong email finds nothing.
+        var anonymous = CreateClient(app);
+        var miss = await PostFormAsync(anonymous, "/track-order", await anonymous.GetStringAsync("/track-order"), new Dictionary<string, string>
+        {
+            ["Input.OrderNumber"] = order.OrderNumber,
+            ["Input.Email"] = "someone-else@test.local",
+        });
+        Assert.Contains("We couldn&#x27;t find an order", await miss.Content.ReadAsStringAsync());
+
+        // The private link from the confirmation email still lets the customer cancel.
+        var customer = CreateClient(app);
+        var statusPage = await customer.GetStringAsync($"/order/{order.OrderNumber}?token={Uri.EscapeDataString(order.TrackingToken)}");
+        Assert.Contains("Cancel order", statusPage);
+        var cancelled = await PostFormAsync(customer, $"/order/{order.OrderNumber}?handler=Cancel", statusPage,
+            new Dictionary<string, string> { ["token"] = order.TrackingToken, ["reason"] = "Plans changed" });
+        Assert.Equal(HttpStatusCode.Redirect, cancelled.StatusCode);
+        Assert.Equal(OrderStatus.Cancelled, await StatusAsync(app, order.OrderNumber));
+    }
+
     [Fact]
     public async Task GeolocationIsAllowed_OnlyOnTheTimeClock()
     {
@@ -290,14 +351,20 @@ public sealed partial class StaffAccessTests(TestServers servers)
         return await scope.ServiceProvider.GetRequiredService<ISender>().Send(request);
     }
 
-    private static async Task<PlaceOrderResult> PlaceOrderAsync(AppFactory app)
+    private static async Task<OrderStatus?> StatusAsync(AppFactory app, string orderNumber)
+    {
+        using var scope = app.Services.CreateScope();
+        return (await scope.ServiceProvider.GetRequiredService<IOrderRepository>().GetByNumberAsync(orderNumber))?.Status;
+    }
+
+    private static async Task<PlaceOrderResult> PlaceOrderAsync(AppFactory app, string? email = null)
     {
         var checkout = await SendAsync(app, new GetCheckoutOptionsQuery());
         var menu = await SendAsync(app, new GetMenuQuery());
         return await SendAsync(app, new PlaceOrderCommand
         {
             CustomerName = "Staff Test Customer",
-            Email = $"order-{Guid.NewGuid():N}@test.local",
+            Email = email ?? $"order-{Guid.NewGuid():N}@test.local",
             Phone = "214-555-0199",
             Fulfillment = FulfillmentMethod.Pickup,
             ScheduledDate = checkout.Days[0].Date,

@@ -11,23 +11,37 @@
 </section>
 
 <section class="section-sm">
-    <div class="container auth-wrap">
-        <form method="post" class="form-card kantha">
-            <div asp-validation-summary="ModelOnly" class="validation-summary-errors"></div>
-            <div class="field mb-2">
-                <label asp-for="Input.OrderNumber"></label>
-                <input asp-for="Input.OrderNumber" placeholder="SV-261008-7KQ4" autocapitalize="characters" />
-                <span asp-validation-for="Input.OrderNumber" class="field-validation-error"></span>
-            </div>
-            <div class="field mb-3">
-                <label asp-for="Input.Email"></label>
-                <input asp-for="Input.Email" type="email" autocomplete="email" />
-                <span asp-validation-for="Input.Email" class="field-validation-error"></span>
-            </div>
-            <button class="btn btn-primary btn-block btn-lg" type="submit">@Icons.Get("search") Find my order</button>
-            <p class="auth-alt small">Have an account? <a href="/account/orders">See all your orders</a></p>
-        </form>
-    </div>
+    @if (Model.Order is { } order)
+    {
+        <div class="container container-narrow">
+            <partial name="_OrderView" model="order" />
+            <p class="alert alert-info small mt-3">
+                To change or cancel this order, use the link in your order confirmation email, or
+                <a href="/account/orders">sign in to your account</a> if you placed it there.
+            </p>
+            <p class="text-center small"><a href="/track-order">Track another order</a></p>
+        </div>
+    }
+    else
+    {
+        <div class="container auth-wrap">
+            <form method="post" class="form-card kantha">
+                <div asp-validation-summary="ModelOnly" class="validation-summary-errors"></div>
+                <div class="field mb-2">
+                    <label asp-for="Input.OrderNumber"></label>
+                    <input asp-for="Input.OrderNumber" placeholder="SV-261008-7KQ4" autocapitalize="characters" />
+                    <span asp-validation-for="Input.OrderNumber" class="field-validation-error"></span>
+                </div>
+                <div class="field mb-3">
+                    <label asp-for="Input.Email"></label>
+                    <input asp-for="Input.Email" type="email" autocomplete="email" />
+                    <span asp-validation-for="Input.Email" class="field-validation-error"></span>
+                </div>
+                <button class="btn btn-primary btn-block btn-lg" type="submit">@Icons.Get("search") Find my order</button>
+                <p class="auth-alt small">Have an account? <a href="/account/orders">See all your orders</a></p>
+            </form>
+        </div>
+    }
 </section>
 
 @section Scripts {
