@@ -127,6 +127,7 @@ public static class DependencyInjection
 
         // ---- Users & permissions ----
         services.AddScoped<IStaffEmailLog, StaffEmailLog>();
+        services.AddScoped<IStaffProfileVersions, StaffProfileVersions>();
 
         return services;
     }

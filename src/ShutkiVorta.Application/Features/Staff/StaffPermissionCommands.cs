@@ -16,13 +16,16 @@ public sealed record ChangeStaffRoleCommand(string UserId, StaffRole Role, int V
 
 /// <summary>
 /// Gives a Manager or Employee their own permissions, one level per module (module key → level key), or makes them follow
-/// their role again when <see cref="Levels"/> is null.
+/// their role again when <see cref="Levels"/> is null. False when that is what they have already: nothing is saved.
 /// </summary>
-public sealed record SetStaffPermissionsCommand(string UserId, IReadOnlyDictionary<string, string>? Levels, int Version) : IRequest, IRequireAdmin;
+public sealed record SetStaffPermissionsCommand(string UserId, IReadOnlyDictionary<string, string>? Levels, int Version) : IRequest<bool>, IRequireAdmin;
 
-/// <summary>What everyone with the role may do (except people with custom permissions), one level per module.</summary>
+/// <summary>
+/// What everyone with the role may do (except people with custom permissions), one level per module. False when that is what
+/// the role has already: nothing is saved, so the revision and the recent changes stay as they are.
+/// </summary>
 /// <param name="Revision">The role's permission revision as the page showed it.</param>
-public sealed record SaveRolePermissionsCommand(StaffRole Role, IReadOnlyDictionary<string, string> Levels, int Revision) : IRequest, IRequireAdmin;
+public sealed record SaveRolePermissionsCommand(StaffRole Role, IReadOnlyDictionary<string, string> Levels, int Revision) : IRequest<bool>, IRequireAdmin;
 
 /// <summary>Removes an admin's changes to a role's permissions, so it has the defaults again.</summary>
 public sealed record RestoreRoleDefaultsCommand(StaffRole Role, int Revision) : IRequest, IRequireAdmin;
@@ -63,10 +66,11 @@ public sealed class RestoreRoleDefaultsCommandValidator : AbstractValidator<Rest
 internal sealed class StaffPermissionCommandHandlers(
     IStaffDirectory directory,
     IStaffPermissionStore store,
+    IStaffProfileVersions versions,
     ICurrentUser currentUser) :
     IRequestHandler<ChangeStaffRoleCommand>,
-    IRequestHandler<SetStaffPermissionsCommand>,
-    IRequestHandler<SaveRolePermissionsCommand>,
+    IRequestHandler<SetStaffPermissionsCommand, bool>,
+    IRequestHandler<SaveRolePermissionsCommand, bool>,
     IRequestHandler<RestoreRoleDefaultsCommand>
 {
     private string By => currentUser.Email ?? "Admin";
@@ -84,12 +88,13 @@ internal sealed class StaffPermissionCommandHandlers(
             throw new ValidationException($"{member.FullName} is already {request.Role.DisplayName()}.");
         }
 
-        await StaffVersions.CheckAsync(store, member.UserId, request.Version, cancellationToken);
+        // The store takes no version: claiming it first means a second admin's form from the same page is refused.
         var actor = currentUser.UserId ?? throw new ForbiddenAccessException();
+        await StaffVersions.ClaimAsync(versions, member.UserId, request.Version, By, cancellationToken);
         Check(await store.SetStaffRoleAsync(member.UserId, request.Role, actor, By, cancellationToken));
     }
 
-    public async Task Handle(SetStaffPermissionsCommand request, CancellationToken cancellationToken)
+    public async Task<bool> Handle(SetStaffPermissionsCommand request, CancellationToken cancellationToken)
     {
         var member = await RequireMemberAsync(request.UserId, cancellationToken);
         if (member.Role is not ({ } role and (StaffRole.Manager or StaffRole.Employee)))
@@ -99,23 +104,39 @@ internal sealed class StaffPermissionCommandHandlers(
                 : "Admins always have every permission.");
         }
 
+        var custom = await store.GetUserPermissionsAsync(member.UserId, cancellationToken);
         IReadOnlySet<string>? granted = null;
         if (request.Levels is not null)
         {
             // A module the form did not send keeps the level the person has now.
-            var custom = await store.GetUserPermissionsAsync(member.UserId, cancellationToken);
             var current = custom.UsesCustomPermissions ? custom.Granted : (await store.GetRolePermissionsAsync(role, cancellationToken)).Granted;
             granted = PermissionLevels.Grants(request.Levels, current);
         }
 
+        // Saving what they have already changes nothing: no new version, no audit entry.
+        var unchanged = granted is null
+            ? !custom.UsesCustomPermissions
+            : custom.UsesCustomPermissions && granted.SetEquals(custom.Granted);
+        if (unchanged)
+        {
+            return false;
+        }
+
         Check(await store.SetUserPermissionsAsync(member.UserId, granted, request.Version, By, cancellationToken));
+        return true;
     }
 
-    public async Task Handle(SaveRolePermissionsCommand request, CancellationToken cancellationToken)
+    public async Task<bool> Handle(SaveRolePermissionsCommand request, CancellationToken cancellationToken)
     {
         var current = await store.GetRolePermissionsAsync(request.Role, cancellationToken);
         var granted = PermissionLevels.Grants(request.Levels, current.Granted);
+        if (granted.SetEquals(current.Granted))
+        {
+            return false;
+        }
+
         Check(await store.SaveRolePermissionsAsync(request.Role, granted, request.Revision, By, cancellationToken));
+        return true;
     }
 
     public async Task Handle(RestoreRoleDefaultsCommand request, CancellationToken cancellationToken) =>

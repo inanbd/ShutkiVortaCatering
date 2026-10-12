@@ -16,6 +16,7 @@ using ShutkiVorta.Infrastructure.Identity;
 using ShutkiVorta.Infrastructure.Persistence;
 using ShutkiVorta.IntegrationTests.Infrastructure;
 using ShutkiVorta.Web.Infrastructure.Security;
+using ShutkiVorta.Web.Pages.Admin.Users;
 using static ShutkiVorta.IntegrationTests.Infrastructure.StaffTestHelper;
 
 namespace ShutkiVorta.IntegrationTests;
@@ -412,6 +413,32 @@ public sealed partial class UsersTests(TestServers servers)
 
     [Theory]
     [MemberData(nameof(TestServers.Providers), MemberType = typeof(TestServers))]
+    public async Task TwoAdminsChangingTheSamePerson_AtTheSameMoment_OnlyTheFirstGetsThrough(string provider)
+    {
+        var app = servers.Get(provider);
+        var first = await SignInAsync(app, AppFactory.AdminEmail);
+        var second = await SignInAsync(app, (await CreateStaffAsync(app, StaffRole.Admin)).Email);
+
+        for (var round = 0; round < 3; round++)
+        {
+            var person = await CreateStaffAsync(app, StaffRole.Employee);
+            var url = $"{Users}/{person.UserId}";
+            var version = (await VersionAsync(app, person.UserId)).ToString();
+            var (firstPage, secondPage) = (await first.GetStringAsync(url), await second.GetStringAsync(url));
+
+            // Both pages showed the same version: one change gets through, the other is told to reload.
+            await Task.WhenAll(
+                PostFormAsync(first, $"{url}?handler=Role", firstPage, new Dictionary<string, string> { ["role"] = "Manager", ["version"] = version }),
+                PostFormAsync(second, $"{url}?handler=Role", secondPage, new Dictionary<string, string> { ["role"] = "Admin", ["version"] = version }));
+
+            Assert.Single(await AuditAsync(app, person.UserId), e => e.Action == StaffAuditActions.RoleChanged);
+            var told = new[] { await first.GetStringAsync(url), await second.GetStringAsync(url) };
+            Assert.Single(told, html => WebUtility.HtmlDecode(html).Contains("Someone changed this person"));
+        }
+    }
+
+    [Theory]
+    [MemberData(nameof(TestServers.Providers), MemberType = typeof(TestServers))]
     public async Task CustomPermissions_SetOnThePage_ApplyOnTheNextRequest(string provider)
     {
         var app = servers.Get(provider);
@@ -427,6 +454,14 @@ public sealed partial class UsersTests(TestServers servers)
         Assert.Matches("<option value=\"view\" selected=\"selected\">View \\(default\\)</option>", page);
 
         var levels = PermissionLevels.Of(PermissionCatalog.Defaults(StaffRole.Employee)).ToDictionary();
+
+        // "Follow the role" saved again changes nothing: no new version, no audit entry.
+        var version = await VersionAsync(app, employee.UserId);
+        await PostUserAsync(admin, employee.UserId, "Permissions", Levels(levels, "role", version));
+        Assert.Contains(StaffUi.NothingChanged, WebUtility.HtmlDecode(await admin.GetStringAsync($"{Users}/{employee.UserId}")));
+        Assert.Equal(version, await VersionAsync(app, employee.UserId));
+        Assert.DoesNotContain(await AuditAsync(app, employee.UserId), e => e.Action == StaffAuditActions.PermissionsChanged);
+
         levels["inventory"] = PermissionCatalog.NoAccess;
         levels["inquiries"] = "view";
         var saved = await PostUserAsync(admin, employee.UserId, "Permissions", Levels(levels, "custom", await VersionAsync(app, employee.UserId)));
@@ -499,6 +534,33 @@ public sealed partial class UsersTests(TestServers servers)
         Assert.Equal("Karim Hossain", (await MemberAsync(app, employee.UserId)).FullName);
     }
 
+    [Theory]
+    [MemberData(nameof(TestServers.Providers), MemberType = typeof(TestServers))]
+    public async Task DetailsSavedFromAStalePage_DoNotOverwriteAnotherAdminsChange(string provider)
+    {
+        var app = servers.Get(provider);
+        var employee = await CreateStaffAsync(app, StaffRole.Employee);
+        var admin = await SignInAsync(app, AppFactory.AdminEmail);
+        var version = (await VersionAsync(app, employee.UserId)).ToString();
+
+        // Only the name and phone change (they live on the account, not the staff profile): the version still moves on.
+        Assert.Equal(HttpStatusCode.Redirect, (await PostUserAsync(admin, employee.UserId, "Details", new()
+        {
+            ["details.FullName"] = "First Change", ["details.PhoneNumber"] = "(214) 555-0123", ["version"] = version,
+        })).StatusCode);
+        Assert.NotEqual(version, (await VersionAsync(app, employee.UserId)).ToString());
+
+        // A second form opened before that change: refused, and the first change stays.
+        var stale = await PostUserAsync(admin, employee.UserId, "Details", new()
+        {
+            ["details.FullName"] = "Stale Change", ["details.PhoneNumber"] = "", ["version"] = version,
+        });
+        Assert.Contains("Someone changed this person", WebUtility.HtmlDecode(await stale.Content.ReadAsStringAsync()));
+        var member = await MemberAsync(app, employee.UserId);
+        Assert.Equal("First Change", member.FullName);
+        Assert.Equal("(214) 555-0123", member.PhoneNumber);
+    }
+
     // ---- Removing and re-adding ----
 
     [Theory]
@@ -550,6 +612,15 @@ public sealed partial class UsersTests(TestServers servers)
         Assert.Null((await AccessAsync(app, userId)).Role);
         Assert.Contains(StaffInvitations.ExpiredOrUsed, WebUtility.HtmlDecode(await CreateClient(app).GetStringAsync(PathAndQuery(link))));
 
+        // Former staff have no invitation waiting: neither the list nor their page says there is one.
+        var former = WebUtility.HtmlDecode(await admin.GetStringAsync($"{Users}?show=former&q={email}"));
+        Assert.Contains("Never Started", former);
+        Assert.DoesNotContain("Invitation pending", former);
+        var page = WebUtility.HtmlDecode(await admin.GetStringAsync($"{Users}/{userId}"));
+        Assert.Contains("Former staff", page);
+        Assert.DoesNotContain("Invitation pending", page);
+        Assert.DoesNotContain("invitation pending", page);
+
         // Re-adding them sends a new invitation.
         var since = DateTime.UtcNow;
         await PostUserAsync(admin, userId, "ReAdd", new() { ["role"] = "Employee" });
@@ -592,7 +663,7 @@ public sealed partial class UsersTests(TestServers servers)
 
     [Theory]
     [MemberData(nameof(TestServers.Providers), MemberType = typeof(TestServers))]
-    public async Task WithoutAWebsiteAddress_InvitationsAreNotEmailed_AndTheLinkUsesTheAdminsOwnAddress(string provider)
+    public async Task WithoutAWebsiteAddress_NoStaffEmailIsSent_AndTheLinkUsesTheAdminsOwnAddress(string provider)
     {
         await using var app = new AppFactory(provider, new Dictionary<string, string?> { ["Site:BaseUrl"] = "" });
         var admin = app.CreateClient(new() { AllowAutoRedirect = false, BaseAddress = new Uri("https://kitchen-laptop.test") });
@@ -610,6 +681,18 @@ public sealed partial class UsersTests(TestServers servers)
         await using var scope = app.Services.CreateAsyncScope();
         var emails = scope.ServiceProvider.GetRequiredService<IStaffEmailLog>();
         Assert.Null(await emails.GetLatestAsync(email, [StaffInvitations.InvitationSubject, StaffInvitations.AddedSubject]));
+
+        // Someone who keeps their password isn't emailed either: its sign-in link would also use the request's address.
+        var customerEmail = NewEmail("nobase-customer");
+        var customerId = await CreateAccountAsync(app, customerEmail, "Kept Password", "Mine12345!", emailConfirmed: true);
+        Assert.Equal(HttpStatusCode.Redirect, (await AddUserAsync(admin, "Kept Password", customerEmail, StaffRole.Employee, confirmedUserId: customerId)).StatusCode);
+        var added = WebUtility.HtmlDecode(await admin.GetStringAsync($"{Users}/{customerId}"));
+        Assert.Contains("Kept is on the staff", added);
+        Assert.Contains("Not emailed: set the Website address in", added);
+        Assert.Contains("tell them yourself", added);
+        Assert.DoesNotContain("We emailed them", added);
+        Assert.Equal(StaffRole.Employee, (await AccessAsync(app, customerId)).Role);
+        Assert.Null(await emails.GetLatestAsync(customerEmail, [StaffInvitations.InvitationSubject, StaffInvitations.AddedSubject]));
     }
 
     [Theory]
@@ -632,6 +715,22 @@ public sealed partial class UsersTests(TestServers servers)
         Assert.Contains("form=\"save-Employee\"", page);
 
         var levels = PermissionLevels.Of(PermissionCatalog.Defaults(StaffRole.Employee)).ToDictionary();
+
+        // Saving without changing anything writes nothing: the revision stays (the save below at revision 0 still works) and
+        // the recent changes stay empty.
+        var unchanged = Levels(levels, mode: null, version: null);
+        unchanged["role"] = "Employee";
+        unchanged["revision"] = "0";
+        Assert.Equal(HttpStatusCode.Redirect, (await PostFormAsync(admin, $"{PermissionsPage}?handler=Save", page, unchanged)).StatusCode);
+        var afterUnchanged = WebUtility.HtmlDecode(await admin.GetStringAsync(PermissionsPage));
+        Assert.Contains(StaffUi.NothingChanged, afterUnchanged);
+        Assert.DoesNotContain("Employee permissions: No changes", afterUnchanged);
+        await using (var scope = app.Services.CreateAsyncScope())
+        {
+            var audit = scope.ServiceProvider.GetRequiredService<IStaffAuditLog>();
+            Assert.Empty(await audit.ListByActionsAsync([StaffAuditActions.RoleDefaultsChanged], 10));
+        }
+
         levels["inquiries"] = "view";
         var fields = Levels(levels, mode: null, version: null);
         fields["role"] = "Employee";

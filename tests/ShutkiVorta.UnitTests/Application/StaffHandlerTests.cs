@@ -24,6 +24,7 @@ public sealed class StaffHandlerTests
     private readonly IIdentityService _identity = Substitute.For<IIdentityService>();
     private readonly IStaffDirectory _directory = Substitute.For<IStaffDirectory>();
     private readonly IStaffPermissionStore _store = Substitute.For<IStaffPermissionStore>();
+    private readonly IStaffProfileVersions _versions = Substitute.For<IStaffProfileVersions>();
     private readonly IStaffAuditLog _audit = Substitute.For<IStaffAuditLog>();
     private readonly IOrderRepository _orders = Substitute.For<IOrderRepository>();
     private readonly IEmailTemplateRenderer _renderer = Substitute.For<IEmailTemplateRenderer>();
@@ -63,12 +64,16 @@ public sealed class StaffHandlerTests
         _store.GetRolePermissionsAsync(Arg.Any<StaffRole>(), Arg.Any<CancellationToken>())
             .Returns(call => new RolePermissionSetDto { Role = call.Arg<StaffRole>(), Revision = 5, Granted = PermissionCatalog.Defaults(call.Arg<StaffRole>()) });
         _orders.CountByCustomerAsync(default!, default).ReturnsForAnyArgs(new Dictionary<string, int> { ["customer-1"] = 4 });
+
+        // Every person's page showed version 3; another version means someone changed them meanwhile.
+        _versions.ClaimAsync(Arg.Any<string>(), Arg.Any<int>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns(call => call.ArgAt<int>(1) == 3);
     }
 
     private StaffMemberCommandHandlers Members() =>
-        new(_identity, _directory, _store, _audit, _orders, _renderer, _email, _urls, _admin, _clock);
+        new(_identity, _directory, _store, _versions, _audit, _orders, _renderer, _email, _urls, _admin, _clock);
 
-    private StaffPermissionCommandHandlers PermissionCommands() => new(_directory, _store, _admin);
+    private StaffPermissionCommandHandlers PermissionCommands() => new(_directory, _store, _versions, _admin);
 
     private StaffQueryHandlers Queries() => new(_directory, _store, _audit, _emailLog, _timeClock);
 
@@ -215,6 +220,20 @@ public sealed class StaffHandlerTests
         Assert.Contains(_auditEntries, e => e.Action == StaffAuditActions.InvitationSent && e.Details!.Contains("Not emailed"));
     }
 
+    [Fact]
+    public async Task WithoutAWebsiteAddress_SomeoneWhoKeepsTheirPassword_IsNotEmailedEither()
+    {
+        _urls.HasConfiguredBaseUrl = false;
+        Existing(Account("customer-1", "nasrin@test.local", confirmed: true, hasPassword: true));
+
+        var added = await Members().Handle(Add("nasrin@test.local", confirmedUserId: "customer-1"), CancellationToken.None);
+
+        Assert.Equal(StaffInvitationKind.Added, added.Invitation!.Kind);
+        Assert.False(added.Invitation.Emailed);
+        Assert.Empty(_sent);
+        await _store.Received(1).SetStaffRoleAsync("customer-1", StaffRole.Employee, AdminId, "owner@test.local", Arg.Any<CancellationToken>());
+    }
+
     // ---- Invitations again, email, details, unlock, removal ----
 
     [Fact]
@@ -271,7 +290,12 @@ public sealed class StaffHandlerTests
 
         await Members().Handle(new UpdateStaffDetailsCommand("staff-1", " New Name ", " ", "Cook", Version: 3), CancellationToken.None);
 
-        await _identity.Received(1).UpdateContactAsync("staff-1", "New Name", null);
+        // The version is claimed first: the name and phone live on the account, so nothing else would move it on.
+        Received.InOrder(() =>
+        {
+            _versions.ClaimAsync("staff-1", 3, "owner@test.local", Arg.Any<CancellationToken>());
+            _identity.UpdateContactAsync("staff-1", "New Name", null);
+        });
         await _store.Received(1).UpdateProfileAsync("staff-1", "Cook", "owner@test.local", Arg.Any<CancellationToken>());
         Assert.Contains(_auditEntries, e => e.Action == StaffAuditActions.ProfileChanged && e.Details!.Contains("Sumi Akter → New Name"));
     }
@@ -296,8 +320,12 @@ public sealed class StaffHandlerTests
 
         await Members().Handle(new RemoveFromStaffCommand("invited-1", Version: 3), CancellationToken.None);
 
-        await _store.Received(1).SetStaffRoleAsync("invited-1", null, AdminId, "owner@test.local", Arg.Any<CancellationToken>());
-        await _identity.Received(1).RotateSecurityStampAsync("invited-1");
+        Received.InOrder(() =>
+        {
+            _versions.ClaimAsync("invited-1", 3, "owner@test.local", Arg.Any<CancellationToken>());
+            _store.SetStaffRoleAsync("invited-1", null, AdminId, "owner@test.local", Arg.Any<CancellationToken>());
+            _identity.RotateSecurityStampAsync("invited-1");
+        });
     }
 
     [Fact]
@@ -344,14 +372,23 @@ public sealed class StaffHandlerTests
             .Returns(Result.Failure("There must always be at least one Admin who can sign in."));
 
         await PermissionCommands().Handle(new ChangeStaffRoleCommand("staff-1", StaffRole.Manager, 3), CancellationToken.None);
-        await _store.Received(1).SetStaffRoleAsync("staff-1", StaffRole.Manager, AdminId, "owner@test.local", Arg.Any<CancellationToken>());
+        Received.InOrder(() =>
+        {
+            _versions.ClaimAsync("staff-1", 3, "owner@test.local", Arg.Any<CancellationToken>());
+            _store.SetStaffRoleAsync("staff-1", StaffRole.Manager, AdminId, "owner@test.local", Arg.Any<CancellationToken>());
+        });
 
         var refused = await Assert.ThrowsAsync<ValidationException>(() =>
             PermissionCommands().Handle(new ChangeStaffRoleCommand("staff-1", StaffRole.Admin, 3), CancellationToken.None));
         Assert.Contains("at least one Admin", refused.Message);
 
         await Assert.ThrowsAsync<ValidationException>(() => PermissionCommands().Handle(new ChangeStaffRoleCommand("staff-1", StaffRole.Employee, 3), CancellationToken.None));
-        await Assert.ThrowsAsync<ValidationException>(() => PermissionCommands().Handle(new ChangeStaffRoleCommand("staff-1", StaffRole.Manager, 2), CancellationToken.None));
+
+        // A form from a page that is out of date (its version was claimed by another change) never reaches the store.
+        var stale = await Assert.ThrowsAsync<ValidationException>(() =>
+            PermissionCommands().Handle(new ChangeStaffRoleCommand("staff-1", StaffRole.Manager, 2), CancellationToken.None));
+        Assert.Equal(StaffVersions.ChangedMeanwhile, stale.Message);
+        await _store.Received(1).SetStaffRoleAsync("staff-1", StaffRole.Manager, AdminId, Arg.Any<string>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -362,7 +399,7 @@ public sealed class StaffHandlerTests
         IReadOnlySet<string>? saved = null;
         await _store.SetUserPermissionsAsync("staff-1", Arg.Do<IReadOnlySet<string>?>(s => saved = s), 3, "owner@test.local", Arg.Any<CancellationToken>());
 
-        await PermissionCommands().Handle(new SetStaffPermissionsCommand("staff-1", levels, 3), CancellationToken.None);
+        Assert.True(await PermissionCommands().Handle(new SetStaffPermissionsCommand("staff-1", levels, 3), CancellationToken.None));
 
         // The modules not sent keep what the person has now (the Employee defaults).
         var expected = PermissionLevels.Grants(levels, PermissionCatalog.Defaults(StaffRole.Employee));
@@ -371,8 +408,32 @@ public sealed class StaffHandlerTests
         Assert.Contains(Permissions.TimeClockViewAll, saved);
         Assert.Contains(Permissions.InventoryView, saved);
 
-        await PermissionCommands().Handle(new SetStaffPermissionsCommand("staff-1", null, 3), CancellationToken.None);
+        _store.GetUserPermissionsAsync("staff-1", Arg.Any<CancellationToken>())
+            .Returns(new CustomPermissionsDto { UserId = "staff-1", UsesCustomPermissions = true, Granted = expected, Version = 3 });
+        Assert.True(await PermissionCommands().Handle(new SetStaffPermissionsCommand("staff-1", null, 3), CancellationToken.None));
         await _store.Received(1).SetUserPermissionsAsync("staff-1", null, 3, "owner@test.local", Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task SavingAPersonsPermissionsUnchanged_SavesNothing()
+    {
+        Staff(Member("staff-1", StaffRole.Employee));
+        var employeeLevels = PermissionLevels.Of(PermissionCatalog.Defaults(StaffRole.Employee));
+
+        // Following the role, and "follow the role" saved again.
+        Assert.False(await PermissionCommands().Handle(new SetStaffPermissionsCommand("staff-1", null, 3), CancellationToken.None));
+
+        // Custom permissions saved again with the same levels.
+        var custom = new HashSet<string>(PermissionCatalog.Defaults(StaffRole.Employee)) { Permissions.OrdersView };
+        _store.GetUserPermissionsAsync("staff-1", Arg.Any<CancellationToken>())
+            .Returns(new CustomPermissionsDto { UserId = "staff-1", UsesCustomPermissions = true, Granted = custom, Version = 3 });
+        Assert.False(await PermissionCommands().Handle(new SetStaffPermissionsCommand("staff-1", PermissionLevels.Of(custom), 3), CancellationToken.None));
+        await _store.DidNotReceiveWithAnyArgs().SetUserPermissionsAsync(default!, default, default, default!);
+
+        // Custom levels that happen to equal the role's still change something: the person no longer follows the role.
+        _store.GetUserPermissionsAsync("staff-1", Arg.Any<CancellationToken>())
+            .Returns(new CustomPermissionsDto { UserId = "staff-1", Version = 3 });
+        Assert.True(await PermissionCommands().Handle(new SetStaffPermissionsCommand("staff-1", employeeLevels, 3), CancellationToken.None));
     }
 
     [Fact]
@@ -392,7 +453,8 @@ public sealed class StaffHandlerTests
         IReadOnlySet<string>? saved = null;
         await _store.SaveRolePermissionsAsync(StaffRole.Manager, Arg.Do<IReadOnlySet<string>>(s => saved = s), 5, "owner@test.local", Arg.Any<CancellationToken>());
 
-        await PermissionCommands().Handle(new SaveRolePermissionsCommand(StaffRole.Manager, new Dictionary<string, string> { ["customers"] = PermissionCatalog.NoAccess }, 5), CancellationToken.None);
+        var noCustomers = new Dictionary<string, string> { ["customers"] = PermissionCatalog.NoAccess };
+        Assert.True(await PermissionCommands().Handle(new SaveRolePermissionsCommand(StaffRole.Manager, noCustomers, 5), CancellationToken.None));
 
         var expected = new HashSet<string>(PermissionCatalog.Defaults(StaffRole.Manager));
         expected.Remove(Permissions.CustomersView);
@@ -401,8 +463,15 @@ public sealed class StaffHandlerTests
         _store.SaveRolePermissionsAsync(StaffRole.Manager, Arg.Any<IReadOnlySet<string>>(), 4, Arg.Any<string>(), Arg.Any<CancellationToken>())
             .Returns(Result.Failure("Someone changed these permissions while you were editing them."));
         var stale = await Assert.ThrowsAsync<ValidationException>(() =>
-            PermissionCommands().Handle(new SaveRolePermissionsCommand(StaffRole.Manager, new Dictionary<string, string>(), 4), CancellationToken.None));
+            PermissionCommands().Handle(new SaveRolePermissionsCommand(StaffRole.Manager, noCustomers, 4), CancellationToken.None));
         Assert.Contains("Someone changed these permissions", stale.Message);
+
+        // Saving the levels the role has already writes nothing: no new revision, no "No changes" in the recent changes.
+        _store.ClearReceivedCalls();
+        Assert.False(await PermissionCommands().Handle(
+            new SaveRolePermissionsCommand(StaffRole.Manager, PermissionLevels.Of(PermissionCatalog.Defaults(StaffRole.Manager)), 5), CancellationToken.None));
+        Assert.False(await PermissionCommands().Handle(new SaveRolePermissionsCommand(StaffRole.Manager, new Dictionary<string, string>(), 5), CancellationToken.None));
+        await _store.DidNotReceiveWithAnyArgs().SaveRolePermissionsAsync(default, default!, default, default!);
 
         await PermissionCommands().Handle(new RestoreRoleDefaultsCommand(StaffRole.Employee, 7), CancellationToken.None);
         await _store.Received(1).RestoreRoleDefaultsAsync(StaffRole.Employee, 7, "owner@test.local", Arg.Any<CancellationToken>());

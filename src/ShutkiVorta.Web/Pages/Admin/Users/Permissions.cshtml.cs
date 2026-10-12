@@ -25,9 +25,12 @@ public sealed class PermissionsModel(ISender sender, IDateTimeProvider clock) : 
     /// <summary>Saves one role's levels (module key → level key) at the revision the page showed.</summary>
     public async Task<IActionResult> OnPostSaveAsync(StaffRole role, Dictionary<string, string>? levels, int revision, CancellationToken cancellationToken)
     {
-        if (await TryExecuteAsync(() => Sender.Send(new SaveRolePermissionsCommand(role, levels ?? [], revision), cancellationToken)))
+        var changed = false;
+        if (await TryExecuteAsync(async () => changed = await Sender.Send(new SaveRolePermissionsCommand(role, levels ?? [], revision), cancellationToken)))
         {
-            StatusMessage = $"{role.DisplayName()} permissions saved. They apply to every {role.DisplayName()} from their next click, except people with custom permissions.";
+            StatusMessage = changed
+                ? $"{role.DisplayName()} permissions saved. They apply to every {role.DisplayName()} from their next click, except people with custom permissions."
+                : StaffUi.NothingChanged;
         }
         else
         {

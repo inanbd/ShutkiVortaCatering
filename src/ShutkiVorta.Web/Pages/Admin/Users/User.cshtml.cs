@@ -128,6 +128,22 @@ public sealed class UserModel(ISender sender, ICurrentStaff currentStaff, IDateT
         return Redirect(StaffUi.UserPath(Id));
     }
 
+    /// <summary>A change that may turn out to be no change at all (false: nothing was saved).</summary>
+    private async Task<IActionResult> ChangeAsync(IRequest<bool> command, string done, CancellationToken cancellationToken)
+    {
+        var changed = false;
+        if (await TryExecuteAsync(async () => changed = await Sender.Send(command, cancellationToken)))
+        {
+            StatusMessage = changed ? done : StaffUi.NothingChanged;
+        }
+        else
+        {
+            ErrorMessage = string.Join(" ", ModelState.Values.SelectMany(v => v.Errors).Select(e => e.ErrorMessage));
+        }
+
+        return Redirect(StaffUi.UserPath(Id));
+    }
+
     /// <summary>Sends an invitation (or "you've been added") and shows its link once on this page.</summary>
     private async Task<IActionResult> InviteAsync(IRequest<StaffInvitationDto> command, CancellationToken cancellationToken)
     {

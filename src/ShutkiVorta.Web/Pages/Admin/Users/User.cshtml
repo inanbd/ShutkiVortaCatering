@@ -68,14 +68,14 @@
             }
             else
             {
-                <p>They keep their password and sign in as usual. We emailed them to say they've been added.</p>
+                <p>They keep their password and sign in as usual.@(invitation.Emailed ? " We emailed them to say they've been added." : string.Empty)</p>
             }
 
             @if (!invitation.Emailed)
             {
                 <div class="alert alert-warn mb-0">
                     @Icons.Get("alert") Not emailed: set the Website address in <a href="@StaffUi.WebsiteSettingsPath">Settings → Website</a> to email invitations.
-                    Until then, send the link above yourself.
+                    @(invitation.Link is null ? "Until then, tell them yourself that they've been added." : "Until then, send the link above yourself.")
                 </div>
             }
             else
@@ -311,7 +311,7 @@ else if (Model.IsAdmin && m.Role is not null && !m.HasStaffAccess)
                 <dl class="kv">
                     <dt>Email</dt><dd class="break">@m.Email</dd>
                     <dt>Phone</dt><dd>@(string.IsNullOrWhiteSpace(m.PhoneNumber) ? "—" : m.PhoneNumber)</dd>
-                    <dt>Password</dt><dd>@(m.HasPassword ? "Set" : "Not set yet (invitation pending)")</dd>
+                    <dt>Password</dt><dd>@(m.HasPassword ? "Set" : m.Role is null ? "Never set" : "Not set yet (invitation pending)")</dd>
                     <dt>Joined</dt><dd>@Format.ShortDate(Model.Local(m.CreatedAtUtc)!.Value)</dd>
                 </dl>
                 @if (m.IsLockedOut)

@@ -16,6 +16,9 @@ public static class StaffUi
     public const string EmailSettingsPath = "/admin/settings/email";
     public const string WebsiteSettingsPath = "/admin/settings/website";
 
+    /// <summary>A save that changed nothing (nothing is written, so nobody else's page goes stale).</summary>
+    public const string NothingChanged = "Nothing to save: those are the permissions already.";
+
     public static string UserPath(string userId) => $"{UsersPath}/{Uri.EscapeDataString(userId)}";
 
     /// <summary>The person's shifts on the time clock's Team page.</summary>
@@ -37,11 +40,12 @@ public static class StaffUi
             statuses.Add(($"On the clock since {TimeClockText.When(since, nowLocal)}", "pill-on"));
         }
 
-        if (!member.HasPassword)
+        // Former staff have no invitation waiting (removing them ended it) and need no confirmed email: nothing to say.
+        if (member.Role is not null && !member.HasPassword)
         {
             statuses.Add(("Invitation pending", "pill-warn"));
         }
-        else if (!member.EmailConfirmed)
+        else if (member.Role is not null && !member.EmailConfirmed)
         {
             statuses.Add(("Email not confirmed", "pill-warn"));
         }

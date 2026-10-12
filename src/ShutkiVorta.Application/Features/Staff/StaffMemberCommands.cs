@@ -145,6 +145,7 @@ internal sealed class StaffMemberCommandHandlers(
     IIdentityService identity,
     IStaffDirectory directory,
     IStaffPermissionStore store,
+    IStaffProfileVersions versions,
     IStaffAuditLog audit,
     IOrderRepository orders,
     IEmailTemplateRenderer renderer,
@@ -273,7 +274,9 @@ internal sealed class StaffMemberCommandHandlers(
     public async Task Handle(UpdateStaffDetailsCommand request, CancellationToken cancellationToken)
     {
         var member = await RequireMemberAsync(request.UserId, cancellationToken);
-        await StaffVersions.CheckAsync(store, member.UserId, request.Version, cancellationToken);
+
+        // The name and phone live on the account, so the store never moves the version on for them: the claim does.
+        await StaffVersions.ClaimAsync(versions, member.UserId, request.Version, By, cancellationToken);
 
         var fullName = request.FullName.Trim();
         var phone = Clean(request.PhoneNumber);
@@ -318,7 +321,7 @@ internal sealed class StaffMemberCommandHandlers(
             throw new ValidationException($"{member.FullName} is not on the staff.");
         }
 
-        await StaffVersions.CheckAsync(store, member.UserId, request.Version, cancellationToken);
+        await StaffVersions.ClaimAsync(versions, member.UserId, request.Version, By, cancellationToken);
         Check(await store.SetStaffRoleAsync(member.UserId, null, ActorId, By, cancellationToken));
         if (!member.HasPassword)
         {
@@ -402,18 +405,25 @@ internal sealed class StaffMemberCommandHandlers(
         };
     }
 
-    /// <summary>An existing account was added: no link to send, they sign in as usual. They are told, so it never comes as a surprise.</summary>
+    /// <summary>
+    /// An existing account was added: no link to send, they sign in as usual. They are told, so it never comes as a surprise,
+    /// unless the website address is not set: as with invitations, no email carries links built from the request's address.
+    /// </summary>
     private async Task<StaffInvitationDto> TellAddedAsync(
         string userId, string fullName, string emailAddress, StaffRole role, CancellationToken cancellationToken)
     {
-        var rendered = renderer.Render(EmailTemplates.StaffAdded, StaffInvitations.AddedSubject, new Dictionary<string, object?>
+        var emailed = urls.HasConfiguredBaseUrl;
+        if (emailed)
         {
-            ["FirstName"] = FirstName(fullName),
-            ["AddedBy"] = currentUser.Name ?? "An admin",
-            ["RoleName"] = role.DisplayName(),
-            ["SignInUrl"] = urls.Login(),
-        });
-        await email.QueueAsync(EmailMessage.Create(emailAddress, rendered), cancellationToken);
+            var rendered = renderer.Render(EmailTemplates.StaffAdded, StaffInvitations.AddedSubject, new Dictionary<string, object?>
+            {
+                ["FirstName"] = FirstName(fullName),
+                ["AddedBy"] = currentUser.Name ?? "An admin",
+                ["RoleName"] = role.DisplayName(),
+                ["SignInUrl"] = urls.Login(),
+            });
+            await email.QueueAsync(EmailMessage.Create(emailAddress, rendered), cancellationToken);
+        }
 
         return new StaffInvitationDto
         {
@@ -422,7 +432,7 @@ internal sealed class StaffMemberCommandHandlers(
             Email = emailAddress,
             Role = role,
             Kind = StaffInvitationKind.Added,
-            Emailed = true,
+            Emailed = emailed,
             CreatedAtUtc = clock.UtcNow,
         };
     }
@@ -450,9 +460,14 @@ internal static class StaffVersions
     public const string ChangedMeanwhile =
         "Someone changed this person while you were looking at them. Reload the page to see the latest and try again.";
 
-    public static async Task CheckAsync(IStaffPermissionStore store, string userId, int version, CancellationToken cancellationToken)
+    /// <summary>
+    /// Claims the version the page showed (<see cref="IStaffProfileVersions"/>) before a change the store takes no version
+    /// for; refused when another change got there first. A change the store then refuses (e.g. the last Admin) has still
+    /// moved the version on, so other admins' open pages for the person ask for a reload: harmless.
+    /// </summary>
+    public static async Task ClaimAsync(IStaffProfileVersions versions, string userId, int version, string changedBy, CancellationToken cancellationToken)
     {
-        if ((await store.GetUserPermissionsAsync(userId, cancellationToken)).Version != version)
+        if (!await versions.ClaimAsync(userId, version, changedBy, cancellationToken))
         {
             throw new ValidationException(ChangedMeanwhile);
         }
