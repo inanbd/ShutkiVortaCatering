@@ -217,19 +217,38 @@ public sealed partial class TimeClockTests(TestServers servers)
         Assert.Contains("before midnight, so please confirm when you finish", plain);
         Assert.DoesNotContain("You didn't clock out", plain);
 
-        // One tap ends it now; a second tap (a double tap) shows the same result.
-        AssertRedirectedTo(await PostFormAsync(client, $"{Page}?handler=FixForgotten", html, new Dictionary<string, string> { ["Forgotten.FinishingNow"] = "true" }), Page);
+        // "I'm finishing now" is a clock-out form like the "Clock out" button: the page's script fills in the location.
+        var finishing = FinishingNowForm().Match(html);
+        Assert.True(finishing.Success, "The \"I'm finishing now\" form is not a clock-out form with the location fields.");
+        Assert.Contains("data-clock-form", finishing.Value);
+        Assert.Contains("name=\"Punch.Latitude\"", finishing.Value);
+        Assert.Contains("data-skip-location", finishing.Value);
+
+        // One tap ends it now, with the location; a second tap (a double tap) shows the same result.
+        var finished = new Dictionary<string, string>(AtTheKitchen()) { ["Punch.ConfirmedPastMidnight"] = "true" };
+        AssertRedirectedTo(await PostFormAsync(client, $"{Page}?handler=ClockOut", html, finished), Page);
         var shift = Assert.Single(await ShiftsOfAsync(app, employee.UserId));
-        Assert.Equal((night.Id, ClockOutSource.SelfCorrected), (shift.Id, shift.ClockOutSource));
+        Assert.Equal((night.Id, ClockOutSource.Self, LocationStatus.Captured), (shift.Id, shift.ClockOutSource, shift.ClockOutLocationStatus));
+        Assert.NotNull(shift.ClockOutLatitude);
+        Assert.Null(shift.EditedBy); // a punch, not an edit
         Assert.InRange(shift.ClockOutUtc!.Value, clock.UtcNow.AddMinutes(-1), clock.UtcNow);
         Assert.True(shift.CountsTowardsHours);
         Assert.True(shift.NeedsReview);
-        Assert.Contains("A manager checks shifts that run past midnight.", WebUtility.HtmlDecode(await client.GetStringAsync(Page)));
+        var after = WebUtility.HtmlDecode(await client.GetStringAsync(Page));
+        Assert.Contains("Your location was recorded", after);
+        Assert.Contains("A manager checks shifts that run past midnight.", after);
 
-        AssertRedirectedTo(await PostFormAsync(client, $"{Page}?handler=FixForgotten", html, new Dictionary<string, string> { ["Forgotten.FinishingNow"] = "true" }), Page);
+        AssertRedirectedTo(await PostFormAsync(client, $"{Page}?handler=ClockOut", html, finished), Page);
         Assert.Equal(shift.ClockOutUtc, Assert.Single(await ShiftsOfAsync(app, employee.UserId)).ClockOutUtc);
         var audit = await AuditOfAsync(app, employee.UserId);
-        Assert.Contains(audit, e => e.Details!.StartsWith($"Shift #{shift.Id} (") && e.Details.Contains("shift ran past midnight"));
+        Assert.Contains(audit, e => e.Action == StaffAuditActions.ShiftPastMidnight
+            && e.Details!.StartsWith($"Shift #{shift.Id} (") && e.Details.Contains("shift ran past midnight"));
+
+        // Managers see a punch with its location, not a forgotten clock-out typed in later.
+        var admin = await SignInAsync(app, AppFactory.AdminEmail);
+        var shiftPage = WebUtility.HtmlDecode(await admin.GetStringAsync($"/admin/time-clock/shifts/{shift.Id}"));
+        Assert.DoesNotContain("entered later by the employee", shiftPage);
+        Assert.Contains("Clocked out after midnight", shiftPage);
     }
 
     // ---- Who sees and fixes what ----
@@ -975,4 +994,7 @@ public sealed partial class TimeClockTests(TestServers servers)
 
     [GeneratedRegex("name=\"__revision\" type=\"hidden\" value=\"(\\d+)\"")]
     private static partial Regex RevisionField();
+
+    [GeneratedRegex("<form[^>]*>(?:(?!</form>).)*I'm finishing now.*?</form>", RegexOptions.Singleline)]
+    private static partial Regex FinishingNowForm();
 }

@@ -24,25 +24,28 @@ public sealed record PunchLocationInput(LocationStatus Status, double? Latitude 
 public sealed record ClockInCommand(PunchLocationInput Location, string? Note = null) : IRequest<ClockResult>, IRequireStaff;
 
 /// <summary>Clocks the signed-in staff member out of their open shift now (server time).</summary>
-public sealed record ClockOutCommand(PunchLocationInput Location, string? Note = null) : IRequest<ClockResult>, IRequireStaff;
+/// <param name="ConfirmedPastMidnight">
+/// "I'm finishing now" on a shift that ran past midnight (<see cref="ShiftRules.RanPastMidnight"/>): a real clock-out now,
+/// with the device's location, flagged for a manager to check. Without it such a shift is refused, so that a page opened
+/// before midnight cannot end a night shift unasked.
+/// </param>
+public sealed record ClockOutCommand(PunchLocationInput Location, string? Note = null, bool ConfirmedPastMidnight = false) : IRequest<ClockResult>, IRequireStaff;
 
 /// <summary>
 /// Closes the caller's own stale shift (one from an earlier day or over 16 hours old) with the time they say they left
 /// (business-local), or, when <paramref name="LeftAtLocal"/> is null, as "I don't remember" (no hours until a manager fixes it).
 /// Flagged for review either way. Acts only on the caller's open shift.
 /// </summary>
-/// <param name="FinishingNow">
-/// "I'm finishing now" on a shift that ran past midnight: it ends now (server time), like a clock-out; <paramref name="LeftAtLocal"/> is ignored.
-/// </param>
-public sealed record FixMyForgottenClockOutCommand(DateTime? LeftAtLocal, bool FinishingNow = false) : IRequest<ClockResult>, IRequireStaff;
+public sealed record FixMyForgottenClockOutCommand(DateTime? LeftAtLocal) : IRequest<ClockResult>, IRequireStaff;
 
 /// <param name="ClockedIn">True after a clock-in; false after a clock-out or a fixed forgotten shift.</param>
 /// <param name="AtLocal">When it happened (business-local).</param>
 /// <param name="Repeated">The same tap arrived twice: this is the first tap's result, nothing new was recorded.</param>
 /// <param name="ShiftLength">The length of the shift that ended (null after a clock-in or for "I don't remember").</param>
+/// <param name="RanPastMidnight">A night shift ended with "I'm finishing now" (a manager checks it).</param>
 public sealed record ClockResult(
     bool ClockedIn, DateTime AtLocal, bool Repeated, LocationStatus? LocationStatus, bool IsApproximate, double? DistanceMeters,
-    bool FlaggedForReview, TimeSpan? ShiftLength);
+    bool FlaggedForReview, TimeSpan? ShiftLength, bool RanPastMidnight = false);
 
 public sealed class PunchLocationInputValidator : AbstractValidator<PunchLocationInput>
 {
@@ -130,11 +133,12 @@ internal sealed class TimeClockCommandHandlers(
             return await AlreadyClockedOutAsync(userId, now, cancellationToken);
         }
 
-        if (ShiftRules.IsStale(open.ClockInUtc, now, clock.BusinessTimeZone))
+        var ranPastMidnight = ShiftRules.RanPastMidnight(open.ClockInUtc, now, clock.BusinessTimeZone);
+        if (ShiftRules.IsStale(open.ClockInUtc, now, clock.BusinessTimeZone) && !(ranPastMidnight && request.ConfirmedPastMidnight))
         {
             // A night shift (an old page still showing "Clock out" after midnight) is not a forgotten one.
             var started = TimeClockText.When(clock.ToBusinessTime(open.ClockInUtc), clock.ToBusinessTime(now));
-            throw new ValidationException(ShiftRules.RanPastMidnight(open.ClockInUtc, now, clock.BusinessTimeZone)
+            throw new ValidationException(ranPastMidnight
                 ? $"Your shift started {started}, before midnight, so please confirm when you finish: tap \"I'm finishing now\"."
                 : $"You didn't clock out on {started}. Please tell us when you left first.");
         }
@@ -142,7 +146,9 @@ internal sealed class TimeClockCommandHandlers(
         var settings = options.Value;
         var location = Locate(request.Location, settings, "clock out");
         var distance = TimeClockTime.DistanceToKitchen(location, settings);
-        var flagged = ShiftRules.IsDoubtfulPunch(location, distance, settings.NearKitchenRadiusMeters) || now - open.ClockInUtc > ShiftRules.LongShift;
+        var flagged = ShiftRules.IsDoubtfulPunch(location, distance, settings.NearKitchenRadiusMeters)
+            || now - open.ClockInUtc > ShiftRules.LongShift
+            || ranPastMidnight; // a manager checks shifts that run past midnight
 
         var punch = new ClockOutPunch(open.Id, userId, now, location, distance, request.Note, flagged);
         if (!await repository.ClockOutAsync(punch, cancellationToken))
@@ -150,7 +156,16 @@ internal sealed class TimeClockCommandHandlers(
             return await AlreadyClockedOutAsync(userId, now, cancellationToken);
         }
 
-        return new ClockResult(false, clock.ToBusinessTime(now), false, location.Status, location.IsApproximate, distance, flagged, now - open.ClockInUtc);
+        if (ranPastMidnight)
+        {
+            var inLocal = clock.ToBusinessTime(open.ClockInUtc);
+            var details = $"shift ran past midnight; clocked out {TimeClockText.Times(inLocal, clock.ToBusinessTime(now))} (tapped \"I'm finishing now\").";
+            await audit.WriteAsync(new StaffAuditEntry(userId, open.EmployeeName, StaffAuditActions.ShiftPastMidnight, ShiftAudit.Details(open.Id, inLocal, details),
+                currentUser.Email ?? open.EmployeeName), cancellationToken);
+        }
+
+        return new ClockResult(false, clock.ToBusinessTime(now), false, location.Status, location.IsApproximate, distance, flagged, now - open.ClockInUtc,
+            ranPastMidnight);
     }
 
     public async Task<ClockResult> Handle(FixMyForgottenClockOutCommand request, CancellationToken cancellationToken)
@@ -170,12 +185,11 @@ internal sealed class TimeClockCommandHandlers(
             throw new ValidationException("Your shift started today, so just clock out.");
         }
 
-        var finishingNow = request.FinishingNow;
-        var remembered = finishingNow || request.LeftAtLocal is not null;
+        var remembered = request.LeftAtLocal is not null;
         DateTime leftAtUtc;
         try
         {
-            leftAtUtc = finishingNow ? now : request.LeftAtLocal is { } leftAt ? BusinessTime.FromLocalInput(leftAt, zone) : open.ClockInUtc;
+            leftAtUtc = request.LeftAtLocal is { } leftAt ? BusinessTime.FromLocalInput(leftAt, zone) : open.ClockInUtc;
             if (remembered)
             {
                 ShiftRules.CheckForgottenClockOut(open.ClockInUtc, leftAtUtc, now);
@@ -188,8 +202,7 @@ internal sealed class TimeClockCommandHandlers(
 
         var source = remembered ? ClockOutSource.SelfCorrected : ClockOutSource.Missed;
         var by = currentUser.Email ?? open.EmployeeName;
-        var reason = finishingNow ? "Shift ran past midnight; tapped \"I'm finishing now\""
-            : remembered ? "Forgot to clock out; entered when they left" : "Forgot to clock out; doesn't remember when they left";
+        var reason = remembered ? "Forgot to clock out; entered when they left" : "Forgot to clock out; doesn't remember when they left";
         if (!await repository.CloseForgottenShiftAsync(new ForgottenClockOut(open.Id, userId, leftAtUtc, source, by, reason, now), cancellationToken))
         {
             return await AlreadyFixedAsync(userId, now, "That shift was already closed. Reload the page to see it.", cancellationToken);
@@ -197,8 +210,7 @@ internal sealed class TimeClockCommandHandlers(
 
         var inLocal = clock.ToBusinessTime(open.ClockInUtc);
         var times = TimeClockText.Times(inLocal, clock.ToBusinessTime(leftAtUtc));
-        var details = finishingNow ? $"shift ran past midnight; finished {times} (tapped \"I'm finishing now\")."
-            : remembered ? $"forgot to clock out; says they left at {times}."
+        var details = remembered ? $"forgot to clock out; says they left at {times}."
             : "forgot to clock out and doesn't remember when they left (no hours count until a manager fixes it).";
         await audit.WriteAsync(new StaffAuditEntry(userId, open.EmployeeName, StaffAuditActions.ShiftSelfCorrected, ShiftAudit.Details(open.Id, inLocal, details), by), cancellationToken);
 

@@ -252,27 +252,45 @@ public sealed class TimeClockHandlerTests
     }
 
     [Fact]
-    public async Task ANightShiftPastMidnight_EndsNowWithOneTap_AndIsNotCalledForgotten()
+    public async Task ANightShiftPastMidnight_EndsWithARealClockOutNow_WithItsLocation_AndIsNotCalledForgotten()
     {
         _clock.At(2026, 10, 6, 4, 0); // Tue 4:00 AM
         _repository.GetOpenShiftAsync(Me, Arg.Any<CancellationToken>()).Returns(Punched(5, Me, Utc(2026, 10, 5, 22, 0)));
-        ForgottenClockOut? fix = null;
-        await _repository.CloseForgottenShiftAsync(Arg.Do<ForgottenClockOut>(f => fix = f), Arg.Any<CancellationToken>());
+        ClockOutPunch? punch = null;
+        await _repository.ClockOutAsync(Arg.Do<ClockOutPunch>(p => punch = p), Arg.Any<CancellationToken>());
 
         // A page still showing "Clock out" from before midnight: asked to confirm, not told they forgot.
         var plain = await Assert.ThrowsAsync<ValidationException>(() => Clock().Handle(new ClockOutCommand(AtTheKitchen), CancellationToken.None));
         Assert.Equal("Your shift started Mon at 10:00 PM, before midnight, so please confirm when you finish: tap \"I'm finishing now\".", plain.Message);
+        Assert.Null(punch);
 
-        // "I'm finishing now" ends it by the server's clock, whatever time came with it.
-        var result = await Clock().Handle(new FixMyForgottenClockOutCommand(new DateTime(2026, 10, 5, 23, 0, 0), FinishingNow: true), CancellationToken.None);
+        // "I'm finishing now" is the clock-out itself: now, by the server's clock, with the device's location (a punch, not a
+        // forgotten clock-out typed in later), flagged for a manager to check.
+        var result = await Clock().Handle(new ClockOutCommand(AtTheKitchen, ConfirmedPastMidnight: true), CancellationToken.None);
 
-        Assert.Equal((5, Me, ClockOutSource.SelfCorrected, _clock.UtcNow), (fix!.ShiftId, fix.UserId, fix.Source, fix.ClockOutUtc));
-        Assert.Equal("Shift ran past midnight; tapped \"I'm finishing now\"", fix.Reason);
-        Assert.Equal((new DateTime(2026, 10, 6, 4, 0, 0), TimeSpan.FromHours(6), true), (result.AtLocal, result.ShiftLength, result.FlaggedForReview));
+        Assert.Equal((5, Me, _clock.UtcNow, LocationStatus.Captured, true), (punch!.ShiftId, punch.UserId, punch.ClockOutUtc, punch.Location.Status, punch.NeedsReview));
+        Assert.InRange(punch.DistanceMeters!.Value, 10, 20);
+        Assert.Equal((new DateTime(2026, 10, 6, 4, 0, 0), TimeSpan.FromHours(6), true, true, LocationStatus.Captured),
+            (result.AtLocal, result.ShiftLength, result.FlaggedForReview, result.RanPastMidnight, result.LocationStatus));
+        await _repository.DidNotReceiveWithAnyArgs().CloseForgottenShiftAsync(default!, default);
         await _audit.Received(1).WriteAsync(
-            Arg.Is<StaffAuditEntry>(e => e.Action == StaffAuditActions.ShiftSelfCorrected
-                && e.Details == "Shift #5 (Mon, Oct 5): shift ran past midnight; finished Mon, Oct 5, 10:00 PM – Tue, Oct 6, 4:00 AM (tapped \"I'm finishing now\")."),
+            Arg.Is<StaffAuditEntry>(e => e.Action == StaffAuditActions.ShiftPastMidnight
+                && e.Details == "Shift #5 (Mon, Oct 5): shift ran past midnight; clocked out Mon, Oct 5, 10:00 PM – Tue, Oct 6, 4:00 AM (tapped \"I'm finishing now\")."),
             Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task FinishingNow_FollowsRequireLocation_LikeAnyClockOut()
+    {
+        _options.RequireLocation = true;
+        _clock.At(2026, 10, 6, 4, 0);
+        _repository.GetOpenShiftAsync(Me, Arg.Any<CancellationToken>()).Returns(Punched(5, Me, Utc(2026, 10, 5, 22, 0)));
+
+        var error = await Assert.ThrowsAsync<ValidationException>(() =>
+            Clock().Handle(new ClockOutCommand(PunchLocationInput.NotProvided, ConfirmedPastMidnight: true), CancellationToken.None));
+
+        Assert.StartsWith("Your location is needed to clock out", error.Message);
+        await _repository.DidNotReceiveWithAnyArgs().ClockOutAsync(default!, default);
     }
 
     [Fact]
@@ -281,10 +299,10 @@ public sealed class TimeClockHandlerTests
         _repository.GetOpenShiftAsync(Me, Arg.Any<CancellationToken>()).Returns(Punched(5, Me, Utc(2026, 10, 5, 9, 0))); // 25 hours ago
 
         var error = await Assert.ThrowsAsync<ValidationException>(() =>
-            Clock().Handle(new FixMyForgottenClockOutCommand(null, FinishingNow: true), CancellationToken.None));
+            Clock().Handle(new ClockOutCommand(AtTheKitchen, ConfirmedPastMidnight: true), CancellationToken.None));
 
-        Assert.Contains("more than 16 hours", error.Message);
-        await _repository.DidNotReceiveWithAnyArgs().CloseForgottenShiftAsync(default!, default);
+        Assert.Equal("You didn't clock out on Mon at 9:00 AM. Please tell us when you left first.", error.Message);
+        await _repository.DidNotReceiveWithAnyArgs().ClockOutAsync(default!, default);
     }
 
     [Fact]
@@ -296,14 +314,14 @@ public sealed class TimeClockHandlerTests
             .With(nameof(TimeClockShift.EditedAtUtc), Utc(2026, 10, 6, 4, 0));
         _repository.GetLastClosedShiftAsync(Me, Arg.Any<CancellationToken>()).Returns(closed);
 
-        var repeated = await Clock().Handle(new FixMyForgottenClockOutCommand(null, FinishingNow: true), CancellationToken.None);
+        var repeated = await Clock().Handle(new FixMyForgottenClockOutCommand(new DateTime(2026, 10, 6, 4, 0, 0)), CancellationToken.None);
         Assert.True(repeated.Repeated);
         Assert.Equal((new DateTime(2026, 10, 6, 4, 0, 0), TimeSpan.FromHours(6)), (repeated.AtLocal, repeated.ShiftLength));
         await _repository.DidNotReceiveWithAnyArgs().CloseForgottenShiftAsync(default!, default);
 
         _clock.UtcNow = _clock.UtcNow.AddMinutes(5);
         var error = await Assert.ThrowsAsync<ValidationException>(() =>
-            Clock().Handle(new FixMyForgottenClockOutCommand(null, FinishingNow: true), CancellationToken.None));
+            Clock().Handle(new FixMyForgottenClockOutCommand(new DateTime(2026, 10, 6, 4, 0, 0)), CancellationToken.None));
         Assert.Equal("You're not clocked in, so there is no shift to fix.", error.Message);
     }
 

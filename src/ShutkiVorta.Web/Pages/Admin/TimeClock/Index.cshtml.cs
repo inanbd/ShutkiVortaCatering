@@ -36,26 +36,22 @@ public sealed class IndexModel(ISender sender) : AppPageModel(sender)
         PunchAsync(new ClockInCommand(Punch.ToLocation(), Punch.Note), cancellationToken);
 
     public Task<IActionResult> OnPostClockOutAsync(CancellationToken cancellationToken) =>
-        PunchAsync(new ClockOutCommand(Punch.ToLocation(), Punch.Note), cancellationToken);
+        PunchAsync(new ClockOutCommand(Punch.ToLocation(), Punch.Note, Punch.ConfirmedPastMidnight), cancellationToken);
 
     public async Task<IActionResult> OnPostFixForgottenAsync(CancellationToken cancellationToken)
     {
-        if (!Forgotten.DontRemember && !Forgotten.FinishingNow && Forgotten.LeftAt is null)
+        if (!Forgotten.DontRemember && Forgotten.LeftAt is null)
         {
             ModelState.AddModelError("Forgotten.LeftAt", "Enter when you left, or tap \"I don't remember\".");
         }
         else
         {
             ClockResult? result = null;
-            var command = Forgotten.DontRemember
-                ? new FixMyForgottenClockOutCommand(null)
-                : new FixMyForgottenClockOutCommand(Forgotten.FinishingNow ? null : Forgotten.LeftAt, Forgotten.FinishingNow);
+            var command = new FixMyForgottenClockOutCommand(Forgotten.DontRemember ? null : Forgotten.LeftAt);
             if (await TryExecuteAsync(async () => result = await Sender.Send(command, cancellationToken)))
             {
                 StatusMessage = result!.ShiftLength switch
                 {
-                    { } length when command.FinishingNow =>
-                        $"Clocked out at {Format.Time(result.AtLocal)} after {Format.Hours(length)} · কাজ শেষ. A manager checks shifts that run past midnight.",
                     { } length => $"Thanks. Saved that you left at {Format.Time(result.AtLocal)} ({Format.Hours(length)}); a manager will check it. You can clock in now.",
                     null => "Thanks. A manager will fill in when you left. You can clock in now.",
                 };
@@ -100,7 +96,8 @@ public sealed class IndexModel(ISender sender) : AppPageModel(sender)
             LocationStatus.Captured => "Your location was recorded.",
             var status => $"No location was recorded ({TimeClockText.Location(status).ToLower(CultureInfo.CurrentCulture)}).",
         };
-        return $"{what} at {Format.Time(result.AtLocal)}{length} · {bangla}. {location}";
+        var nightShift = result.RanPastMidnight ? " A manager checks shifts that run past midnight." : string.Empty;
+        return $"{what} at {Format.Time(result.AtLocal)}{length} · {bangla}. {location}{nightShift}";
     }
 
     /// <summary>
@@ -114,6 +111,9 @@ public sealed class IndexModel(ISender sender) : AppPageModel(sender)
         public string? Longitude { get; set; }
         public string? Accuracy { get; set; }
         public string? Note { get; set; }
+
+        /// <summary>"I'm finishing now" on a shift that ran past midnight.</summary>
+        public bool ConfirmedPastMidnight { get; set; }
 
         public PunchLocationInput ToLocation()
         {
@@ -135,8 +135,5 @@ public sealed class IndexModel(ISender sender) : AppPageModel(sender)
         public DateTime? LeftAt { get; set; }
 
         public bool DontRemember { get; set; }
-
-        /// <summary>"I'm finishing now" on a shift that ran past midnight: it ends now, by the server's clock.</summary>
-        public bool FinishingNow { get; set; }
     }
 }

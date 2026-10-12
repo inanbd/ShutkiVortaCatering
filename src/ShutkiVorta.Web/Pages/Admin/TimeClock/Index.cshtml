@@ -36,12 +36,28 @@
         </div>
         @if (pastMidnight)
         {
-            <form method="post" asp-page-handler="FixForgotten" class="clock-form">
-                <input type="hidden" name="Forgotten.FinishingNow" value="true" />
-                <button class="btn btn-lg btn-block clock-button btn-primary" type="submit">
+            @* A real clock-out (with the location, like the "Clock out" button), confirmed for a shift that ran past midnight. *@
+            <form method="post" asp-page-handler="ClockOut" class="clock-form" data-clock-form>
+                <input type="hidden" name="Punch.ConfirmedPastMidnight" value="true" />
+                <input type="hidden" name="Punch.Status" value="@LocationStatus.NotProvided" data-punch="status" />
+                <input type="hidden" name="Punch.Latitude" data-punch="latitude" />
+                <input type="hidden" name="Punch.Longitude" data-punch="longitude" />
+                <input type="hidden" name="Punch.Accuracy" data-punch="accuracy" />
+                <button class="btn btn-lg btn-block clock-button btn-primary" type="submit" data-clock-button>
                     <span>I'm finishing now</span> <span aria-hidden="true">·</span> <span class="bn" lang="bn">কাজ শেষ</span>
                 </button>
+                <p class="clock-locating" data-locating role="status" hidden>
+                    <span class="spinner" aria-hidden="true"></span> Getting your location… <button type="button" class="btn-link" data-skip-location>Skip</button>
+                </p>
             </form>
+            <p class="clock-location" data-location-status>
+                @Icons.Get("pin")
+                <span>
+                    <span data-location-text>@(c.RequireLocation ? "Your location is needed to clock out." : "Your phone or computer will be asked for its location.")</span>
+                    <a href="#location-help" data-help-link hidden>how to turn it on</a>
+                </span>
+            </p>
+            <partial name="_LocationHelp" model="Model.ShowLocationHelp" />
         }
         <form method="post" asp-page-handler="FixForgotten" class="forgotten-form">
             <div class="field">
