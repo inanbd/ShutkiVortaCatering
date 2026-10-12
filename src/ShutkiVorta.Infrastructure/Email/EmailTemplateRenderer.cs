@@ -115,9 +115,11 @@ internal sealed partial class EmailTemplateRenderer(
             return string.IsNullOrEmpty(label) || label == href ? href : $"{label} ({href})";
         });
         text = LineBreaks().Replace(text, "\n");
+        text = InlineTags().Replace(text, string.Empty); // "as <strong>Employee</strong>." must not become "as Employee ."
         text = Tags().Replace(text, " ");
         text = WebUtility.HtmlDecode(text);
         text = HorizontalSpace().Replace(text, " ");
+        text = SpaceBeforePunctuation().Replace(text, "$1");
         text = string.Join("\n", text.Split('\n').Select(l => l.Trim()));
         text = BlankLines().Replace(text, "\n\n").Trim();
 
@@ -145,6 +147,12 @@ internal sealed partial class EmailTemplateRenderer(
 
     [GeneratedRegex("<[^>]+>")]
     private static partial Regex Tags();
+
+    [GeneratedRegex(@"</?(strong|b|em|i|u|span|small)\b[^>]*>", RegexOptions.IgnoreCase)]
+    private static partial Regex InlineTags();
+
+    [GeneratedRegex(@" +([.,;:!?])")]
+    private static partial Regex SpaceBeforePunctuation();
 
     [GeneratedRegex(@"[ \t\r\f\v]+")]
     private static partial Regex HorizontalSpace();

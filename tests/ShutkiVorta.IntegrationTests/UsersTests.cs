@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Razor.Hosting;
 using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.Extensions.DependencyInjection;
+using ShutkiVorta.Application.Common.Email;
 using ShutkiVorta.Application.Common.Interfaces;
 using ShutkiVorta.Application.Common.Security;
 using ShutkiVorta.Application.Features.Accounts;
@@ -943,6 +944,27 @@ public sealed partial class UsersTests(TestServers servers)
         ["/Pages/Admin/Users/Permissions.cshtml OnPostSaveAsync"] = "page rule",
         ["/Pages/Admin/Users/Permissions.cshtml OnPostRestoreAsync"] = "page rule",
     };
+
+    [Fact]
+    public void TheStaffEmails_PlainText_HasNoGapBeforeAFullStop()
+    {
+        var renderer = servers.Get("Sqlite").Services.GetRequiredService<IEmailTemplateRenderer>();
+        var model = new Dictionary<string, object?>
+        {
+            ["FirstName"] = "Eli",
+            ["InvitedBy"] = "Site Administrator",
+            ["RoleName"] = "Employee",
+            ["InvitationUrl"] = "https://shutki.test/account/reset-password?invite=1",
+            ["LoginUrl"] = "https://shutki.test/account/login",
+        };
+
+        foreach (var template in new[] { EmailTemplates.StaffInvitation, EmailTemplates.StaffAdded })
+        {
+            var text = renderer.Render(template, "Subject", model).Text;
+            Assert.Contains("staff as Employee.", text);
+            Assert.DoesNotContain(" .", text);
+        }
+    }
 
     /// <summary>Pinned in both directions: exactly these pages and handlers exist, each with exactly this rule.</summary>
     [Fact]
