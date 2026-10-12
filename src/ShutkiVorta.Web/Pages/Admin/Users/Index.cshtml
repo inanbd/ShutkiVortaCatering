@@ -120,16 +120,11 @@
     </div>
 </section>
 <p class="small muted mt-2">
-    @if (Model.ShowFormer)
-    {
-        <text>Former staff keep their account and their shifts; they can no longer open the staff pages.</text>
-    }
-    else
-    {
-        <text>New people can sign in once they have set their password through their invitation link.</text>
-    }
+    @(Model.ShowFormer
+        ? "Former staff keep their account and their shifts; they can no longer open the staff pages."
+        : "New people can sign in once they have set their password through their invitation link.")
     @if (Model.IsAdmin)
     {
-        <text>What Managers and Employees may do is set on the <a href="@StaffUi.PermissionsPath">Permissions</a> page; open a person to give them their own.</text>
+        <span>What Managers and Employees may do is set on the <a href="@StaffUi.PermissionsPath">Permissions</a> page; open a person to give them their own.</span>
     }
 </p>

@@ -21,6 +21,7 @@
 .unlock { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 12px; }
 .unlock svg.icon, .read-only-note svg.icon { width: 16px; height: 16px; vertical-align: -3px; }
 .danger-zone { border-color: #e3b1b1; }
+@media (min-width: 561px) { .staff-grid .kv { grid-template-columns: 96px minmax(0, 1fr); } }
 .danger-zone .panel-head h2 { color: var(--maroon-800); }
 
 .permission-summary { list-style: none; margin: 0 0 12px; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 4px 20px; }
@@ -59,8 +60,8 @@
 .permissions-table .locked-cell svg.icon { width: 15px; height: 15px; vertical-align: -2px; color: var(--maroon-700); }
 .permissions-table tr.locked-row td { background: #fcf8ef; }
 .permissions-table tfoot td { background: var(--cream-50); border-bottom: 0; }
-.permissions-table .role-actions { display: table-cell; }
 .permissions-table .role-actions > * { display: block; margin-top: 6px; }
+.permissions-table .role-actions > .unsaved[hidden] { display: none; }
 .permissions-table .role-actions > .btn { display: inline-flex; margin-right: 6px; }
 .permissions-table .unsaved { color: var(--maroon-700); font-weight: 600; }
 .permissions-grid { margin-top: 24px; }
@@ -94,7 +95,8 @@
   .permissions-table .locked-cell::before { display: inline !important; margin-right: 6px; }
   .permissions-table select { min-width: 0; }
   .permissions-table .level-help { max-width: none; }
-  .permissions-table tr:hover td { background: none; }
+  .permissions-table tr:hover td, .permissions-table tr.locked-row td { background: none; }
+  .permissions-table tr.locked-row { background: #fcf8ef; }
   .permissions-table tfoot tr { padding: 0; border-bottom: 0; }
   .permissions-table tfoot td.tfoot-label { display: none; }
   .permissions-table .role-actions { display: block; padding: 12px 16px; border-bottom: 1px solid #efe4cc; }

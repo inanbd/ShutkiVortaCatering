@@ -23,7 +23,7 @@
             <dl class="kv">
                 <dt>Name</dt><dd><strong>@account.FullName</strong></dd>
                 <dt>Email</dt><dd>@account.Email</dd>
-                <dt>Joined</dt><dd>@Format.ShortDate(account.CreatedAtUtc)</dd>
+                <dt>Joined</dt><dd>@Format.ShortDate(Model.Local(account.CreatedAtUtc))</dd>
                 <dt>Orders</dt><dd>@(account.OrderCount == 0 ? "None" : account.OrderCount == 1 ? "1 order" : $"{account.OrderCount} orders")</dd>
                 @if (account.IsFormerStaff)
                 {
@@ -96,7 +96,7 @@ else
             </form>
         </div>
     </section>
-    <p class="small muted mt-2">
+    <p class="small muted mt-2 add-user">
         New people get an email with a link to set their password (it works for @StaffInvitations.ValidFor.Days days); you'll also see
         the link once, to text it to them. They can open the staff pages once their password is set. Someone who already has an
         account on the website with a confirmed email keeps their password.

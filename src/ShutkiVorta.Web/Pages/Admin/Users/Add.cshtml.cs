@@ -1,6 +1,7 @@
 using System.ComponentModel.DataAnnotations;
 using MediatR;
 using Microsoft.AspNetCore.Mvc;
+using ShutkiVorta.Application.Common.Interfaces;
 using ShutkiVorta.Application.Common.Security;
 using ShutkiVorta.Application.Features.Staff;
 using ShutkiVorta.Web.Infrastructure;
@@ -12,7 +13,7 @@ namespace ShutkiVorta.Web.Pages.Admin.Users;
 /// is and confirms; then the person's page shows the set-password link once (and whether the email went out).
 /// </summary>
 [AdminOnly]
-public sealed class AddModel(ISender sender) : AppPageModel(sender)
+public sealed class AddModel(ISender sender, IDateTimeProvider clock) : AppPageModel(sender)
 {
     [BindProperty]
     public AddInput Input { get; set; } = new();
@@ -28,6 +29,8 @@ public sealed class AddModel(ISender sender) : AppPageModel(sender)
     public ExistingAccountDto? AlreadyStaff { get; private set; }
 
     public void OnGet() => ViewData["Title"] = "Add a user";
+
+    public DateTime Local(DateTime utc) => clock.ToBusinessTime(utc);
 
     public async Task<IActionResult> OnPostAsync(CancellationToken cancellationToken)
     {
