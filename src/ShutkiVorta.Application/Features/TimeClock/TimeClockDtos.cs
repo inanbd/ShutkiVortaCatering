@@ -279,7 +279,12 @@ internal static class TimeClockMapping
         AddIf(options.HasKitchenLocation && (clockIn.DistanceMeters > options.NearKitchenRadiusMeters || clockOut.DistanceMeters > options.NearKitchenRadiusMeters),
             ShiftFlag.FarFromKitchen);
         AddIf(shift.IsManualEntry, ShiftFlag.ManualEntry);
-        AddIf(!shift.IsManualEntry && shift.EditedBy is not null, ShiftFlag.Edited);
+        // Changed by someone else: a manager's correction (which keeps the punched times as the original ones) or a close by
+        // a manager or the system. Not the person's own forgotten clock-out, which has its own flag.
+        AddIf(!shift.IsManualEntry
+              && (shift.OriginalClockInUtc is not null || shift.OriginalClockOutUtc is not null
+                  || shift.ClockOutSource is ClockOutSource.Manager or ClockOutSource.System),
+            ShiftFlag.Edited);
         return flags;
     }
 

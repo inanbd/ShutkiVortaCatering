@@ -248,6 +248,8 @@ public sealed partial class TimeClockTests(TestServers servers)
         var admin = await SignInAsync(app, AppFactory.AdminEmail);
         var shiftPage = WebUtility.HtmlDecode(await admin.GetStringAsync($"/admin/time-clock/shifts/{shift.Id}"));
         Assert.DoesNotContain("entered later by the employee", shiftPage);
+        Assert.DoesNotContain("(Clocked out)", shiftPage); // a plain punch needs no note on how the shift ended
+        Assert.DoesNotContain(">Edited<", shiftPage);
         Assert.Contains("Clocked out after midnight", shiftPage);
     }
 

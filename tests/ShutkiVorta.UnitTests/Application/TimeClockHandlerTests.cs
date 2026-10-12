@@ -706,6 +706,32 @@ public sealed class TimeClockHandlerTests
         Assert.Equal((true, TimeSpan.FromMinutes(1)), (over.IsOvertime, over.Overtime));
     }
 
+    [Fact]
+    public void TheEditedFlag_MeansChangedBySomeoneElse_NotThePersonsOwnForgottenClockOut()
+    {
+        var day = Utc(2026, 10, 5, 9, 0);
+        Assert.DoesNotContain(ShiftFlag.Edited, Flags(Punched(1, Me, day, day.AddHours(8))));
+
+        var selfFixed = Punched(2, Me, day, day.AddHours(8))
+            .With(nameof(TimeClockShift.ClockOutSource), ClockOutSource.SelfCorrected)
+            .With(nameof(TimeClockShift.EditedBy), "me@test.local");
+        Assert.Equal([ShiftFlag.SelfCorrected], Flags(selfFixed).Where(f => f is ShiftFlag.SelfCorrected or ShiftFlag.Edited));
+
+        var missed = Punched(3, Me, day, day)
+            .With(nameof(TimeClockShift.ClockOutSource), ClockOutSource.Missed)
+            .With(nameof(TimeClockShift.EditedBy), "me@test.local");
+        Assert.DoesNotContain(ShiftFlag.Edited, Flags(missed));
+
+        // A manager's correction (even of a shift the person fixed themselves), a manager's close, a close by the system.
+        Assert.Contains(ShiftFlag.Edited, Flags(selfFixed.With(nameof(TimeClockShift.OriginalClockInUtc), day)));
+        Assert.Contains(ShiftFlag.Edited, Flags(Punched(4, Me, day, day.AddHours(8))
+            .With(nameof(TimeClockShift.ClockOutSource), ClockOutSource.Manager).With(nameof(TimeClockShift.EditedBy), "boss@test.local")));
+        Assert.Contains(ShiftFlag.Edited, Flags(Punched(5, Me, day, day.AddHours(8))
+            .With(nameof(TimeClockShift.ClockOutSource), ClockOutSource.System).With(nameof(TimeClockShift.EditedBy), "boss@test.local")));
+
+        IReadOnlyList<ShiftFlag> Flags(TimeClockShift shift) => shift.ToDto(_clock, _options).Flags;
+    }
+
     // ---- CSV exports ----
 
     [Theory]

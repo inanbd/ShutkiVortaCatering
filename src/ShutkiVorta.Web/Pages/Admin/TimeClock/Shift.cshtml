@@ -45,7 +45,10 @@ else if (s.IsMissedClockOut)
                         else
                         {
                             @(s.IsMissedClockOut ? "Unknown" : Format.DateTime(s.ClockOutLocal!.Value))
-                            <span class="small muted">(@TimeClockText.ClockOutSource(s.ClockOutSource))</span>
+                            @if (s.ClockOutSource != ClockOutSource.Self)
+                            {
+                                <span class="small muted">(@TimeClockText.ClockOutSource(s.ClockOutSource))</span>
+                            }
                         }
                     </dd>
                     <dt>Hours</dt>
