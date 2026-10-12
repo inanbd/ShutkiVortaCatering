@@ -88,9 +88,9 @@ public sealed class TimeClockShift : Entity
     /// <summary>The shift's length (so far, while it is open).</summary>
     public TimeSpan Duration(DateTime nowUtc) => ShiftRules.Clip(ClockInUtc, ClockOutUtc, nowUtc, DateTime.MinValue, DateTime.MaxValue);
 
-    /// <summary>Hours that count inside [<paramref name="startUtc"/>, <paramref name="endUtc"/>).</summary>
+    /// <summary>Hours that count inside [<paramref name="startUtc"/>, <paramref name="endUtc"/>), in whole minutes (<see cref="ShiftRules.CountedTime"/>).</summary>
     public TimeSpan HoursWithin(DateTime startUtc, DateTime endUtc) =>
-        CountsTowardsHours ? ShiftRules.Clip(ClockInUtc, ClockOutUtc, ClockOutUtc!.Value, startUtc, endUtc) : TimeSpan.Zero;
+        CountsTowardsHours ? ShiftRules.CountedTime(ShiftRules.Clip(ClockInUtc, ClockOutUtc, ClockOutUtc!.Value, startUtc, endUtc)) : TimeSpan.Zero;
 
     /// <summary>Time worked so far inside the period while the shift is still open (not part of the totals).</summary>
     public TimeSpan InProgressWithin(DateTime startUtc, DateTime endUtc, DateTime nowUtc) =>

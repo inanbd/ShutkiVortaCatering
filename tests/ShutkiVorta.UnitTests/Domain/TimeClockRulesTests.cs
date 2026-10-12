@@ -215,6 +215,18 @@ public sealed class TimeClockRulesTests
         Assert.Equal(TimeSpan.Zero, ShiftRules.Clip(Utc(2026, 10, 7, 9, 0), null, Utc(2026, 10, 7, 12, 0), start, end));
     }
 
+    [Theory]
+    [InlineData(0, 0)]
+    [InlineData(29, 0)]
+    [InlineData(30, 1)]
+    [InlineData(20 * 60 + 40, 21)]
+    [InlineData(8 * 3600 + 10, 8 * 60)]
+    [InlineData(-90, 0)]
+    public void TimeWorked_CountsToTheNearestWholeMinute(int seconds, int minutes)
+    {
+        Assert.Equal(TimeSpan.FromMinutes(minutes), ShiftRules.CountedTime(TimeSpan.FromSeconds(seconds)));
+    }
+
     [Fact]
     public void HoursAcrossTheFallBackNight_AreRealHours()
     {

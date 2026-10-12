@@ -181,8 +181,10 @@ public sealed record PersonWeekHoursDto(string UserId, string Name, string? Emai
 {
     public static readonly TimeSpan OvertimeAfter = TimeSpan.FromHours(40);
 
-    public bool IsOvertime => Total > OvertimeAfter;
-    public TimeSpan Overtime => IsOvertime ? Total - OvertimeAfter : TimeSpan.Zero;
+    /// <summary>Over 40 hours by at least a whole minute, as shown (never "+0.00 h").</summary>
+    public bool IsOvertime => Overtime > TimeSpan.Zero;
+
+    public TimeSpan Overtime => TimeSpan.FromMinutes(Math.Max(0, Math.Floor(Total.TotalMinutes) - OvertimeAfter.TotalMinutes));
 }
 
 public sealed record WorkweekHoursDto(DateOnly Start, IReadOnlyList<PersonWeekHoursDto> People)
@@ -246,7 +248,8 @@ internal static class TimeClockMapping
             VoidedAtLocal = Local(clock, shift.VoidedAtUtc),
             VoidReason = shift.VoidReason,
             Version = shift.Version,
-            Duration = shift.Duration(now),
+            // A closed shift's length as it is counted (whole minutes), so its row and the day's and week's totals agree.
+            Duration = shift.IsOpen ? shift.Duration(now) : ShiftRules.CountedTime(shift.Duration(now)),
             CountsTowardsHours = shift.CountsTowardsHours,
             Flags = Flags(shift, clockIn, clockOut, options, now),
         };

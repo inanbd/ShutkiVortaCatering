@@ -87,7 +87,7 @@ internal sealed class TimeClockQueryHandlers(
 
     private static readonly string[] ShiftColumns =
     [
-        "Name", "Email", "Date", "Clock in", "Clock out", "Hours", "Status", "Clock-in location", "Clock-out location",
+        "Name", "Email", "Date", "Clock in", "Clock out", "Hours", "Hours (h:mm)", "Status", "Clock-in location", "Clock-out location",
         "Clock-in distance (m)", "Clock-out distance (m)", "Clock-in coordinates", "Clock-out coordinates", "Edited by", "Reason", "Voided",
     ];
 
@@ -309,7 +309,8 @@ internal sealed class TimeClockQueryHandlers(
         return
         [
             s.EmployeeName, email, Iso(s.Date), Stamp(s.ClockInLocal), s.ClockOutLocal is { } outLocal ? Stamp(outLocal) : string.Empty,
-            s.CountsTowardsHours ? Format.DecimalHours(s.Duration) : string.Empty, status, Location(s.ClockIn), clockOutLocation,
+            s.CountsTowardsHours ? Format.DecimalHours(s.Duration) : string.Empty, s.CountsTowardsHours ? TimeClockText.HoursMinutes(s.Duration) : string.Empty,
+            status, Location(s.ClockIn), clockOutLocation,
             Meters(s.ClockIn.DistanceMeters), Meters(s.ClockOut.DistanceMeters), s.ClockIn.Coordinates, s.ClockOut.Coordinates,
             s.EditedBy, s.EditReason, s.IsVoided ? $"Yes: {s.VoidReason} ({s.VoidedBy})" : string.Empty,
         ];

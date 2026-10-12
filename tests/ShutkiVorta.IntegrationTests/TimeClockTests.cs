@@ -325,11 +325,11 @@ public sealed partial class TimeClockTests(TestServers servers)
         Assert.Equal("text/csv", export.Content.Headers.ContentType!.MediaType);
         var lines = await CsvLinesAsync(export);
         Assert.Equal(
-            "Name,Email,Date,Clock in,Clock out,Hours,Status,Clock-in location,Clock-out location,Clock-in distance (m),Clock-out distance (m),"
+            "Name,Email,Date,Clock in,Clock out,Hours,Hours (h:mm),Status,Clock-in location,Clock-out location,Clock-in distance (m),Clock-out distance (m),"
             + "Clock-in coordinates,Clock-out coordinates,Edited by,Reason,Voided",
             lines[0]);
         var row = Assert.Single(lines.Skip(1));
-        Assert.StartsWith($"{employee.FullName},{employee.Email},{from},{from} 09:00,{from} 17:30,8.50,Closed,Entered by hand,Entered by hand,", row);
+        Assert.StartsWith($"{employee.FullName},{employee.Email},{from},{from} 09:00,{from} 17:30,8.50,8:30,Closed,Entered by hand,Entered by hand,", row);
         Assert.EndsWith($",{AppFactory.AdminEmail},\"'=HYPERLINK(\"\"http://evil.test\"\",\"\"click\"\")\",", row);
 
         var weeklyExport = await client.GetAsync($"{Page}/team?handler=ExportWeekly&user={employee.UserId}&from={from}&to={from}");

@@ -32,6 +32,13 @@ public static class ShiftRules
         IsStale(clockInUtc, nowUtc, zone) && nowUtc - clockInUtc <= LongShift;
 
     /// <summary>
+    /// Time worked as it is counted and paid: to the nearest whole minute (30 seconds and more round up). Each shift is
+    /// counted this way and a week's hours are the sum, so the shifts' rows always add up to the week's total.
+    /// </summary>
+    public static TimeSpan CountedTime(TimeSpan worked) =>
+        worked <= TimeSpan.Zero ? TimeSpan.Zero : TimeSpan.FromMinutes(Math.Round(worked.TotalMinutes, MidpointRounding.AwayFromZero));
+
+    /// <summary>
     /// The part of a shift inside [<paramref name="startUtc"/>, <paramref name="endUtc"/>):
     /// max(0, min(out ?? now, end) − max(in, start)). UTC arithmetic only, so daylight-saving changes count correctly.
     /// </summary>

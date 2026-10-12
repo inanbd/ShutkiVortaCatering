@@ -638,6 +638,52 @@ public sealed class TimeClockHandlerTests
         Assert.Equal(1, lastWeek.FlaggedCount);
     }
 
+    [Fact]
+    public async Task ShiftRows_AddUpToTheWeek_AndOvertimeStartsAfterAWholeMinuteOver40Hours()
+    {
+        var shifts = new List<TimeClockShift>();
+        for (var day = 5; day <= 9; day++)
+        {
+            shifts.Add(Punched(day, Colleague, Utc(2026, 10, day, 8, 0), Utc(2026, 10, day, 16, 0).AddSeconds(10))); // 5 × 8 h 0 min 10 s
+        }
+
+        for (var n = 0; n < 3; n++)
+        {
+            var start = Utc(2026, 10, 12, 9 + n, 0);
+            shifts.Add(Punched(30 + n, Me, start, start.AddMinutes(20).AddSeconds(40), name: "Me Myself")); // 3 × 20 min 40 s
+        }
+
+        _repository.ListOverlappingAsync(default, default, default, default).ReturnsForAnyArgs(shifts);
+        _repository.SearchAsync(default!, default).ReturnsForAnyArgs(new PagedResult<TimeClockShift>(shifts, shifts.Count, 1, 20_000));
+        _directory.ListAsync(default!, default).ReturnsForAnyArgs([Member(Colleague, "Rahim Uddin"), Member(Me, "Me Myself")]);
+        _staff.Access = StaffAccessFor.Admin(Me);
+        _clock.At(2026, 10, 13, 12, 0);
+
+        var weekly = await Queries().Handle(new GetWeeklyHoursQuery { From = new DateOnly(2026, 10, 5) }, CancellationToken.None);
+
+        // 40 h and 10 × 5 seconds is 40 h as counted: not overtime, and never "Over 40 h: +0.00 h".
+        var forty = Assert.Single(weekly.Weeks.Single(w => w.Start == new DateOnly(2026, 10, 5)).People);
+        Assert.Equal(TimeSpan.FromHours(40), forty.Total);
+        Assert.False(forty.IsOvertime);
+        Assert.Equal(TimeSpan.Zero, forty.Overtime);
+
+        // Each 20 min 40 s shift counts 21 min, and the week is their sum (1:03), not 1:02 next to rows of 0.33.
+        var shortShifts = Assert.Single(weekly.Weeks.Single(w => w.Start == new DateOnly(2026, 10, 12)).People);
+        Assert.Equal(TimeSpan.FromMinutes(63), shortShifts.Total);
+
+        var file = await Queries().Handle(new ExportShiftsCsvQuery { UserId = Me, From = new DateOnly(2026, 10, 12), To = new DateOnly(2026, 10, 12) }, CancellationToken.None);
+        var rows = System.Text.Encoding.UTF8.GetString(file.Content[3..]).Split("\r\n", StringSplitOptions.RemoveEmptyEntries).Skip(1)
+            .Where(l => l.StartsWith("Me Myself,", StringComparison.Ordinal)).ToList();
+        Assert.Equal(3, rows.Count);
+        Assert.All(rows, r => Assert.Contains(",0.35,0:21,Closed,", r));
+        Assert.Equal("1.05", ShutkiVorta.Application.Common.Formatting.Format.DecimalHours(shortShifts.Total));
+
+        var nearly = new PersonWeekHoursDto("u", "U", null, TimeSpan.FromHours(40).Add(TimeSpan.FromSeconds(59)), TimeSpan.Zero, 5, 0);
+        Assert.False(nearly.IsOvertime);
+        var over = new PersonWeekHoursDto("u", "U", null, TimeSpan.FromHours(40).Add(TimeSpan.FromMinutes(1)), TimeSpan.Zero, 5, 0);
+        Assert.Equal((true, TimeSpan.FromMinutes(1)), (over.IsOvertime, over.Overtime));
+    }
+
     // ---- CSV exports ----
 
     [Theory]
@@ -672,11 +718,11 @@ public sealed class TimeClockHandlerTests
         Assert.Equal([0xEF, 0xBB, 0xBF], file.Content.Take(3));
         var lines = System.Text.Encoding.UTF8.GetString(file.Content[3..]).Split("\r\n", StringSplitOptions.RemoveEmptyEntries);
         Assert.Equal(
-            "Name,Email,Date,Clock in,Clock out,Hours,Status,Clock-in location,Clock-out location,Clock-in distance (m),Clock-out distance (m),"
+            "Name,Email,Date,Clock in,Clock out,Hours,Hours (h:mm),Status,Clock-in location,Clock-out location,Clock-in distance (m),Clock-out distance (m),"
             + "Clock-in coordinates,Clock-out coordinates,Edited by,Reason,Voided",
             lines[0]);
         Assert.Equal(
-            "'=cmd|' /C calc'!A0,user-colleague@test.local,2026-10-05,2026-10-05 09:00,2026-10-05 17:15,8.25,Closed,Location recorded,Location recorded,,,"
+            "'=cmd|' /C calc'!A0,user-colleague@test.local,2026-10-05,2026-10-05 09:00,2026-10-05 17:15,8.25,8:15,Closed,Location recorded,Location recorded,,,"
             + "\"32.776700,-96.797000\",,manager@test.local,\"'@forgot, came early\",",
             lines[1]);
     }
