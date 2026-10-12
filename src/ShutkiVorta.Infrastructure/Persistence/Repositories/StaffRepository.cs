@@ -375,7 +375,9 @@ internal sealed class StaffRepository(IDbConnectionFactory connections, IDateTim
                 "DELETE FROM UserPermissions WHERE UserId = @UserId", new { UserId = userId }, transaction, cancellationToken: cancellationToken));
         }
 
-        var closedShift = role is null && await CloseOpenShiftAsync(connection, transaction, userId, changedBy, now, cancellationToken);
+        var closedShift = role is null
+            ? await CloseOpenShiftAsync(connection, transaction, userId, changedBy, now, clock.BusinessTimeZone, cancellationToken)
+            : ClosedShift.None;
 
         var (action, details) = Describe(current, currentRoles, role, hadCustomPermissions, closedShift);
         await StaffAuditLogRepository.InsertAsync(connection, transaction, new StaffAuditEntry(userId, user.FullName, action, details, changedBy), now, cancellationToken);
@@ -452,33 +454,68 @@ internal sealed class StaffRepository(IDbConnectionFactory connections, IDateTim
                                 WHERE ur.UserId = u.Id AND r.NormalizedName IN ('MANAGER', 'EMPLOYEE'))
             """, new { UserId = userId, Now = now }, transaction, cancellationToken: cancellationToken));
 
-    /// <summary>Closes the person's open shift now, flagged for review. True when there was one.</summary>
-    private static async Task<bool> CloseOpenShiftAsync(
-        DbConnection connection, DbTransaction transaction, string userId, string changedBy, DateTime now, CancellationToken cancellationToken)
+    private enum ClosedShift
     {
-        var closed = await connection.ExecuteAsync(new CommandDefinition(
+        None,
+        Now,
+        Missed,
+    }
+
+    /// <summary>
+    /// Closes the person's open shift, flagged for review. One they most likely forgot to clock out of (stale by the time
+    /// clock's own rule, <see cref="ShiftRules.IsStale"/>) is closed as a missed clock-out, at its clock-in time, so it adds
+    /// no hours until a manager enters the real time, exactly like "I don't remember"; a current one is closed now.
+    /// </summary>
+    private static async Task<ClosedShift> CloseOpenShiftAsync(
+        DbConnection connection, DbTransaction transaction, string userId, string changedBy, DateTime now, TimeZoneInfo zone,
+        CancellationToken cancellationToken)
+    {
+        // A person has at most one open shift (a unique index).
+        var open = await connection.QuerySingleOrDefaultAsync<(int Id, DateTime ClockInUtc)?>(new CommandDefinition(
+            "SELECT Id, ClockInUtc FROM TimeClockShifts WHERE UserId = @UserId AND ClockOutUtc IS NULL",
+            new { UserId = userId }, transaction, cancellationToken: cancellationToken));
+        if (open is not { } shift)
+        {
+            return ClosedShift.None;
+        }
+
+        now = new DateTime(now.Ticks - now.Ticks % TimeSpan.TicksPerSecond, DateTimeKind.Utc); // to the whole second, like every punch
+        var missed = ShiftRules.IsStale(DateTime.SpecifyKind(shift.ClockInUtc, DateTimeKind.Utc), now, zone);
+        await connection.ExecuteAsync(new CommandDefinition(
             """
             UPDATE TimeClockShifts
-               SET ClockOutUtc = CASE WHEN ClockInUtc > @Now THEN ClockInUtc ELSE @Now END,
+               SET ClockOutUtc = CASE WHEN @Missed = 1 OR ClockInUtc > @Now THEN ClockInUtc ELSE @Now END,
                    ClockOutSource = @Source, NeedsReview = 1, EditedBy = @EditedBy, EditedAtUtc = @Now,
-                   EditReason = 'Closed when removed from staff', Version = Version + 1, UpdatedAtUtc = @Now
-             WHERE UserId = @UserId AND ClockOutUtc IS NULL
+                   EditReason = @Reason, Version = Version + 1, UpdatedAtUtc = @Now
+             WHERE Id = @Id AND ClockOutUtc IS NULL
             """,
-            new { UserId = userId, Now = now, Source = (int)ClockOutSource.System, EditedBy = changedBy },
+            new
+            {
+                shift.Id,
+                Now = now,
+                Missed = missed ? 1 : 0,
+                Source = (int)(missed ? ClockOutSource.Missed : ClockOutSource.System),
+                EditedBy = changedBy,
+                Reason = missed ? "Missed clock-out: still open from an earlier day when removed from staff" : "Closed when removed from staff",
+            },
             transaction,
             cancellationToken: cancellationToken));
-        return closed > 0;
+        return missed ? ClosedShift.Missed : ClosedShift.Now;
     }
 
     private static (string Action, string Details) Describe(
-        StaffRole? current, IReadOnlyCollection<StaffRole> currentRoles, StaffRole? role, bool hadCustomPermissions, bool closedShift)
+        StaffRole? current, IReadOnlyCollection<StaffRole> currentRoles, StaffRole? role, bool hadCustomPermissions, ClosedShift closedShift)
     {
         var reset = hadCustomPermissions ? " Their custom permissions were removed." : string.Empty;
         if (role is null)
         {
             return (StaffAuditActions.StaffRemoved,
-                $"Removed from the staff (was {current?.RoleName()})." + reset +
-                (closedShift ? " Their open shift was closed and flagged for review." : string.Empty));
+                $"Removed from the staff (was {current?.RoleName()})." + reset + closedShift switch
+                {
+                    ClosedShift.Now => " Their open shift was closed and flagged for review.",
+                    ClosedShift.Missed => " Their open shift was from an earlier day, so it was closed as a missed clock-out (no hours until a manager enters the time) and flagged for review.",
+                    _ => string.Empty,
+                });
         }
 
         if (current is null)

@@ -46,8 +46,9 @@ public sealed record UpdateStaffDetailsCommand(string UserId, string FullName, s
 public sealed record UnlockStaffSignInCommand(string UserId) : IRequest, IRequireAdmin;
 
 /// <summary>
-/// Takes away someone's staff role. They keep their account and their shifts; an open shift is closed now and flagged for
-/// review; an invitation they have not used stops working.
+/// Takes away someone's staff role. They keep their account and their shifts; an open shift is closed and flagged for
+/// review (a forgotten one from an earlier day as a missed clock-out, without hours); an invitation they have not used
+/// stops working.
 /// </summary>
 public sealed record RemoveFromStaffCommand(string UserId, int Version) : IRequest, IRequireAdmin;
 

@@ -34,8 +34,9 @@ public interface IStaffPermissionStore
     /// Makes the person Admin, Manager or Employee, or removes them from the staff (<paramref name="role"/> null), in one
     /// transaction serialised with every other role change: refuses to change <paramref name="actorUserId"/>'s own role
     /// and to leave no Admin who can sign in (a password and a confirmed email); removes any other staff role; creates or
-    /// updates the staff profile; resets custom permissions on any change; on removal closes an open shift
-    /// (ClockOutSource.System, flagged for review); writes the audit entry. Setting the role someone already has changes
+    /// updates the staff profile; resets custom permissions on any change; on removal closes an open shift, flagged for
+    /// review (now, ClockOutSource.System; or, when it is stale by ShiftRules.IsStale, as a missed clock-out that adds no
+    /// hours, ClockOutSource.Missed); writes the audit entry. Setting the role someone already has changes
     /// nothing. Does not touch the Customer role, the password or the security stamp.
     /// </summary>
     Task<Result> SetStaffRoleAsync(string userId, StaffRole? role, string actorUserId, string changedBy, CancellationToken cancellationToken = default);

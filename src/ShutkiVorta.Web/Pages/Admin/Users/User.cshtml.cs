@@ -4,6 +4,7 @@ using ShutkiVorta.Application.Common.Interfaces;
 using ShutkiVorta.Application.Common.Security;
 using ShutkiVorta.Application.Features.Staff;
 using ShutkiVorta.Application.Features.TimeClock;
+using ShutkiVorta.Domain.TimeClock;
 using ShutkiVorta.Web.Infrastructure;
 
 namespace ShutkiVorta.Web.Pages.Admin.Users;
@@ -27,6 +28,10 @@ public sealed class UserModel(ISender sender, ICurrentStaff currentStaff, IDateT
     public bool IsAdmin => Viewer.IsAdmin;
     public bool IsYou => string.Equals(Viewer.UserId, Member.UserId, StringComparison.OrdinalIgnoreCase);
     public DateTime NowLocal { get; private set; }
+
+    /// <summary>Their open shift is most likely a forgotten clock-out (removing them closes it as a missed clock-out).</summary>
+    public bool OpenShiftIsStale =>
+        Details.OnClockSinceUtc is { } since && ShiftRules.IsStale(since, clock.UtcNow, clock.BusinessTimeZone);
 
     /// <summary>The set-password link of the invitation just sent: shown this once.</summary>
     public InvitationFlash? Invitation { get; private set; }

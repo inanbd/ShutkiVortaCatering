@@ -360,9 +360,9 @@ else if (Model.IsAdmin && m.Role is not null && !m.HasStaffAccess)
             <section class="panel danger-zone">
                 <div class="panel-head"><h2>Remove from staff</h2></div>
                 <div class="panel-body">
-                    <p class="small">@firstName keeps their account and shifts but can no longer open the staff pages.@(onClockSince is null ? "" : " Their open shift is closed now and flagged for review.")</p>
+                    <p class="small">@firstName keeps their account and shifts but can no longer open the staff pages.@(onClockSince is null ? "" : Model.OpenShiftIsStale ? " Their open shift looks like a forgotten clock-out, so it is closed as a missed clock-out (no hours until someone enters the time) and flagged for review." : " Their open shift is closed now and flagged for review.")</p>
                     <form method="post" asp-page-handler="Remove"
-                          data-confirm="Remove @m.FullName from the staff? They keep their account and shifts and lose access at once. If they're on the clock, their shift is closed now and flagged for review.">
+                          data-confirm="Remove @m.FullName from the staff? They keep their account and shifts and lose access at once. If they're on the clock, their shift is closed and flagged for review (a forgotten one from an earlier day as a missed clock-out, without hours).">
                         <input type="hidden" name="version" value="@d.Version" />
                         <button class="btn btn-danger btn-sm" type="submit">@Icons.Get("trash") Remove from staff</button>
                     </form>

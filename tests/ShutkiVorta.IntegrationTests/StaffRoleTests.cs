@@ -125,7 +125,11 @@ public sealed class StaffRoleTests
             await scope.ServiceProvider.GetRequiredService<IStaffPermissionStore>().UpdateProfileAsync(employee.UserId, "Prep cook", "tests");
         }
 
-        await InsertOpenShiftAsync(app, employee.UserId, DateTime.UtcNow.AddHours(-3));
+        // A shift of today that is still going (not one forgotten on an earlier day), whatever time the test runs.
+        var clock = app.Services.GetRequiredService<IDateTimeProvider>();
+        var startOfToday = BusinessTime.StartOfDayUtc(BusinessTime.DateOf(clock.UtcNow, clock.BusinessTimeZone), clock.BusinessTimeZone);
+        var clockIn = new[] { clock.UtcNow.AddHours(-3), startOfToday }.Max();
+        await InsertOpenShiftAsync(app, employee.UserId, clockIn);
 
         using (var scope = app.Services.CreateScope())
         {
@@ -154,6 +158,8 @@ public sealed class StaffRoleTests
 
         var shift = await QuerySingleAsync<ShiftRow>(app, "SELECT ClockOutUtc, ClockOutSource, NeedsReview, EditReason FROM TimeClockShifts WHERE UserId = @Id", new { Id = employee.UserId });
         Assert.NotNull(shift.ClockOutUtc);
+        Assert.InRange(shift.ClockOutUtc.Value, clock.UtcNow.AddMinutes(-1), clock.UtcNow); // closed now
+        Assert.Equal(0, shift.ClockOutUtc.Value.Ticks % TimeSpan.TicksPerSecond); // to the second, like every punch
         Assert.Equal((int)ClockOutSource.System, shift.ClockOutSource);
         Assert.True(shift.NeedsReview);
         Assert.Equal("Closed when removed from staff", shift.EditReason);
@@ -161,6 +167,38 @@ public sealed class StaffRoleTests
         Assert.False((await AccessAsync(app, employee.UserId)).IsStaff);
         Assert.Contains(await AuditAsync(app, employee.UserId), e =>
             e.Action == StaffAuditActions.StaffRemoved && e.Details!.Contains("open shift was closed", StringComparison.Ordinal));
+    }
+
+    [Theory]
+    [MemberData(nameof(TestServers.Providers), MemberType = typeof(TestServers))]
+    public async Task RemovingSomeone_WhoForgotToClockOutDaysAgo_ClosesThatShiftAsAMissedClockOut_WithoutHours(string provider)
+    {
+        await using var app = new AppFactory(provider);
+        var seedAdmin = await UserIdAsync(app, AppFactory.AdminEmail);
+        var employee = await CreateStaffAsync(app, StaffRole.Employee);
+        var clockIn = new DateTime(DateTime.UtcNow.AddDays(-3).Ticks / TimeSpan.TicksPerSecond * TimeSpan.TicksPerSecond, DateTimeKind.Utc);
+        await InsertOpenShiftAsync(app, employee.UserId, clockIn);
+
+        Assert.True((await StoreAsync(app, s => s.SetStaffRoleAsync(employee.UserId, null, seedAdmin, "tests"))).Succeeded);
+
+        // Not 72 hours of pay and overtime: closed at its own clock-in, like "I don't remember", for a manager to fix.
+        var row = await QuerySingleAsync<ShiftRow>(app, "SELECT ClockOutUtc, ClockOutSource, NeedsReview, EditReason FROM TimeClockShifts WHERE UserId = @Id", new { Id = employee.UserId });
+        Assert.Equal(clockIn, DateTime.SpecifyKind(row.ClockOutUtc!.Value, DateTimeKind.Utc));
+        Assert.Equal((int)ClockOutSource.Missed, row.ClockOutSource);
+        Assert.True(row.NeedsReview);
+        Assert.StartsWith("Missed clock-out", row.EditReason);
+
+        using (var scope = app.Services.CreateScope())
+        {
+            var shifts = scope.ServiceProvider.GetRequiredService<ITimeClockRepository>();
+            var shift = Assert.Single(await shifts.ListOverlappingAsync(clockIn.AddDays(-1), DateTime.UtcNow.AddDays(1), employee.UserId));
+            Assert.True(shift.IsMissedClockOut);
+            Assert.False(shift.CountsTowardsHours);
+            Assert.Equal(TimeSpan.Zero, shift.HoursWithin(clockIn.AddDays(-7), DateTime.UtcNow.AddDays(1)));
+        }
+
+        Assert.Contains(await AuditAsync(app, employee.UserId), e =>
+            e.Action == StaffAuditActions.StaffRemoved && e.Details!.Contains("closed as a missed clock-out", StringComparison.Ordinal));
     }
 
     [Theory]
