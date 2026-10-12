@@ -197,6 +197,32 @@ public sealed class StaffHandlerTests
     }
 
     [Fact]
+    public async Task AnAccountAnotherRequestCreatedMeanwhile_IsNotTakenOver_NorInvitedTwice()
+    {
+        // Another tab created the account between this request's check and its insert, and has not made it staff yet.
+        var raced = Account("raced-1", "rahim@test.local", confirmed: false, hasPassword: false);
+        _identity.FindByEmailAsync("rahim@test.local").Returns(null, raced);
+        _identity.CreateStaffAccountAsync(default!, default!, default).ReturnsForAnyArgs(Result<string>.Failure("Email 'rahim@test.local' is already taken."));
+
+        var error = await Assert.ThrowsAsync<ValidationException>(() => Members().Handle(Add(), CancellationToken.None));
+
+        Assert.Contains("was created a moment ago", Assert.Single(error.Errors["Email"]));
+        await _identity.DidNotReceiveWithAnyArgs().ResetToInvitationAsync(default!);
+        await _store.DidNotReceiveWithAnyArgs().SetStaffRoleAsync(default!, default, default!, default!);
+        Assert.Empty(_sent);
+
+        // Once that request has made them staff: "already on the staff", as for any repeated add.
+        _identity.FindByEmailAsync("rahim@test.local").Returns(null, raced);
+        _directory.GetAsync("raced-1", Arg.Any<CancellationToken>()).Returns(Member("raced-1", StaffRole.Employee, hasPassword: false, confirmed: false));
+
+        var again = await Members().Handle(Add(), CancellationToken.None);
+
+        Assert.Equal(AddStaffMemberOutcome.AlreadyStaff, again.Outcome);
+        await _identity.DidNotReceiveWithAnyArgs().ResetToInvitationAsync(default!);
+        Assert.Empty(_sent);
+    }
+
+    [Fact]
     public async Task TheInvitationLink_IsOnlyInTheSensitiveEmailAndTheResult_NeverInTheAuditLog()
     {
         var result = await Members().Handle(Add(), CancellationToken.None);

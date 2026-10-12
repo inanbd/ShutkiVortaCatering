@@ -38,7 +38,17 @@ internal sealed class DapperUserStore(IDbConnectionFactory connections, Identity
             """;
 
         await using var connection = await connections.OpenAsync(cancellationToken);
-        await connection.ExecuteAsync(new CommandDefinition(sql, user, cancellationToken: cancellationToken));
+        try
+        {
+            await connection.ExecuteAsync(new CommandDefinition(sql, user, cancellationToken: cancellationToken));
+        }
+        catch (Exception ex) when (DbErrors.IsUniqueViolation(ex))
+        {
+            // Another request created an account with this email (the user name) between Identity's check and this insert:
+            // two tabs, two admins, a repeated post or a double registration.
+            return IdentityResult.Failed(errors.DuplicateEmail(user.Email));
+        }
+
         return IdentityResult.Success;
     }
 

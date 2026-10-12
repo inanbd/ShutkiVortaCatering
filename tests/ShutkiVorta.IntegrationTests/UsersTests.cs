@@ -366,6 +366,49 @@ public sealed partial class UsersTests(TestServers servers)
 
     [Theory]
     [MemberData(nameof(TestServers.Providers), MemberType = typeof(TestServers))]
+    public async Task AddingTheSamePersonFromSeveralTabsAtOnce_CreatesOneAccount_AndNeverFails(string provider)
+    {
+        var app = servers.Get(provider);
+        var email = NewEmail("race");
+
+        // The store reports a second insert of the same email as a duplicate (what Identity's own check says), not a crash.
+        using (var scope = app.Services.CreateScope())
+        {
+            var store = scope.ServiceProvider.GetRequiredService<IUserStore<ApplicationUser>>();
+            var users = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
+            ApplicationUser NewUser() => new()
+            {
+                UserName = email, NormalizedUserName = users.NormalizeName(email), Email = email, NormalizedEmail = users.NormalizeEmail(email),
+                FullName = "Race", SecurityStamp = Guid.NewGuid().ToString(), CreatedAtUtc = DateTime.UtcNow,
+            };
+            Assert.True((await store.CreateAsync(NewUser(), CancellationToken.None)).Succeeded);
+            var duplicate = await store.CreateAsync(NewUser(), CancellationToken.None);
+            Assert.False(duplicate.Succeeded);
+            Assert.Equal("DuplicateEmail", Assert.Single(duplicate.Errors).Code);
+            await users.DeleteAsync((await users.FindByEmailAsync(email))!);
+        }
+
+        // Six posts of the same new person at once: one account, and every answer a page, never an error.
+        var admin = await SignInAsync(app, AppFactory.AdminEmail);
+        var form = await admin.GetStringAsync("/admin/users/add");
+        var fields = new Dictionary<string, string>
+        {
+            ["Input.FullName"] = "Race Person",
+            ["Input.Email"] = email,
+            ["Input.PhoneNumber"] = string.Empty,
+            ["Input.JobTitle"] = string.Empty,
+            ["Input.Role"] = nameof(StaffRole.Employee),
+        };
+        var answers = await Task.WhenAll(Enumerable.Range(0, 6).Select(_ => PostFormAsync(admin, "/admin/users/add", form, fields)));
+        Assert.All(answers, a => Assert.True(a.StatusCode is HttpStatusCode.Redirect or HttpStatusCode.OK, $"{(int)a.StatusCode}"));
+        Assert.Contains(answers, a => a.StatusCode == HttpStatusCode.Redirect);
+        var userId = await UserIdAsync(app, email);
+        Assert.Equal(1, (await QueryAsync<int>(app, "SELECT COUNT(*) FROM Users WHERE NormalizedEmail = @Email", new { Email = email.ToUpperInvariant() })).Single());
+        Assert.Equal(StaffRole.Employee, (await MemberAsync(app, userId)).Role);
+    }
+
+    [Theory]
+    [MemberData(nameof(TestServers.Providers), MemberType = typeof(TestServers))]
     public async Task AddingWithBadInput_ShowsTheProblems_AndCreatesNothing(string provider)
     {
         var app = servers.Get(provider);

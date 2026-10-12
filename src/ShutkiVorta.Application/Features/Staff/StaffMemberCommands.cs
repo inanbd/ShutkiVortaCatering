@@ -176,7 +176,8 @@ internal sealed class StaffMemberCommandHandlers(
             var created = await identity.CreateStaffAccountAsync(fullName, emailAddress, phone);
             if (!created.Succeeded)
             {
-                throw new ValidationException(nameof(AddStaffMemberCommand.Email), string.Join(" ", created.Errors));
+                return await AddedMeanwhileAsync(emailAddress, cancellationToken)
+                    ?? throw new ValidationException(nameof(AddStaffMemberCommand.Email), string.Join(" ", created.Errors));
             }
 
             await JoinStaffAsync(created.Value!, request.Role, request.JobTitle, cancellationToken);
@@ -332,6 +333,32 @@ internal sealed class StaffMemberCommandHandlers(
     }
 
     private string ActorId => currentUser.UserId ?? throw new ForbiddenAccessException();
+
+    /// <summary>
+    /// When creating the account failed because another request (a second tab, another admin, a repeated post) created it a
+    /// moment ago: that request's result. Not the takeover of an existing account, which would end the invitation the other
+    /// request is sending. Null when no such account exists (another reason).
+    /// </summary>
+    private async Task<AddStaffMemberResult?> AddedMeanwhileAsync(string emailAddress, CancellationToken cancellationToken)
+    {
+        if (await identity.FindByEmailAsync(emailAddress) is not { } account)
+        {
+            return null;
+        }
+
+        var member = await directory.GetAsync(account.Id, cancellationToken);
+        if (member?.Role is null)
+        {
+            throw new ValidationException(nameof(AddStaffMemberCommand.Email),
+                $"An account for {emailAddress} was created a moment ago, perhaps from another tab. Open it from the Users list.");
+        }
+
+        return new AddStaffMemberResult
+        {
+            Outcome = AddStaffMemberOutcome.AlreadyStaff,
+            ExistingAccount = await DescribeAsync(account, member, cancellationToken),
+        };
+    }
 
     private async Task<StaffMemberDto> RequireMemberAsync(string userId, CancellationToken cancellationToken) =>
         await directory.GetAsync(userId.Trim(), cancellationToken) ?? throw new NotFoundException("Staff member", userId);
