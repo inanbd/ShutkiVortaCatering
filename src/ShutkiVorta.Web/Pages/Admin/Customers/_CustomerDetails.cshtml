@@ -1,0 +1,217 @@
+@model CustomerDetailsDto
+@inject IDateTimeProvider Clock
+@{
+    var c = Model.Customer;
+    var isAccount = c.AccountId is not null;
+    DateTime? Local(DateTime? utc) => utc is { } value ? Clock.ToBusinessTime(value) : null;
+    string Day(DateTime? utc) => Local(utc) is { } local ? Format.ShortDate(local) : "—";
+    var phoneLink = new string((c.Phone ?? string.Empty).Where(ch => char.IsDigit(ch) || ch == '+').ToArray());
+    var showLatestDelivery = c.LatestDeliveryAddress is not null
+        && !string.Equals(c.LatestDeliveryAddress, c.SavedAddress, StringComparison.OrdinalIgnoreCase);
+}
+
+<div class="customer-heading">
+    @CustomersUi.TypePill(c.Type)
+    @if (isAccount)
+    {
+        @if (c.EmailConfirmed)
+        {
+            <span class="pill pill-on">Email confirmed</span>
+        }
+        else
+        {
+            <span class="pill pill-warn">Email not confirmed</span>
+        }
+
+        @if (c.IsStaff)
+        {
+            <span class="pill pill-staff"><a href="@CustomersUi.StaffPath(c.AccountId!)" link-permission="@Permissions.StaffView">Also staff</a></span>
+        }
+    }
+    else
+    {
+        <span class="small muted">Ordered without an account</span>
+    }
+</div>
+
+@if (c.UnconfirmedAccountId is { } unconfirmed)
+{
+    <div class="alert alert-warn">
+        @Icons.Get("alert") An account uses this email too but hasn't confirmed it, so these orders are not counted on that account.
+        <a href="@CustomersUi.AccountPath(unconfirmed)">Open the account</a>
+    </div>
+}
+
+<div class="kpis customer-kpis">
+    <div class="kpi">
+        <div class="label">Orders</div>
+        <div class="value">@c.OrderCount</div>
+        <div class="sub">@(c.CancelledCount > 0 ? $"and {c.CancelledCount} cancelled" : "not counting cancelled ones")</div>
+    </div>
+    <div class="kpi gold">
+        <div class="label">Order value</div>
+        <div class="value">@Ui.Money(c.OrderValue)</div>
+        <div class="sub" title="@CustomersUi.OrderValueHint">payments are not tracked</div>
+    </div>
+    <div class="kpi">
+        <div class="label">Average order</div>
+        <div class="value">@(c.OrderCount == 0 ? "—" : Ui.Money(c.AverageOrder))</div>
+        <div class="sub">per order</div>
+    </div>
+    <div class="kpi maroon">
+        <div class="label">Last order</div>
+        <div class="value customer-kpi-date">@Day(c.LastOrderUtc)</div>
+        <div class="sub">first: @Day(c.FirstOrderUtc)</div>
+    </div>
+</div>
+
+<div class="detail-grid customer-grid">
+    <div>
+        <section class="panel">
+            <div class="panel-head">
+                <h2>Orders</h2>
+                @if (Model.HasMoreOrders)
+                {
+                    <span class="small muted">The newest @Model.Orders.Count of @c.AllOrderCount</span>
+                }
+            </div>
+            <div class="panel-body flush">
+                @if (Model.Orders.Count == 0)
+                {
+                    <p class="muted" style="padding:24px;">No orders yet.</p>
+                }
+                else
+                {
+                    <div class="table-wrap">
+                        <table class="table customer-orders">
+                            <thead>
+                                <tr><th>Order</th><th>Placed</th><th>Scheduled</th><th>Status</th><th class="num">Total</th></tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var o in Model.Orders)
+                                {
+                                    <tr class="@(o.Status == OrderStatus.Cancelled ? "row-muted" : null)">
+                                        <td>
+                                            <a class="strong" href="@CustomersUi.OrderPath(o.OrderNumber)" link-permission="@Permissions.OrdersView">@o.OrderNumber</a>
+                                            @if (o.IsRestaurantOrder)
+                                            {
+                                                <span class="source-badge">@Icons.Get("repeat") Restaurant</span>
+                                            }
+                                            <div class="preview">@o.ItemsPreview</div>
+                                        </td>
+                                        <td class="nowrap" data-label="Placed">@Day(o.CreatedAtUtc)</td>
+                                        <td data-label="Scheduled">@o.ScheduledFor.ToString("ddd, MMM d, yyyy", Format.Culture) <span class="small muted">@Format.Time(o.ScheduledFor)</span></td>
+                                        <td data-label="Status"><partial name="_StatusBadge" model="o.Status" /></td>
+                                        <td class="num" data-label="Total">@Ui.Money(o.Total)</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+            </div>
+        </section>
+    </div>
+
+    <div>
+        <section class="panel">
+            <div class="panel-head"><h2>Contact</h2></div>
+            <div class="panel-body">
+                <dl class="kv">
+                    <dt>Name</dt><dd>@c.Name</dd>
+                    <dt>Email</dt><dd class="customer-break"><a href="mailto:@c.Email">@c.Email</a></dd>
+                    <dt>Phone</dt>
+                    <dd>
+                        @if (string.IsNullOrWhiteSpace(c.Phone))
+                        {
+                            <text>—</text>
+                        }
+                        else
+                        {
+                            <a href="tel:@phoneLink">@c.Phone</a>
+                        }
+                    </dd>
+                    @if (c.SavedAddress is not null)
+                    {
+                        <dt>Address</dt><dd>@c.SavedAddress</dd>
+                    }
+                    @if (showLatestDelivery)
+                    {
+                        <dt>Latest delivery</dt><dd>@c.LatestDeliveryAddress <span class="small muted">(@Day(c.LatestDeliveryUtc))</span></dd>
+                    }
+                    else if (c.SavedAddress is null)
+                    {
+                        <dt>Address</dt><dd class="muted">None yet (no delivery orders)</dd>
+                    }
+                    @if (isAccount)
+                    {
+                        <dt>Joined</dt><dd>@Day(c.JoinedUtc)</dd>
+                    }
+                </dl>
+            </div>
+        </section>
+
+        @if (Model.StandingOrders.Count > 0)
+        {
+            <section class="panel">
+                <div class="panel-head"><h2>Restaurant standing orders</h2></div>
+                <div class="panel-body">
+                    <ul class="customer-list">
+                        @foreach (var s in Model.StandingOrders)
+                        {
+                            <li>
+                                <span class="customer-list-head">
+                                    <a class="strong" href="@CustomersUi.StandingOrderPath(s.Id)" link-permission="@Permissions.RestaurantsView">@s.BusinessName</a>
+                                    <partial name="_StandingOrderBadge" model="s.Status" />
+                                </span>
+                                <span class="small muted">@s.Reference · @s.DaysText · from @Format.ShortDate(s.StartDate)</span>
+                            </li>
+                        }
+                    </ul>
+                </div>
+            </section>
+        }
+
+        @if (Model.Inquiries is { } inquiries)
+        {
+            <section class="panel">
+                <div class="panel-head">
+                    <h2>Inquiries</h2>
+                    <a class="small" href="@CustomersUi.InquiriesPath?all=true">All inquiries</a>
+                </div>
+                <div class="panel-body">
+                    @if (inquiries.Count == 0)
+                    {
+                        <p class="muted mb-0">No inquiries from this email.</p>
+                    }
+                    else
+                    {
+                        <ul class="customer-list">
+                            @foreach (var i in inquiries)
+                            {
+                                <li>
+                                    <span class="customer-list-head">
+                                        <strong>@i.TopicName</strong>
+                                        <span class="pill @(i.IsHandled ? "pill-off" : "pill-on")">@(i.IsHandled ? "Handled" : "Open")</span>
+                                    </span>
+                                    <span class="small muted">
+                                        @Format.DateTime(i.CreatedAtLocal)
+                                        @if (i.EventDate is { } date)
+                                        {
+                                            <text> · event @Format.ShortDate(date)</text>
+                                        }
+                                        @if (i.GuestCount is { } guests)
+                                        {
+                                            <text> · @guests guests</text>
+                                        }
+                                    </span>
+                                    <span class="customer-message">@CustomersUi.Shorten(i.Message)</span>
+                                </li>
+                            }
+                        </ul>
+                    }
+                </div>
+            </section>
+        }
+    </div>
+</div>

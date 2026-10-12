@@ -1,5 +1,4 @@
 using System.Text;
-using Dapper;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.Extensions.Options;
@@ -8,15 +7,12 @@ using ShutkiVorta.Application.Common.Models;
 using ShutkiVorta.Application.Common.Security;
 using ShutkiVorta.Application.Features.Accounts;
 using ShutkiVorta.Application.Features.Staff;
-using ShutkiVorta.Infrastructure.Persistence;
 
 namespace ShutkiVorta.Infrastructure.Identity;
 
 internal sealed class IdentityService(
     UserManager<ApplicationUser> userManager,
     SignInManager<ApplicationUser> signInManager,
-    IDbConnectionFactory connections,
-    ISqlDialect dialect,
     IOptionsMonitor<AccountOptions> account) : IIdentityService
 {
     public bool RequireConfirmedEmail => account.CurrentValue.RequireConfirmedEmail;
@@ -196,56 +192,6 @@ internal sealed class IdentityService(
         return result.Succeeded ? Result.Success() : Result.Failure(result.Errors.Select(e => e.Description));
     }
 
-    public async Task<PagedResult<UserAccount>> SearchUsersAsync(string? search, int page, int pageSize, CancellationToken cancellationToken = default)
-    {
-        var where = string.Empty;
-        var parameters = new DynamicParameters();
-        if (!string.IsNullOrWhiteSpace(search))
-        {
-            var term = search.Replace("%", string.Empty).Replace("_", string.Empty).Replace("[", string.Empty).Trim();
-            where = "WHERE u.Email LIKE @Pattern OR u.FullName LIKE @Pattern OR u.PhoneNumber LIKE @Pattern";
-            parameters.Add("Pattern", $"%{term}%");
-        }
-
-        parameters.Add("Skip", (page - 1) * pageSize);
-        parameters.Add("Take", pageSize);
-
-        await using var connection = await connections.OpenAsync(cancellationToken);
-        var total = await connection.ExecuteScalarAsync<int>(new CommandDefinition(
-            $"SELECT COUNT(*) FROM Users u {where}", parameters, cancellationToken: cancellationToken));
-        if (total == 0)
-        {
-            return PagedResult<UserAccount>.Empty(page, pageSize);
-        }
-
-        var sql = dialect.Page($"""
-            SELECT u.Id, u.Email, u.FullName, u.PhoneNumber, u.EmailConfirmed, u.AddressLine1, u.AddressLine2, u.City, u.State,
-                   u.PostalCode, u.CreatedAtUtc, u.LockoutEndUtc
-            FROM Users u {where}
-            ORDER BY u.CreatedAtUtc DESC
-            """);
-
-        var rows = await connection.QueryAsync<UserRow>(new CommandDefinition(sql, parameters, cancellationToken: cancellationToken));
-        var now = DateTime.UtcNow;
-        var items = rows.Select(r => new UserAccount
-        {
-            Id = r.Id,
-            Email = r.Email,
-            FullName = r.FullName,
-            PhoneNumber = r.PhoneNumber,
-            EmailConfirmed = r.EmailConfirmed,
-            AddressLine1 = r.AddressLine1,
-            AddressLine2 = r.AddressLine2,
-            City = r.City,
-            State = r.State,
-            PostalCode = r.PostalCode,
-            CreatedAtUtc = r.CreatedAtUtc,
-            IsLockedOut = r.LockoutEndUtc is { } end && end > now,
-        }).ToList();
-
-        return new PagedResult<UserAccount>(items, total, page, pageSize);
-    }
-
     // ---- Staff accounts ----
 
     public async Task<Result<string>> CreateStaffAccountAsync(string fullName, string email, string? phoneNumber)
@@ -417,21 +363,5 @@ internal sealed class IdentityService(
         {
             return null;
         }
-    }
-
-    private sealed class UserRow
-    {
-        public string Id { get; init; } = string.Empty;
-        public string Email { get; init; } = string.Empty;
-        public string FullName { get; init; } = string.Empty;
-        public string? PhoneNumber { get; init; }
-        public bool EmailConfirmed { get; init; }
-        public string? AddressLine1 { get; init; }
-        public string? AddressLine2 { get; init; }
-        public string? City { get; init; }
-        public string? State { get; init; }
-        public string? PostalCode { get; init; }
-        public DateTime CreatedAtUtc { get; init; }
-        public DateTime? LockoutEndUtc { get; init; }
     }
 }

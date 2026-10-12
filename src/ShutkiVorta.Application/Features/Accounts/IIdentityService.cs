@@ -39,8 +39,6 @@ public interface IIdentityService
 
     Task<Result> UpdateProfileAsync(string userId, UserProfileUpdate update);
 
-    Task<PagedResult<UserAccount>> SearchUsersAsync(string? search, int page, int pageSize, CancellationToken cancellationToken = default);
-
     // ---- Staff accounts (the Users pages, for Admins) ----
 
     /// <summary>

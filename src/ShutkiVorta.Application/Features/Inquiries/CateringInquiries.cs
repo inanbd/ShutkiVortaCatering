@@ -22,6 +22,9 @@ public interface ICateringInquiryRepository
     Task UpdateAsync(CateringInquiry inquiry, CancellationToken cancellationToken = default);
     Task<PagedResult<CateringInquiry>> ListAsync(bool onlyOpen, int page, int pageSize, CancellationToken cancellationToken = default);
     Task<int> CountOpenAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>The newest inquiries sent with this email (compared lower-cased, as stored), newest first.</summary>
+    Task<IReadOnlyList<CateringInquiry>> GetByEmailAsync(string email, int take, CancellationToken cancellationToken = default);
 }
 
 public sealed record SubmitCateringInquiryCommand(

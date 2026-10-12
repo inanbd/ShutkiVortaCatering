@@ -1,0 +1,10 @@
+@page "/admin/customers/{id:guid}"
+@model ShutkiVorta.Web.Pages.Admin.Customers.CustomerModel
+@section Head {
+    <link rel="stylesheet" href="~/css/admin-customers.css" asp-append-version="true" />
+}
+@section Actions {
+    <a class="btn btn-outline btn-sm" href="@CustomersUi.CustomersPath">&larr; Customers</a>
+}
+
+<partial name="_CustomerDetails" model="Model.Details" />

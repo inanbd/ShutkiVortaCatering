@@ -1,39 +1,122 @@
 @page
 @model ShutkiVorta.Web.Pages.Admin.Customers.IndexModel
+@{
+    var list = Model.List;
+    var customers = list.Customers;
+}
+@section Head {
+    <link rel="stylesheet" href="~/css/admin-customers.css" asp-append-version="true" />
+}
+
+<nav class="tabs" aria-label="Customer types">
+    @foreach (var (type, label) in CustomersUi.Tabs)
+    {
+        var active = Model.Type == type;
+        <a class="@(active ? "active" : null)" href="@Model.TabUrl(type)" aria-current="@(active ? "page" : null)">@label <span class="count">@CustomersUi.TabCount(list, type)</span></a>
+    }
+</nav>
 
 <section class="panel">
     <div class="panel-head">
         <form method="get" class="filters" style="width:100%;">
+            @if (Model.Type is { } type)
+            {
+                <input type="hidden" name="type" value="@type.ToString().ToLowerInvariant()" />
+            }
             <div class="field grow">
-                <label for="q">Search customers</label>
-                <input id="q" name="q" value="@Model.Q" placeholder="Name, email or phone" />
+                <label for="q">Search</label>
+                <input id="q" name="q" value="@Model.Search" placeholder="Name, email, phone or restaurant" autocomplete="off" />
+            </div>
+            <div class="field">
+                <label for="sort">Sort by</label>
+                <select id="sort" name="sort">
+                    @foreach (var sort in Enum.GetValues<CustomerSort>())
+                    {
+                        <option value="@sort.ToString().ToLowerInvariant()" selected="@(Model.Sort == sort)">@sort.DisplayName()</option>
+                    }
+                </select>
             </div>
             <button class="btn btn-green btn-sm" type="submit">@Icons.Get("search") Search</button>
+            @if (Model.IsSearching || Model.Sort != CustomerSort.LastOrder)
+            {
+                <a class="btn btn-outline btn-sm" href="@Model.ResetUrl">Reset</a>
+            }
         </form>
     </div>
-    <div class="panel-body flush table-wrap">
-        @if (Model.Users.Items.Count == 0)
+    <div class="panel-body flush">
+        @if (customers.Items.Count == 0)
         {
-            <p class="muted" style="padding:24px;">No registered customers found. Guests who check out without an account appear on the Orders page.</p>
+            <p class="muted" style="padding:24px;">
+                @if (Model.IsSearching)
+                {
+                    <text>Nobody matches your search.</text>
+                }
+                else if (Model.Type is CustomerType.Guest)
+                {
+                    <text>No guest orders yet. People who check out without an account appear here, one row per email.</text>
+                }
+                else if (Model.Type is CustomerType.Restaurant)
+                {
+                    <text>No restaurants yet. Accounts that ask for a standing order appear here.</text>
+                }
+                else
+                {
+                    <text>No customers yet. People appear here when they create an account or place an order.</text>
+                }
+            </p>
         }
         else
         {
-            <table class="table">
-                <thead><tr><th>Name</th><th>Contact</th><th>Joined</th><th class="num">Orders</th></tr></thead>
-                <tbody>
-                    @foreach (var u in Model.Users.Items)
-                    {
-                        var a = u.Account;
+            <div class="table-wrap">
+                <table class="table customer-cards">
+                    <thead>
                         <tr>
-                            <td><strong>@a.FullName</strong>@if (!a.EmailConfirmed) {<text><br /><span class="small muted">email not confirmed</span></text>}</td>
-                            <td>@a.Email<br /><span class="small muted">@a.PhoneNumber</span></td>
-                            <td class="small">@a.CreatedAtUtc.ToString("MMM d, yyyy", Format.Culture)</td>
-                            <td class="num"><a href="/admin/orders?q=@Uri.EscapeDataString(a.Email)">@u.OrderCount</a></td>
+                            <th>Name</th><th>Contact</th><th>Type</th><th class="num">Orders</th>
+                            <th class="num"><abbr title="@CustomersUi.OrderValueHint">Order value</abbr></th>
+                            <th>Last order</th><th>Joined</th>
                         </tr>
-                    }
-                </tbody>
-            </table>
+                    </thead>
+                    <tbody>
+                        @foreach (var c in customers.Items)
+                        {
+                            var lastOrder = Model.Local(c.LastOrderUtc);
+                            var guest = c.Type == CustomerType.Guest;
+                            <tr>
+                                <td class="customer-name">
+                                    <a class="strong" href="@CustomersUi.DetailsPath(c)">@c.Name</a>
+                                    @if (!string.IsNullOrWhiteSpace(c.BusinessName))
+                                    {
+                                        <span class="customer-business">@c.BusinessName</span>
+                                    }
+                                </td>
+                                <td class="customer-contact" data-label="Contact">
+                                    <span>@c.Email</span>
+                                    @if (!string.IsNullOrWhiteSpace(c.Phone))
+                                    {
+                                        <span class="muted">@c.Phone</span>
+                                    }
+                                </td>
+                                <td data-label="Type">@CustomersUi.TypePill(c.Type)</td>
+                                <td class="num" data-label="Orders">@c.OrderCount</td>
+                                <td class="num" data-label="Order value">@Ui.Money(c.OrderValue)</td>
+                                <td data-label="Last order">@(lastOrder is { } last ? Format.ShortDate(last) : "—")</td>
+                                <td data-label="@(guest ? "First order" : "Joined")">
+                                    @Format.ShortDate(Model.Local(c.JoinedUtc)!.Value)
+                                    @if (guest)
+                                    {
+                                        <span class="customer-joined-note small muted">first order</span>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
         }
     </div>
 </section>
-<partial name="_Pager" model="(Model.Users.Page, Model.Users.TotalPages, (Func<int, string>)Model.PageUrl)" />
+<p class="small muted mt-2">
+    @customers.TotalCount @(customers.TotalCount == 1 ? "customer" : "customers")@(Model.IsSearching ? " match your search" : string.Empty).
+    Orders and order value leave out cancelled orders. Order value is what was ordered, paid or not: payments are not tracked.
+</p>
+<partial name="_Pager" model="(customers.Page, customers.TotalPages, (Func<int, string>)Model.PageUrl)" />

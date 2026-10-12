@@ -1,0 +1,10 @@
+@page "/admin/customers/guest/{orderNumber}"
+@model ShutkiVorta.Web.Pages.Admin.Customers.GuestModel
+@section Head {
+    <link rel="stylesheet" href="~/css/admin-customers.css" asp-append-version="true" />
+}
+@section Actions {
+    <a class="btn btn-outline btn-sm" href="@CustomersUi.CustomersPath?type=guest">&larr; Guests</a>
+}
+
+<partial name="_CustomerDetails" model="Model.Details" />

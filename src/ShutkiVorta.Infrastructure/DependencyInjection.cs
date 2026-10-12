@@ -129,6 +129,9 @@ public static class DependencyInjection
         services.AddScoped<IStaffEmailLog, StaffEmailLog>();
         services.AddScoped<IStaffProfileVersions, StaffProfileVersions>();
 
+        // ---- Customers ----
+        services.AddScoped<Application.Features.Customers.ICustomerRepository, CustomerRepository>();
+
         return services;
     }
 

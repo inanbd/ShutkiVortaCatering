@@ -63,4 +63,14 @@ internal sealed class CateringInquiryRepository(IDbConnectionFactory connections
         return await connection.ExecuteScalarAsync<int>(new CommandDefinition(
             "SELECT COUNT(*) FROM CateringInquiries WHERE IsHandled = 0", cancellationToken: cancellationToken));
     }
+
+    public async Task<IReadOnlyList<CateringInquiry>> GetByEmailAsync(string email, int take, CancellationToken cancellationToken = default)
+    {
+        await using var connection = await connections.OpenAsync(cancellationToken);
+        var items = await connection.QueryAsync<CateringInquiry>(new CommandDefinition(
+            dialect.Page($"SELECT {Columns} FROM CateringInquiries WHERE Email = @Email ORDER BY CreatedAtUtc DESC, Id DESC"),
+            new { Email = email.Trim().ToLowerInvariant(), Skip = 0, Take = take },
+            cancellationToken: cancellationToken));
+        return items.AsList();
+    }
 }

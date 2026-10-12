@@ -15,7 +15,8 @@ internal sealed class OrderRepository(IDbConnectionFactory connections, ISqlDial
         CreatedAtUtc, UpdatedAtUtc, StandingOrderId, CompanyName
         """;
 
-    private const string SummaryColumns = """
+    /// <summary>The columns of <see cref="OrderSummaryDto"/> (orders aliased <c>o</c>); also used by the customer pages.</summary>
+    internal const string SummaryColumns = """
         o.Id, o.OrderNumber, o.CustomerId, o.CustomerName, o.Email, o.Phone, o.Fulfillment, o.ScheduledFor, o.Status,
         o.Subtotal, o.DeliveryFee, o.Tax, o.Total, o.CreatedAtUtc, o.StandingOrderId, o.CompanyName
         """;
@@ -292,7 +293,7 @@ internal sealed class OrderRepository(IDbConnectionFactory connections, ISqlDial
     }
 
     /// <summary>Adds a short "2 lb Loitta Shutki Vorta, 1 lb Aloo Vorta" description to each summary row.</summary>
-    private static async Task AttachPreviewsAsync(DbConnection connection, List<OrderSummaryDto> orders, CancellationToken cancellationToken)
+    internal static async Task AttachPreviewsAsync(DbConnection connection, List<OrderSummaryDto> orders, CancellationToken cancellationToken)
     {
         if (orders.Count == 0)
         {
