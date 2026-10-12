@@ -1,3 +1,4 @@
+using System.Globalization;
 using Dapper;
 using ShutkiVorta.Application.Common.Models;
 using ShutkiVorta.Application.Features.Customers;
@@ -302,6 +303,15 @@ internal sealed class CustomerRepository(IDbConnectionFactory connections, ISqlD
 
     private static DateTime? Utc(DateTime? value) => value is { } v ? Utc(v) : null;
 
+    /// <summary>A date read as an object: DateTime on SQL Server, text on SQLite, or null.</summary>
+    private static DateTime? Utc(object? value) => value switch
+    {
+        null => null,
+        DateTime date => Utc(date),
+        string text => Utc(DateTime.Parse(text, CultureInfo.InvariantCulture)),
+        _ => throw new InvalidCastException($"Expected a date, got {value.GetType().Name}."),
+    };
+
     private static string? OneLine(string? line1, string? line2, string? city, string? state, string? postalCode)
     {
         var text = string.Join(", ", new[] { line1, line2, city, $"{state} {postalCode}".Trim() }.Where(p => !string.IsNullOrWhiteSpace(p)));
@@ -327,7 +337,13 @@ internal sealed class CustomerRepository(IDbConnectionFactory connections, ISqlD
         public DateTime JoinedUtc { get; init; }
         public int OrderCount { get; init; }
         public decimal OrderValue { get; init; }
-        public DateTime? LastOrderUtc { get; init; }
+
+        /// <summary>
+        /// Read as it comes: SQLite returns dates as text, and when the first row's value is NULL it gives the computed column
+        /// no type, so Dapper would cast the other rows' text to DateTime? and fail.
+        /// </summary>
+        public object? LastOrderUtc { get; init; }
+
         public string? GuestOrderNumber { get; init; }
         public int IsRestaurant { get; init; }
 
