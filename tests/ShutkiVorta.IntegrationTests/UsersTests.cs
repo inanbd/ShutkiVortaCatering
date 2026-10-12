@@ -2,12 +2,14 @@ using System.Net;
 using System.Reflection;
 using System.Text.RegularExpressions;
 using Dapper;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Razor.Hosting;
 using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.Extensions.DependencyInjection;
 using ShutkiVorta.Application.Common.Interfaces;
 using ShutkiVorta.Application.Common.Security;
+using ShutkiVorta.Application.Features.Accounts;
 using ShutkiVorta.Application.Features.Staff;
 using ShutkiVorta.Application.Features.TimeClock;
 using ShutkiVorta.Domain.TimeClock;
@@ -217,11 +219,11 @@ public sealed partial class UsersTests(TestServers servers)
         var added = await AddUserAsync(admin, "Real Manager", email, StaffRole.Manager);
         Assert.Equal($"{Users}/{userId}", added.Headers.Location!.OriginalString); // no confirmation step: nobody proved they own it
 
-        // Their password is gone, their session gives no staff access, and their name is the one the admin entered.
+        // Their password is gone, their session is over, and their name is the one the admin entered.
         var account = await AccountAsync(app, userId);
         Assert.Null(account.PasswordHash);
         Assert.Equal("Real Manager", account.FullName);
-        AssertNotStaff(await squatter.GetAsync("/admin"));
+        AssertSignInRequired(await squatter.GetAsync("/admin"));
         Assert.NotEqual(HttpStatusCode.Redirect, (await LoginAsync(CreateClient(app), email, "Mine12345!")).StatusCode);
         Assert.Contains(await AuditAsync(app, userId), e => e.Action == StaffAuditActions.InvitationSent && e.Details!.Contains("never confirmed"));
 
@@ -231,6 +233,84 @@ public sealed partial class UsersTests(TestServers servers)
         var accepted = await AcceptInvitationAsync(owner, link, "Owner12345!");
         Assert.Equal(StaffLanding.Dashboard, accepted.Headers.Location!.OriginalString);
         Assert.Equal(HttpStatusCode.OK, (await owner.GetAsync("/admin")).StatusCode);
+    }
+
+    [Theory]
+    [MemberData(nameof(TestServers.Providers), MemberType = typeof(TestServers))]
+    public async Task TheSquattersOldSession_EndsAtTheTakeover_AndAProfileSaveCannotRevive_ItAsTheNewAdmin(string provider)
+    {
+        var app = servers.Get(provider);
+        var email = NewEmail("window");
+        var userId = await CreateAccountAsync(app, email, "Squatter Name", "Mine12345!", emailConfirmed: false);
+        var squatter = await SignInAsync(app, email, "Mine12345!");
+        var profileForm = await squatter.GetStringAsync("/account/manage"); // opened before the takeover
+
+        var admin = await SignInAsync(app, AppFactory.AdminEmail);
+        await AddUserAsync(admin, "Real Admin", email, StaffRole.Admin, phone: "214-555-0999");
+        var owner = CreateClient(app);
+        var accepted = await AcceptInvitationAsync(owner, InvitationLinkInEmail(await MailToAsync(app, email)), "Owner12345!");
+        Assert.Equal(StaffLanding.Dashboard, accepted.Headers.Location!.OriginalString);
+
+        // Well within Identity's 5-minute check, the old cookie is signed out on its next request: no profile (with the phone
+        // the admin entered), no profile save (which used to re-issue the cookie with the new stamp), and no admin pages.
+        AssertSignInRequired(await squatter.GetAsync("/account/manage"));
+        var saved = await PostFormAsync(squatter, "/account/manage", profileForm, new Dictionary<string, string>
+        {
+            ["Input.FullName"] = "Squatter Renamed This Admin",
+            ["Input.PhoneNumber"] = "2145550000",
+        });
+        Assert.NotEqual(HttpStatusCode.OK, saved.StatusCode);
+        Assert.DoesNotContain("/account/manage", saved.Headers.Location?.OriginalString ?? string.Empty, StringComparison.OrdinalIgnoreCase);
+        AssertSignInRequired(await squatter.GetAsync("/admin"));
+        AssertSignInRequired(await squatter.GetAsync("/admin/settings"));
+        var account = await AccountAsync(app, userId);
+        Assert.Equal("Real Admin", account.FullName);
+        Assert.Equal("214-555-0999", account.PhoneNumber);
+
+        // The owner's own session is untouched, and saving their profile keeps them signed in.
+        var ownForm = await owner.GetStringAsync("/account/manage");
+        Assert.Contains("214-555-0999", ownForm);
+        var ownSave = await PostFormAsync(owner, "/account/manage", ownForm, new Dictionary<string, string>
+        {
+            ["Input.FullName"] = "Real Admin",
+            ["Input.PhoneNumber"] = "214-555-0999",
+        });
+        Assert.Equal(HttpStatusCode.Redirect, ownSave.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await owner.GetAsync("/admin/settings")).StatusCode);
+    }
+
+    [Theory]
+    [MemberData(nameof(TestServers.Providers), MemberType = typeof(TestServers))]
+    public async Task RefreshingASignIn_WhoseStampChangedMeanwhile_SignsItOut_InsteadOfIssuingTheNewStamp(string provider)
+    {
+        var app = servers.Get(provider);
+        var email = NewEmail("race");
+        var userId = await CreateAccountAsync(app, email, "Race Squatter", "Mine12345!", emailConfirmed: false);
+
+        using var scope = app.Services.CreateScope();
+        var accessor = scope.ServiceProvider.GetRequiredService<IHttpContextAccessor>();
+        var context = new DefaultHttpContext { RequestServices = scope.ServiceProvider };
+        accessor.HttpContext = context;
+        try
+        {
+            var signIn = scope.ServiceProvider.GetRequiredService<SignInManager<ApplicationUser>>();
+            var users = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
+            context.User = await signIn.CreateUserPrincipalAsync((await users.FindByIdAsync(userId))!);
+
+            // The request passed the stamp check, then the account was taken over as an invitation before the profile save
+            // refreshed the sign-in.
+            var identity = scope.ServiceProvider.GetRequiredService<IIdentityService>();
+            Assert.True((await identity.ResetToInvitationAsync(userId)).Succeeded);
+            await identity.RefreshSignInAsync(userId);
+
+            var cookie = context.Response.Headers.SetCookie.ToString();
+            Assert.Contains("sv_auth=;", cookie); // deleted, not re-issued
+            Assert.Contains("expires=Thu, 01 Jan 1970", cookie, StringComparison.OrdinalIgnoreCase);
+        }
+        finally
+        {
+            accessor.HttpContext = null;
+        }
     }
 
     [Theory]

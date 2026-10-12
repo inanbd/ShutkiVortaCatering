@@ -73,10 +73,17 @@ internal sealed class IdentityService(
 
     public async Task RefreshSignInAsync(string userId)
     {
-        var user = await userManager.FindByIdAsync(userId);
-        if (user is not null)
+        // Re-issues the cookie (with the account's current stamp) only for a sign-in that is still current. A session the
+        // account's stamp change was meant to end (e.g. an unconfirmed account taken over as a staff invitation in the
+        // middle of this request) is signed out instead of being handed the new stamp.
+        var user = await signInManager.ValidateSecurityStampAsync(signInManager.Context.User);
+        if (user is not null && user.Id == userId)
         {
             await signInManager.RefreshSignInAsync(user);
+        }
+        else
+        {
+            await signInManager.SignOutAsync();
         }
     }
 

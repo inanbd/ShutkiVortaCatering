@@ -79,6 +79,7 @@ public static class DependencyInjection
             .AddTokenProvider<StaffInvitationTokenProvider>(StaffInvitationTokenProvider.ProviderName);
 
         services.AddScoped<IUserConfirmation<ApplicationUser>, SettingsUserConfirmation>();
+        services.AddScoped<ISecurityStampValidator, CurrentSecurityStampValidator>();
         services.AddScoped<IIdentityService, IdentityService>();
 
         // ---- Staff: roles, permissions and the audit log (read per request, never cached between requests) ----

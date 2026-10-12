@@ -139,8 +139,8 @@ public sealed partial class StaffAccessTests(TestServers servers)
     [MemberData(nameof(TestServers.Providers), MemberType = typeof(TestServers))]
     public async Task ASignInFromBeforeTheAccountWasReset_LosesStaffAccessAtOnce(string provider)
     {
-        // An admin taking an account over (or a password reset) rotates its stamp; the cookie's own stamp check runs only
-        // every few minutes, so staff access compares the stamp on every request.
+        // An admin taking an account over (or a password reset) rotates its stamp; Identity's own cookie check runs only
+        // every few minutes, so the stamp is compared on every request: the old sign-in ends at once (not just its staff access).
         var app = servers.Get(provider);
         var manager = await CreateStaffAsync(app, StaffRole.Manager);
         var before = await SignInAsync(app, manager.Email);
@@ -152,7 +152,8 @@ public sealed partial class StaffAccessTests(TestServers servers)
             Assert.True((await users.UpdateSecurityStampAsync((await users.FindByIdAsync(manager.UserId))!)).Succeeded);
         }
 
-        AssertNotStaff(await before.GetAsync("/admin/orders"));
+        AssertSignInRequired(await before.GetAsync("/admin/orders"));
+        AssertSignInRequired(await before.GetAsync("/account/manage"));
         var after = await SignInAsync(app, manager.Email);
         Assert.Equal(HttpStatusCode.OK, (await after.GetAsync("/admin/orders")).StatusCode);
     }
