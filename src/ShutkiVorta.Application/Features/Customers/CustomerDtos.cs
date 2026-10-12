@@ -69,8 +69,9 @@ public sealed record CustomerSearch
 }
 
 /// <summary>
-/// One row of the customer list. Orders, order value and the last order leave cancelled orders out. Populated directly by the
-/// data layer; times are UTC.
+/// One row of the customer list. Orders, order value and the last order leave cancelled orders out and count an order from
+/// when it is placed, delivered yet or not: a restaurant's upcoming deliveries count from the day they are generated.
+/// Populated directly by the data layer; times are UTC.
 /// </summary>
 public sealed class CustomerListItemDto
 {

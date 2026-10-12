@@ -12,10 +12,11 @@
 .customer-joined-note { display: block; }
 .customer-cards abbr[title] { text-decoration: underline dotted; cursor: help; }
 
-/* A customer's page. */
+/* A customer's page. The title is the name they typed (sometimes an email with no spaces): let it wrap anywhere. */
+.admin-topbar h1 { overflow-wrap: anywhere; min-width: 0; }
 .customer-heading { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; margin-bottom: 20px; }
 .customer-kpis .kpi .value.customer-kpi-date { font-size: 1.6rem; line-height: 1.35; }
-.customer-break { overflow-wrap: anywhere; }
+.customer-grid .kv dd { overflow-wrap: anywhere; min-width: 0; } /* names, emails and addresses as typed */
 .customer-grid .panel + .panel { margin-top: 24px; }
 .customer-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
 .customer-list li { display: grid; gap: 4px; padding-bottom: 12px; border-bottom: 1px dashed var(--line); overflow-wrap: anywhere; }

@@ -20,6 +20,9 @@ public sealed record TestOrder(string Email, decimal Total, DateTime CreatedAtUt
     public string? DeliveryStreet { get; init; }
 
     public int? StandingOrderId { get; init; }
+
+    /// <summary>When it is due (default: two days after it was placed).</summary>
+    public DateTime? ScheduledFor { get; init; }
 }
 
 /// <summary>Customers for the customer list tests: accounts, orders (with or without an account) and standing orders.</summary>
@@ -80,7 +83,7 @@ public static class CustomerTestData
                 City = order.DeliveryStreet is null ? null : "Dallas",
                 State = order.DeliveryStreet is null ? null : "TX",
                 PostalCode = order.DeliveryStreet is null ? null : "75202",
-                ScheduledFor = order.CreatedAtUtc.AddDays(2),
+                ScheduledFor = order.ScheduledFor ?? order.CreatedAtUtc.AddDays(2),
                 Status = (int)order.Status,
                 order.Total,
                 order.CreatedAtUtc,

@@ -170,6 +170,35 @@ public sealed partial class CustomersTests(TestServers servers)
 
     [Theory]
     [MemberData(nameof(TestServers.Providers), MemberType = typeof(TestServers))]
+    public async Task AnEmailWithAnUnderscore_IsFound_AndAPagePastTheEnd_ShowsTheLastPage(string provider)
+    {
+        var app = servers.Get(provider);
+        var tag = Tag();
+        var email = $"john_doe-{tag}@test.local";
+        var account = await CreateAccountAsync(app, $"John {tag}", email);
+        await AddOrderAsync(app, new TestOrder(email, 12m, DateTime.UtcNow.AddDays(-1)) { CustomerId = account });
+        var viewer = await SignInAsync(app, (await CreateStaffAsync(app, StaffRole.Employee, [Permissions.CustomersView])).Email);
+
+        // The exact email (or part of it) finds the account; the underscore is not dropped or taken as a wildcard.
+        foreach (var term in new[] { email, $"john_doe-{tag}" })
+        {
+            Assert.Contains($"href=\"{Customers}/{account}\"", await PageAsync(viewer, $"{Customers}?q={Uri.EscapeDataString(term)}"));
+        }
+
+        Assert.Contains("Nobody matches your search.", await PageAsync(viewer, $"{Customers}?q=johnxdoe-{tag}"));
+
+        // A page number past the end (or too large for the database) shows the last page, not an empty one.
+        foreach (var page in new[] { "9", "100000000", "2147483647" })
+        {
+            var list = await PageAsync(viewer, $"{Customers}?q={tag}&p={page}");
+            Assert.Contains($"href=\"{Customers}/{account}\"", list);
+            Assert.DoesNotContain("Nobody matches your search.", list);
+            Assert.Contains("1 customer matches your search.", list);
+        }
+    }
+
+    [Theory]
+    [MemberData(nameof(TestServers.Providers), MemberType = typeof(TestServers))]
     public async Task TheOldMakeAdminAction_IsGone(string provider)
     {
         var app = servers.Get(provider);

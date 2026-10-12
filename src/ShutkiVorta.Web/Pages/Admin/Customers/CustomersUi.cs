@@ -8,8 +8,9 @@ public static class CustomersUi
 {
     public const string CustomersPath = "/admin/customers";
 
-    /// <summary>The order value is what was ordered, not what was paid.</summary>
-    public const string OrderValueHint = "The total of their orders that were not cancelled, paid or not: payments are not tracked.";
+    /// <summary>The order value is what was ordered, not what was paid (and not only what was delivered).</summary>
+    public const string OrderValueHint =
+        "The total of their orders that were not cancelled, including ones not delivered yet (such as a restaurant's upcoming deliveries), paid or not: payments are not tracked.";
 
     public static string AccountPath(string userId) => $"{CustomersPath}/{Uri.EscapeDataString(userId)}";
 

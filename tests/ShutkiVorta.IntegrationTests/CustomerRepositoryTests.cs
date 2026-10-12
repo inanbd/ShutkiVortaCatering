@@ -55,9 +55,11 @@ public sealed class CustomerRepositoryTests
         Assert.Equal(((DateTime?)T0.AddDays(4), T0.AddDays(1)), (carol.LastOrderUtc, carol.JoinedUtc));
         Assert.Equal(people.CarolNewOrder, carol.GuestOrderNumber);
 
-        // A restaurant: an account with a standing order (and the restaurant's name).
+        // A restaurant: an account with a standing order (and the restaurant's name). Its delivery counts from the day it was
+        // generated, although it is not due yet, like any order placed for a later date.
         var dina = Assert.Single(rows, r => r.AccountId == people.Dina);
         Assert.Equal((CustomerType.Restaurant, "Dina's Kitchen", 1, 200m), (dina.Type, dina.BusinessName, dina.OrderCount, dina.OrderValue));
+        Assert.Equal(T0.AddDays(6), dina.LastOrderUtc);
 
         // Staff who order are customers too; only cancelled orders still make someone a customer, with nothing counted.
         Assert.Equal(1, Assert.Single(rows, r => r.AccountId == people.Frank).OrderCount);
@@ -105,6 +107,24 @@ public sealed class CustomerRepositoryTests
         var bobs = await SearchAsync(app, new CustomerSearch { Search = "bob", Type = CustomerType.Guest });
         Assert.Equal(("bob@example.test", 1), (Assert.Single(bobs.Customers.Items).Email, bobs.Customers.TotalCount));
         Assert.Equal((1, 1), (bobs.AccountCount, bobs.GuestCount));
+
+        // LIKE's wildcards in a search are plain characters: an email with an underscore is found by its exact text (and not
+        // by any character in its place), and % and SQL Server's [ ] match only themselves.
+        var ian = await CreateAccountAsync(app, "Ian Under", "ian_under@example.test");
+        await AddOrderAsync(app, new TestOrder("ian_under@example.test", 8m, T0.AddDays(2)) { CustomerId = ian });
+        await AddOrderAsync(app, new TestOrder("ianxunder@example.test", 9m, T0.AddDays(2)) { Name = "Ian [VIP]" });
+        await AddOrderAsync(app, new TestOrder("percent@example.test", 7m, T0.AddDays(2)) { Name = "100% Halal" });
+        foreach (var term in new[] { "ian_under", "ian_under@example.test" })
+        {
+            Assert.Equal(ian, Assert.Single((await SearchAsync(app, new CustomerSearch { Search = term })).Customers.Items).AccountId);
+        }
+
+        Assert.Equal("ianxunder@example.test", Assert.Single((await SearchAsync(app, new CustomerSearch { Search = "[VIP]" })).Customers.Items).Email);
+        Assert.Empty((await SearchAsync(app, new CustomerSearch { Search = "[A-Z]" })).Customers.Items);
+        Assert.Equal("percent@example.test", Assert.Single((await SearchAsync(app, new CustomerSearch { Search = "100%" })).Customers.Items).Email);
+        Assert.Equal("percent@example.test", Assert.Single((await SearchAsync(app, new CustomerSearch { Search = "%" })).Customers.Items).Email);
+        Assert.Equal(ian, Assert.Single((await SearchAsync(app, new CustomerSearch { Search = "_" })).Customers.Items).AccountId);
+        Assert.Empty((await SearchAsync(app, new CustomerSearch { Search = @"\" })).Customers.Items);
     }
 
     [Theory]
@@ -161,6 +181,19 @@ public sealed class CustomerRepositoryTests
         }
 
         Assert.Equal(20, (await SearchAsync(app, new CustomerSearch())).Customers.TotalCount);
+
+        // A page past the end (an old link, or a made-up page number) is the last page, whatever the number.
+        var lastPage = await SearchAsync(app, new CustomerSearch { Page = 7, PageSize = 3 });
+        Assert.Equal((7, 7, 2), (lastPage.Customers.Page, lastPage.Customers.TotalPages, lastPage.Customers.Items.Count));
+        foreach (var page in new[] { 8, 100_000_000, int.MaxValue })
+        {
+            var past = await SearchAsync(app, new CustomerSearch { Page = page, PageSize = 3 });
+            Assert.Equal((7, 20), (past.Customers.Page, past.Customers.TotalCount));
+            Assert.Equal(lastPage.Customers.Items.Select(Key), past.Customers.Items.Select(Key));
+        }
+
+        var nobody = await SearchAsync(app, new CustomerSearch { Search = "nobody at all", Page = 5 });
+        Assert.Equal((1, 0, 0), (nobody.Customers.Page, nobody.Customers.TotalPages, nobody.Customers.Items.Count));
     }
 
     [Theory]
@@ -240,7 +273,10 @@ public sealed class CustomerRepositoryTests
 
         var dina = await CreateAccountAsync(app, "Dina Restaurant", "dina@example.test", createdAtUtc: T0.AddDays(-10));
         var standing = await AddStandingOrderAsync(app, dina, "Dina's Kitchen", "dina@example.test");
-        await AddOrderAsync(app, new TestOrder("dina@example.test", 200m, T0.AddDays(6)) { CustomerId = dina, Name = "Dina Restaurant", Status = OrderStatus.Confirmed, StandingOrderId = standing });
+        await AddOrderAsync(app, new TestOrder("dina@example.test", 200m, T0.AddDays(6))
+        {
+            CustomerId = dina, Name = "Dina Restaurant", Status = OrderStatus.Confirmed, StandingOrderId = standing, ScheduledFor = DateTime.UtcNow.AddDays(7),
+        });
 
         var frank = await CreateAccountAsync(app, "Frank Staff", "frank@example.test", customerRole: false, createdAtUtc: T0.AddDays(-5));
         using (var scope = app.Services.CreateScope())

@@ -3,6 +3,7 @@
 @{
     var list = Model.List;
     var customers = list.Customers;
+    var justOne = customers.TotalCount == 1;
 }
 @section Head {
     <link rel="stylesheet" href="~/css/admin-customers.css" asp-append-version="true" />
@@ -116,7 +117,8 @@
     </div>
 </section>
 <p class="small muted mt-2">
-    @customers.TotalCount @(customers.TotalCount == 1 ? "customer" : "customers")@(Model.IsSearching ? " match your search" : string.Empty).
-    Orders and order value leave out cancelled orders. Order value is what was ordered, paid or not: payments are not tracked.
+    @customers.TotalCount @(justOne ? "customer" : "customers")@(Model.IsSearching ? (justOne ? " matches your search" : " match your search") : string.Empty).
+    Orders and order value leave out cancelled orders and include orders not delivered yet, such as a restaurant's upcoming
+    deliveries. Order value is what was ordered, paid or not: payments are not tracked.
 </p>
 <partial name="_Pager" model="(customers.Page, customers.TotalPages, (Func<int, string>)Model.PageUrl)" />
